@@ -97,6 +97,7 @@ export class LlmProxyServer {
   private readonly sseClients = new Set<ServerResponse>();
   private readonly activeConnections = new Map<string, ActiveConnectionRuntime>();
   private heartbeat?: NodeJS.Timeout;
+  private liveSnapshotTicker?: NodeJS.Timeout;
   private snapshotTimer?: NodeJS.Timeout;
 
   public constructor(
@@ -119,6 +120,13 @@ export class LlmProxyServer {
         client.write(": ping\n\n");
       }
     }, 15_000);
+    this.liveSnapshotTicker = setInterval(() => {
+      if (this.activeConnections.size === 0 || this.sseClients.size === 0) {
+        return;
+      }
+
+      this.broadcastCurrentSnapshot();
+    }, 1_000);
 
     const { host, port } = this.loadBalancer.getServerConfig();
 
@@ -137,6 +145,11 @@ export class LlmProxyServer {
     if (this.heartbeat) {
       clearInterval(this.heartbeat);
       this.heartbeat = undefined;
+    }
+
+    if (this.liveSnapshotTicker) {
+      clearInterval(this.liveSnapshotTicker);
+      this.liveSnapshotTicker = undefined;
     }
 
     if (this.snapshotTimer) {
