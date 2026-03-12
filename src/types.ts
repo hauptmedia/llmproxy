@@ -142,6 +142,7 @@ export interface ActiveConnectionSnapshot {
   kind: ActiveConnectionKind;
   method: string;
   path: string;
+  clientIp?: string;
   model?: string;
   clientStream: boolean;
   upstreamStream: boolean;

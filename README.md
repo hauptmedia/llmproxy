@@ -2,13 +2,13 @@
 
 ![llmproxy logo](frontend/src/assets/llmproxy-logo.svg)
 
-A small TypeScript proxy with an OpenAI-compatible `/v1/*` interface, health checks, queueing, and a live dashboard for local `llama.cpp` instances or other OpenAI-compatible backends.
+A small TypeScript proxy with an OpenAI-compatible chat completions interface, health checks, queueing, and a live dashboard for local `llama.cpp` instances or other OpenAI-compatible backends.
 
 Prerequisite: Node.js 18+ should be available on your system `PATH` or configured as the project interpreter in WebStorm.
 
 ## Features
 
-- OpenAI-compatible forwarding for arbitrary `/v1/*` routes
+- OpenAI-compatible forwarding for `POST /v1/chat/completions`
 - Load balancing across multiple backends with configurable `maxConcurrency`
 - Queueing when local backends are fully utilized
 - Vue-based single page dashboard served by the backend under `/dashboard`, refactored into Vue single-file components and built with Vite plus Tailwind CSS
@@ -16,6 +16,13 @@ Prerequisite: Node.js 18+ should be available on your system `PATH` or configure
 - Built-in chat debugger with model selection, live token metrics, sampler parameters, and raw request/response views
 - Aggregated `/v1/models`
 - Health checks for OpenAI-compatible backends via `/v1/models`
+
+## Supported Routes
+
+- `GET /v1/models`
+- `POST /v1/chat/completions`
+
+Other OpenAI-style routes such as `POST /v1/completions`, `POST /v1/responses`, `POST /v1/embeddings`, audio routes, or image routes are currently not implemented and return `501`.
 
 ## Start
 
@@ -92,8 +99,8 @@ Dashboard changes to `enabled` and `maxConcurrency` are written back to your loc
 ## Notes
 
 - Requests are buffered so routing can take the requested `model` into account.
-- Chat and completion requests always use upstream streaming so the proxy can collect live metrics such as `tok/s`, TTFB, and in-flight token counts.
+- Chat completion requests always use upstream streaming so the proxy can collect live metrics such as `tok/s`, TTFB, and in-flight token counts.
 - If the client does not request streaming, the proxy buffers the upstream stream internally and returns a normal JSON response at the end.
-- `multipart/form-data` and unknown formats are routed without model-based selection to a matching free backend.
-- The `Active Connections` dashboard section shows all currently active connections in real time, including queue state, streaming mode, token counts, and `tok/s`.
+- The proxy is intentionally limited to the completion routes listed above; other `/v1/*` routes return `501`.
+- The `Active Connections` dashboard section shows live `chat.completions` requests in real time, including queue state, streaming mode, token counts, and `tok/s`.
 - The `Chat Debugger` lets you send debug requests to `/v1/chat/completions` and inspect transcript, parameters, routing, and raw responses.

@@ -49,6 +49,7 @@ interface ActiveConnectionRuntime {
   kind: ActiveConnectionKind;
   method: string;
   path: string;
+  clientIp?: string;
   model?: string;
   clientStream: boolean;
   upstreamStream: boolean;
@@ -81,6 +82,14 @@ interface ActiveConnectionRuntime {
 
 interface DashboardRoute {
   page: "overview" | "logs" | "chat" | "backends";
+}
+
+export function isSupportedProxyRoute(method: string, pathname: string): boolean {
+  if (method !== "POST") {
+    return false;
+  }
+
+  return pathname === "/v1/chat/completions";
 }
 
 export class LlmProxyServer {
@@ -245,6 +254,15 @@ export class LlmProxyServer {
     }
 
     if (url.pathname.startsWith("/v1/")) {
+      if (!isSupportedProxyRoute(method, url.pathname)) {
+        sendJson(
+          response,
+          501,
+          proxyError(`Route "${method} ${url.pathname}" is not implemented. Supported routes: GET /v1/models, POST /v1/chat/completions.`),
+        );
+        return;
+      }
+
       await this.handleProxy(request, response, url);
       return;
     }
@@ -560,6 +578,7 @@ export class LlmProxyServer {
       kind,
       method: route.method,
       path: route.path,
+      clientIp: route.clientIp,
       model: route.model,
       clientStream: route.stream,
       upstreamStream,
@@ -689,6 +708,7 @@ export class LlmProxyServer {
       kind: connection.kind,
       method: connection.method,
       path: connection.path,
+      clientIp: connection.clientIp,
       model: connection.model,
       clientStream: connection.clientStream,
       upstreamStream: connection.upstreamStream,
