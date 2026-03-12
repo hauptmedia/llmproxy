@@ -85,17 +85,74 @@ function readErrorCauseMessage(error: Error): string | undefined {
 }
 
 export function extractClientIp(request: IncomingMessage): string | undefined {
-  const forwardedFor = request.headers["x-forwarded-for"];
-
-  if (typeof forwardedFor === "string") {
-    return forwardedFor.split(",")[0]?.trim();
+  const forwardedFor = firstHeaderValue(request.headers["x-forwarded-for"]);
+  if (forwardedFor) {
+    return forwardedFor.split(",")[0]?.trim() || undefined;
   }
 
-  if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
-    return forwardedFor[0]?.split(",")[0]?.trim();
+  const forwarded = firstHeaderValue(request.headers.forwarded);
+  const forwardedIp = parseForwardedFor(forwarded);
+  if (forwardedIp) {
+    return forwardedIp;
+  }
+
+  const directHeaderIp = firstNonEmptyHeaderValue(
+    request.headers["cf-connecting-ip"],
+    request.headers["true-client-ip"],
+    request.headers["x-real-ip"],
+    request.headers["x-client-ip"],
+    request.headers["fastly-client-ip"],
+  );
+  if (directHeaderIp) {
+    return directHeaderIp;
   }
 
   return request.socket.remoteAddress ?? undefined;
+}
+
+function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+  if (typeof value === "string") {
+    return value.trim() || undefined;
+  }
+
+  if (Array.isArray(value) && value.length > 0) {
+    return value[0]?.trim() || undefined;
+  }
+
+  return undefined;
+}
+
+function firstNonEmptyHeaderValue(...values: Array<string | string[] | undefined>): string | undefined {
+  for (const value of values) {
+    const candidate = firstHeaderValue(value);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+function parseForwardedFor(value?: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const match = value.match(/for=(?:"?\[?)([^;\],"]+)/i);
+  if (!match?.[1]) {
+    return undefined;
+  }
+
+  const candidate = match[1].trim();
+  if (!candidate) {
+    return undefined;
+  }
+
+  if (candidate.startsWith("_")) {
+    return undefined;
+  }
+
+  return candidate.replace(/\]$/, "");
 }
 
 export function escapeHtml(value: string): string {

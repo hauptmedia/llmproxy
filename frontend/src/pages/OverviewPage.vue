@@ -1,16 +1,50 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
+import { badgeClass, buildConnectionTransportBadges } from "../utils/dashboard-badges";
+import type { ActiveConnectionSnapshot } from "../types/dashboard";
 
 const store = useDashboardStore();
 
+const chatCompletionConnections = computed(() => (
+  store.state.snapshot.activeConnections.filter((connection) => connection.kind === "chat.completions")
+));
+
 const activeConnections = computed(() => (
-  store.state.snapshot.activeConnections.filter((connection) => connection.phase !== "queued" || Boolean(connection.backendId))
+  chatCompletionConnections.value.filter((connection) => connection.phase !== "queued" || Boolean(connection.backendId))
 ));
 
 const queuedConnections = computed(() => (
-  store.state.snapshot.activeConnections.filter((connection) => connection.phase === "queued" && !connection.backendId)
+  chatCompletionConnections.value.filter((connection) => connection.phase === "queued" && !connection.backendId)
 ));
+
+function formatClientIp(value?: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.startsWith("::ffff:")) {
+    return trimmed.slice(7);
+  }
+
+  return trimmed;
+}
+
+function connectionHeadline(connection: ActiveConnectionSnapshot): string {
+  const parts = [
+    formatClientIp(connection.clientIp) ? `IP ${formatClientIp(connection.clientIp)}` : undefined,
+    store.shortId(connection.id),
+    connection.model,
+    connection.backendName,
+  ].filter((value): value is string => Boolean(value));
+
+  return parts.join(" › ");
+}
 </script>
 
 <template>
@@ -38,34 +72,59 @@ const queuedConnections = computed(() => (
         <article
           v-for="connection in activeConnections"
           :key="connection.id"
-          class="request-card interactive"
+          class="request-card"
         >
           <div class="request-main">
-            <button
-              type="button"
-              class="request-card-trigger"
-              :disabled="!connection.hasDetail"
-              :title="connection.hasDetail ? 'Open the active request inspector.' : 'Detail data is not available for this request yet.'"
-              @click="store.openRequestDetail(connection.id)"
-            >
+            <div class="request-card-body">
               <div>
-                <h3>{{ connection.method }} {{ connection.path }}</h3>
-                <div class="request-subtitle">
-                  <span class="mono">{{ store.shortId(connection.id) }}</span>
-                  <template v-if="connection.backendName"> · {{ connection.backendName }}</template>
-                  <template v-if="connection.model"> · {{ connection.model }}</template>
+                <div class="request-topline">
+                  {{ connectionHeadline(connection) }}
+                </div>
+                <div class="request-title-row">
+                  <span
+                    class="badge neutral"
+                    title="This live entry is a chat completion request."
+                  >
+                    Chat Completion
+                  </span>
+                  <span
+                    v-for="badge in buildConnectionTransportBadges(connection)"
+                    :key="badge.text + badge.title"
+                    :class="badgeClass(badge)"
+                    :title="badge.title"
+                  >
+                    {{ badge.text }}
+                  </span>
                 </div>
               </div>
-            </button>
+            </div>
             <div class="request-actions">
               <button
                 type="button"
-                class="button secondary small"
+                class="icon-button"
+                :disabled="!connection.hasDetail"
+                :aria-label="connection.hasDetail ? 'Open active connection details' : 'Active connection details are not available yet'"
+                :title="connection.hasDetail ? 'Open the active request inspector.' : 'Detail data is not available for this request yet.'"
+                @click="store.openRequestDetail(connection.id)"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M12 10v6"></path>
+                  <path d="M12 7.25h.01"></path>
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="icon-button danger"
                 :disabled="store.isRequestCancelling(connection.id)"
+                :aria-label="store.isRequestCancelling(connection.id) ? 'Ending the active connection' : 'End this active connection'"
                 :title="store.isRequestCancelling(connection.id) ? 'Ending the active connection...' : 'End this active connection after confirmation.'"
                 @click="store.cancelActiveRequest(connection.id)"
               >
-                {{ store.isRequestCancelling(connection.id) ? "Ending..." : "End" }}
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3.5v7"></path>
+                  <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
+                </svg>
               </button>
             </div>
           </div>
@@ -79,7 +138,7 @@ const queuedConnections = computed(() => (
               {{ badge.text }}
             </span>
           </div>
-          <div class="request-metrics">
+          <div v-if="store.connectionMetricBadges(connection).length" class="request-metrics">
             <span
               v-for="badge in store.connectionMetricBadges(connection)"
               :key="badge.text + badge.title"
@@ -104,34 +163,59 @@ const queuedConnections = computed(() => (
         <article
           v-for="connection in queuedConnections"
           :key="connection.id"
-          class="request-card interactive"
+          class="request-card"
         >
           <div class="request-main">
-            <button
-              type="button"
-              class="request-card-trigger"
-              :disabled="!connection.hasDetail"
-              :title="connection.hasDetail ? 'Open the queued request inspector.' : 'Detail data is not available for this request yet.'"
-              @click="store.openRequestDetail(connection.id)"
-            >
+            <div class="request-card-body">
               <div>
-                <h3>{{ connection.method }} {{ connection.path }}</h3>
-                <div class="request-subtitle">
-                  <span class="mono">{{ store.shortId(connection.id) }}</span>
-                  <template v-if="connection.backendName"> · {{ connection.backendName }}</template>
-                  <template v-if="connection.model"> · {{ connection.model }}</template>
+                <div class="request-topline">
+                  {{ connectionHeadline(connection) }}
+                </div>
+                <div class="request-title-row">
+                  <span
+                    class="badge neutral"
+                    title="This live entry is a chat completion request."
+                  >
+                    Chat Completion
+                  </span>
+                  <span
+                    v-for="badge in buildConnectionTransportBadges(connection)"
+                    :key="badge.text + badge.title"
+                    :class="badgeClass(badge)"
+                    :title="badge.title"
+                  >
+                    {{ badge.text }}
+                  </span>
                 </div>
               </div>
-            </button>
+            </div>
             <div class="request-actions">
               <button
                 type="button"
-                class="button secondary small"
+                class="icon-button"
+                :disabled="!connection.hasDetail"
+                :aria-label="connection.hasDetail ? 'Open queued connection details' : 'Queued connection details are not available yet'"
+                :title="connection.hasDetail ? 'Open the queued request inspector.' : 'Detail data is not available for this request yet.'"
+                @click="store.openRequestDetail(connection.id)"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M12 10v6"></path>
+                  <path d="M12 7.25h.01"></path>
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="icon-button danger"
                 :disabled="store.isRequestCancelling(connection.id)"
+                :aria-label="store.isRequestCancelling(connection.id) ? 'Ending the queued connection' : 'End this queued connection'"
                 :title="store.isRequestCancelling(connection.id) ? 'Ending the queued connection...' : 'End this queued connection after confirmation.'"
                 @click="store.cancelActiveRequest(connection.id)"
               >
-                {{ store.isRequestCancelling(connection.id) ? "Ending..." : "End" }}
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3.5v7"></path>
+                  <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
+                </svg>
               </button>
             </div>
           </div>
@@ -145,7 +229,7 @@ const queuedConnections = computed(() => (
               {{ badge.text }}
             </span>
           </div>
-          <div class="request-metrics">
+          <div v-if="store.connectionMetricBadges(connection).length" class="request-metrics">
             <span
               v-for="badge in store.connectionMetricBadges(connection)"
               :key="badge.text + badge.title"

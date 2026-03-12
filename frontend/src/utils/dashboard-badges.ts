@@ -50,7 +50,13 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
       : healthyCount < enabledCount
         ? "warn"
         : "good";
-  const waitingConnections = snapshot.activeConnections.filter(
+  const chatCompletionConnections = snapshot.activeConnections.filter(
+    (connection) => connection.kind === "chat.completions",
+  );
+  const activeConnections = chatCompletionConnections.filter(
+    (connection) => connection.phase !== "queued" || Boolean(connection.backendId),
+  ).length;
+  const waitingConnections = chatCompletionConnections.filter(
     (connection) => connection.phase === "queued" && !connection.backendId,
   ).length;
   const uptimeMs = Math.max(0, Date.now() - new Date(snapshot.startedAt).getTime());
@@ -67,9 +73,9 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
     {
       key: "live-connections",
       label: "Active Connections",
-      value: snapshot.activeConnections.length,
+      value: activeConnections,
       note: "",
-      title: "Requests that are currently running through llmproxy or already assigned to a backend slot.",
+      title: "Chat completion requests that are currently running through llmproxy or already assigned to a backend slot.",
       tone: "info",
     },
     {
@@ -77,7 +83,7 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
       label: "Queued Connections",
       value: waitingConnections,
       note: "",
-      title: "Requests that are still waiting in the scheduler queue because no backend slot is available yet.",
+      title: "Chat completion requests that are still waiting in the scheduler queue because no backend slot is available yet.",
       tone: "warn",
     },
     {
@@ -173,25 +179,89 @@ export function buildDebugMetaBadges(debug: DebugState, liveUsage: string): UiBa
   return bits;
 }
 
-export function buildConnectionCardBadges(connection: ActiveConnectionSnapshot): UiBadge[] {
-  const items: UiBadge[] = [
-    badgeSpec(connection.phase, connection.phase === "queued" ? "warn" : "good", "Current request phase inside llmproxy."),
-    badgeSpec(connection.clientStream ? "client stream" : "client json", "neutral", "Whether the downstream client requested streaming."),
-    badgeSpec(connection.upstreamStream ? "upstream stream" : "upstream json", "neutral", "llmproxy forces upstream streaming for generation routes to collect live metrics."),
-    badgeSpec(`queued ${formatDuration(connection.queueMs)}`, "neutral", "Time spent waiting for a free backend slot before this request started upstream."),
+export function buildConnectionTransportBadges(connection: ActiveConnectionSnapshot): UiBadge[] {
+  const queueDurationMs =
+    connection.phase === "queued" ? connection.elapsedMs : connection.queueMs;
+  const showQueueDuration =
+    connection.phase === "queued" || connection.queueMs > 0;
+  const tokenRate = formatTokenRate(connection.completionTokensPerSecond);
+  const liveCompletionTokens = typeof connection.completionTokens === "number"
+    ? connection.completionTokens
+    : connection.contentTokens + connection.reasoningTokens + connection.textTokens;
+  const tokenCountLabel = liveCompletionTokens > 0 ? `${liveCompletionTokens} tok` : "";
+  const timeToFirstToken = typeof connection.timeToFirstTokenMs === "number"
+    ? formatDuration(connection.timeToFirstTokenMs)
+    : "";
+  const generationDuration = typeof connection.generationMs === "number"
+    ? formatDuration(connection.generationMs)
+    : "";
+  const downstreamTokenRate = connection.clientStream && tokenRate ? tokenRate : "";
+  const upstreamTokenRate = connection.upstreamStream && tokenRate ? tokenRate : "";
+  const downstreamLabel = [
+    connection.clientStream ? "\u2191 stream" : "\u2191 json",
+    ...(showQueueDuration ? [formatDuration(queueDurationMs)] : []),
+    formatDuration(connection.elapsedMs),
+    ...(downstreamTokenRate ? (tokenCountLabel ? [tokenCountLabel] : []) : []),
+    ...(downstreamTokenRate ? [downstreamTokenRate] : []),
+  ].join(" \u00b7 ");
+  const elapsedDetail = ` Total downstream lifetime so far: ${formatDuration(connection.elapsedMs)}.`;
+  const queueDetail =
+    connection.phase === "queued"
+      ? ` First time value: queued for ${formatDuration(queueDurationMs)} so far while waiting for a backend slot.`
+      : connection.queueMs > 0
+        ? ` First time value: waited ${formatDuration(connection.queueMs)} in queue before a backend was assigned.`
+        : "";
+  const tokenCountDetail = tokenCountLabel
+    ? ` Current generated completion tokens: ${liveCompletionTokens}.`
+    : "";
+  const tokenRateDetail = tokenRate
+    ? ` Current generation speed: ${tokenRate}.`
+    : "";
+  const downstreamTone =
+    connection.phase === "streaming" && connection.clientStream
+      ? "good"
+      : "warn";
+  const downstreamTitle =
+    connection.phase === "queued"
+      ? `The client is still waiting because this request has not been assigned to a backend yet.${elapsedDetail}${queueDetail}${tokenCountDetail}${tokenRateDetail}`
+      : connection.phase === "connected"
+        ? `A backend is assigned, but the client is still waiting for the response to begin.${elapsedDetail}${queueDetail}${tokenCountDetail}${tokenRateDetail}`
+        : connection.clientStream
+          ? `The client is receiving streamed tokens or chunks from llmproxy right now.${elapsedDetail}${queueDetail}${tokenCountDetail}${tokenRateDetail}`
+          : `The backend is generating, but llmproxy is buffering the response before returning JSON to the client.${elapsedDetail}${queueDetail}${tokenCountDetail}${tokenRateDetail}`;
+  const upstreamTone =
+    connection.statusCode === undefined
+      ? "neutral"
+      : connection.statusCode === 200
+        ? "good"
+        : "bad";
+  const upstreamTitle =
+    connection.statusCode === undefined
+      ? "Upstream request mode from llmproxy to the backend."
+      : `Upstream request mode from llmproxy to the backend. Current upstream status: HTTP ${connection.statusCode}.${timeToFirstToken ? ` First time value: time to first upstream token ${timeToFirstToken}.` : ""}${generationDuration ? ` Second time value: upstream generation phase lasted ${generationDuration}.` : ""}${tokenCountDetail}${upstreamTokenRate ? ` Current upstream generation speed: ${upstreamTokenRate}.` : ""}`;
+
+  return [
+    badgeSpec(
+      downstreamLabel,
+      downstreamTone,
+      downstreamTitle,
+    ),
+    badgeSpec(
+      [
+        connection.upstreamStream ? "\u2193 stream" : "\u2193 json",
+        ...(timeToFirstToken ? [timeToFirstToken] : []),
+        ...(generationDuration ? [generationDuration] : []),
+        ...(upstreamTokenRate ? (tokenCountLabel ? [tokenCountLabel] : []) : []),
+        ...(upstreamTokenRate ? [upstreamTokenRate] : []),
+      ].join(" \u00b7 "),
+      upstreamTone,
+      upstreamTitle,
+    ),
   ];
+}
 
-  if (connection.backendName) {
-    items.push(badgeSpec(`backend ${connection.backendName}`, "good", "Backend currently serving this request."));
-  }
-
-  if (connection.statusCode !== undefined) {
-    items.push(badgeSpec(`HTTP ${connection.statusCode}`, connection.statusCode >= 500 ? "bad" : "good", "Current upstream status code."));
-  }
-
-  if (connection.model) {
-    items.push(badgeSpec(`model ${connection.model}`, "neutral", "Requested model name."));
-  }
+export function buildConnectionCardBadges(connection: ActiveConnectionSnapshot): UiBadge[] {
+  const items: UiBadge[] = [];
 
   if (connection.finishReason) {
     items.push(badgeSpec(`finish ${connection.finishReason}`, "good", describeFinishReason(connection.finishReason)));
@@ -205,48 +275,8 @@ export function buildConnectionCardBadges(connection: ActiveConnectionSnapshot):
 }
 
 export function buildConnectionMetricBadges(connection: ActiveConnectionSnapshot): UiBadge[] {
-  const items: UiBadge[] = [
-    badgeSpec(`elapsed ${formatDuration(connection.elapsedMs)}`, "neutral", "How long this request has been active."),
-  ];
-
-  if (typeof connection.promptTokens === "number") {
-    items.push(badgeSpec(`prompt ${connection.promptTokens}`, "neutral", "Prompt tokens reported or inferred for this request."));
-  }
-
-  if (typeof connection.completionTokens === "number") {
-    items.push(badgeSpec(`completion ${connection.completionTokens}`, "neutral", "Completion tokens reported or inferred for this request."));
-  }
-
-  if (typeof connection.totalTokens === "number") {
-    items.push(badgeSpec(`total ${connection.totalTokens}`, "neutral", "Total tokens reported or inferred for this request."));
-  }
-
-  if (typeof connection.contentTokens === "number" && connection.contentTokens > 0) {
-    items.push(badgeSpec(`content ${connection.contentTokens}`, "neutral", "Completion tokens attributed to normal visible content."));
-  }
-
-  if (typeof connection.reasoningTokens === "number" && connection.reasoningTokens > 0) {
-    items.push(badgeSpec(`reasoning ${connection.reasoningTokens}`, "neutral", "Completion tokens attributed to reasoning content."));
-  }
-
-  if (typeof connection.textTokens === "number" && connection.textTokens > 0) {
-    items.push(badgeSpec(`text ${connection.textTokens}`, "neutral", "Completion tokens attributed to legacy text completions."));
-  }
-
-  if (typeof connection.timeToFirstTokenMs === "number") {
-    items.push(badgeSpec(`ttfb ${formatDuration(connection.timeToFirstTokenMs)}`, "neutral", "Time to first generated token."));
-  }
-
-  if (typeof connection.generationMs === "number") {
-    items.push(badgeSpec(`gen ${formatDuration(connection.generationMs)}`, "neutral", "Generation phase duration."));
-  }
-
-  const tokenRate = formatTokenRate(connection.completionTokensPerSecond);
-  if (tokenRate) {
-    items.push(badgeSpec(tokenRate, "good", "Completion tokens generated per second."));
-  }
-
-  return items;
+  void connection;
+  return [];
 }
 
 function buildRequestOutcomeBadge(entry: RequestLogEntry): UiBadge {

@@ -66,7 +66,6 @@ watch(
           </div>
           <div :class="['meta', store.state.connectionStatus]" :title="store.state.connectionText">
             <span class="connection-dot" aria-hidden="true"></span>
-            <span>{{ store.state.connectionText }}</span>
           </div>
         </div>
       </header>

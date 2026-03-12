@@ -221,9 +221,10 @@
   }
 
   .meta {
-    @apply inline-flex items-center gap-2.5 border border-amber-900/10 bg-white/60 px-3.5 py-2.5 text-stone-600 shadow-sm;
-    min-height: 44px;
-    border-radius: 1rem;
+    @apply inline-flex items-center justify-center border border-amber-900/10 bg-white/60 p-0 text-stone-600 shadow-sm;
+    width: 44px;
+    height: 44px;
+    border-radius: 9999px;
   }
 
   .connection-dot {
@@ -357,12 +358,8 @@
     @apply opacity-80;
   }
 
-  .request-card-trigger {
-    @apply flex-1 cursor-pointer border-0 bg-transparent p-0 text-left text-inherit;
-  }
-
-  .request-card-trigger:disabled {
-    @apply cursor-default opacity-80;
+  .request-card-body {
+    @apply min-w-0 flex-1;
   }
 
   .request-actions {
@@ -375,6 +372,14 @@
 
   .request-main h3 {
     @apply m-0 text-base font-semibold text-stone-950;
+  }
+
+  .request-title-row {
+    @apply flex flex-wrap items-center gap-2.5;
+  }
+
+  .request-topline {
+    @apply mb-2.5 text-sm font-bold leading-relaxed text-stone-800 break-words;
   }
 
   .request-subtitle {
@@ -566,6 +571,39 @@
     @apply opacity-60;
   }
 
+  .icon-button {
+    @apply inline-flex items-center justify-center border transition duration-150;
+    width: 34px;
+    height: 34px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .icon-button svg {
+    width: 17px;
+    height: 17px;
+    display: block;
+  }
+
+  .icon-button:hover:not(:disabled) {
+    filter: brightness(0.98);
+  }
+
+  .icon-button.danger {
+    color: #b91c1c;
+    border-color: rgba(185, 28, 28, 0.18);
+    background: rgba(254, 242, 242, 0.96);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  }
+
+  .icon-button.danger:hover:not(:disabled) {
+    background: rgba(254, 226, 226, 0.96);
+  }
+
+  .icon-button:disabled {
+    @apply opacity-60;
+  }
+
   .debug-grid {
     @apply grid gap-[18px];
     grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
@@ -754,7 +792,7 @@
   }
 
   .request-detail-overlay {
-    @apply fixed inset-0 z-20 grid place-items-center p-[22px];
+    @apply fixed inset-0 z-40 grid place-items-center p-[22px];
     background: rgba(28, 25, 23, 0.26);
     backdrop-filter: blur(6px);
   }
