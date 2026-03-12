@@ -1856,7 +1856,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         }
 
         const blocks = value
-          .split(/\n\s*\n/)
+          .split(/\\n\\s*\\n/)
           .map((block) => block.trim())
           .filter(Boolean);
 
@@ -1901,7 +1901,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
 
       function syntaxHighlightJson(jsonText) {
         return escapeCodeHtml(jsonText).replace(
-          /("(\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+          /("(\\\\u[\\da-fA-F]{4}|\\\\[^u]|[^\\\\"])*"(\\s*:)?|\\b(true|false|null)\\b|-?\\d+(?:\\.\\d*)?(?:[eE][+\\-]?\\d+)?)/g,
           (match) => {
             let className = "json-number";
 
@@ -1922,7 +1922,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         const docs = getJsonDocuments(value);
         if (docs) {
           return {
-            html: docs.map((doc) => syntaxHighlightJson(prettyJson(doc))).join("\n\n"),
+            html: docs.map((doc) => syntaxHighlightJson(prettyJson(doc))).join("\\n\\n"),
             isJson: true,
           };
         }
