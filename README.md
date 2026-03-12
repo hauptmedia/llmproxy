@@ -11,7 +11,7 @@ A small TypeScript proxy with an OpenAI-compatible `/v1/*` interface, health che
 - Overview page with health status and live active connections, plus dedicated subpages for chat debugging and backend management
 - Built-in chat debugger with model selection, live token metrics, sampler parameters, and raw request/response views
 - Aggregated `/v1/models`
-- Health checks via `/health` or `/v1/models`
+- Health checks for OpenAI-compatible backends via `/v1/models`
 
 ## Start
 
@@ -56,7 +56,7 @@ Important backend fields:
 - `baseUrl`: target URL of the OpenAI-compatible backend
 - `maxConcurrency`: concurrent requests allowed for that backend
 - `models`: optional model list or patterns such as `["llama-*"]` or `["*"]`
-- `healthPath`: optional health endpoint
+- `healthPath`: optional backend health endpoint, for OpenAI-compatible backends usually `/v1/models`
 - `apiKey` or `apiKeyEnv`: optional upstream authentication
 
 Dashboard changes to `enabled` and `maxConcurrency` are written back to your local `llmproxy.config.json`.
