@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import CodeView from "./CodeView.vue";
 import MessageCard from "./MessageCard.vue";
-import { useDashboardStore } from "../dashboard-core";
+import { useDashboardStore } from "../composables/useDashboardStore";
 
 const store = useDashboardStore();
 </script>

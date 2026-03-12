@@ -1,0 +1,231 @@
+export type DashboardPage = "overview" | "chat" | "backends";
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+export interface DashboardBootstrap {
+  dashboardPath: string;
+  page: DashboardPage;
+  snapshot: ProxySnapshot;
+}
+
+export interface ProxySnapshot {
+  startedAt: string;
+  queueDepth: number;
+  totals: {
+    activeRequests: number;
+    successfulRequests: number;
+    failedRequests: number;
+    cancelledRequests: number;
+    rejectedRequests: number;
+  };
+  backends: BackendSnapshot[];
+  activeConnections: ActiveConnectionSnapshot[];
+  recentRequests: RequestLogEntry[];
+}
+
+export interface BackendSnapshot {
+  id: string;
+  name: string;
+  baseUrl: string;
+  enabled: boolean;
+  healthy: boolean;
+  maxConcurrency: number;
+  activeRequests: number;
+  availableSlots: number;
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  cancelledRequests: number;
+  lastLatencyMs?: number;
+  avgLatencyMs?: number;
+  lastCheckedAt?: string;
+  lastError?: string;
+  configuredModels: string[];
+  discoveredModels: string[];
+  discoveredModelDetails: Array<{ id: string; metadata?: JsonValue }>;
+}
+
+export interface ActiveConnectionSnapshot {
+  id: string;
+  kind: string;
+  method: string;
+  path: string;
+  model?: string;
+  clientStream: boolean;
+  upstreamStream: boolean;
+  phase: "queued" | "connected" | "streaming";
+  startedAt: string;
+  elapsedMs: number;
+  queueMs: number;
+  backendId?: string;
+  backendName?: string;
+  statusCode?: number;
+  error?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  contentTokens: number;
+  reasoningTokens: number;
+  textTokens: number;
+  promptMs?: number;
+  generationMs?: number;
+  promptTokensPerSecond?: number;
+  completionTokensPerSecond?: number;
+  timeToFirstTokenMs?: number;
+  finishReason?: string;
+  metricsExact: boolean;
+  hasDetail?: boolean;
+}
+
+export interface RequestLogEntry {
+  id: string;
+  time: string;
+  method: string;
+  path: string;
+  model?: string;
+  backendId?: string;
+  backendName?: string;
+  outcome: "success" | "error" | "cancelled" | "queued_timeout";
+  latencyMs: number;
+  queuedMs: number;
+  statusCode?: number;
+  error?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  contentTokens?: number;
+  reasoningTokens?: number;
+  textTokens?: number;
+  promptMs?: number;
+  generationMs?: number;
+  promptTokensPerSecond?: number;
+  completionTokensPerSecond?: number;
+  timeToFirstTokenMs?: number;
+  finishReason?: string;
+  metricsExact?: boolean;
+  hasDetail?: boolean;
+}
+
+export interface RequestLogDetail {
+  entry: RequestLogEntry;
+  requestBody?: JsonValue;
+  responseBody?: JsonValue;
+  live?: boolean;
+}
+
+export interface KnownModel {
+  id: string;
+  ownedBy: string;
+}
+
+export interface UiBadge {
+  text: string;
+  tone?: "good" | "warn" | "bad" | "neutral";
+  title?: string;
+  className?: string;
+}
+
+export interface DebugTranscriptEntry {
+  role: string;
+  content?: JsonValue;
+  reasoning_content?: string;
+  refusal?: string;
+  function_call?: JsonValue;
+  tool_calls?: JsonValue[];
+  audio?: JsonValue;
+  name?: string;
+  tool_call_id?: string;
+  backend?: string;
+  finish_reason?: string;
+}
+
+export interface BackendDraft {
+  enabled: boolean;
+  maxConcurrency: number;
+  saving: boolean;
+  error: string;
+}
+
+export interface DebugParams {
+  temperature: number;
+  top_p: number;
+  top_k: number;
+  min_p: number;
+  repeat_penalty: number;
+  max_tokens: number;
+}
+
+export interface DebugMetrics {
+  startedAt: number;
+  firstTokenAt: number;
+  lastTokenAt: number;
+  promptTokens: number | null;
+  completionTokens: number;
+  totalTokens: number | null;
+  contentTokens: number;
+  reasoningTokens: number;
+  promptMs: number | null;
+  generationMs: number | null;
+  promptPerSecond: number | null;
+  completionPerSecond: number | null;
+  finishReason: string;
+}
+
+export interface DebugState {
+  model: string;
+  systemPrompt: string;
+  prompt: string;
+  stream: boolean;
+  sending: boolean;
+  abortController: AbortController | null;
+  backend: string;
+  status: string;
+  usage: string;
+  error: string;
+  rawRequest: string;
+  rawResponse: string;
+  transcript: DebugTranscriptEntry[];
+  metrics: DebugMetrics;
+  params: DebugParams;
+}
+
+export interface RequestDetailState {
+  open: boolean;
+  loading: boolean;
+  requestId: string;
+  error: string;
+  detail: RequestLogDetail | null;
+  cache: Record<string, RequestLogDetail>;
+  lastFetchedAt: number;
+}
+
+export interface DashboardState {
+  snapshot: ProxySnapshot;
+  connectionStatus: "connecting" | "connected";
+  connectionText: string;
+  models: KnownModel[];
+  requestDetail: RequestDetailState;
+  backendDrafts: Record<string, BackendDraft>;
+  debug: DebugState;
+}
+
+export interface SummaryCard {
+  key: string;
+  label: string;
+  value: string | number;
+  note: string;
+  title: string;
+}
+
+export interface RenderMessageOptions {
+  heading?: string;
+  role?: string;
+  finishReason?: string;
+  reasoningCollapsed?: boolean;
+  extraBadges?: UiBadge[];
+}
+
+export interface ModelSpec {
+  text: string;
+  className: string;
+  title: string;
+}

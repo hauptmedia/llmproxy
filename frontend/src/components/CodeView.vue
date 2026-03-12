@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { renderCodeBlockHtml } from "../dashboard-core";
+import { renderCodeBlockHtml } from "../utils/code-rendering";
 
 const props = withDefaults(defineProps<{
   value?: any;

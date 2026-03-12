@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { dashboardBootstrap } from "./dashboard-core";
+import { dashboardBootstrap } from "./dashboard-bootstrap";
 import BackendsPage from "./pages/BackendsPage.vue";
 import ChatDebuggerPage from "./pages/ChatDebuggerPage.vue";
 import OverviewPage from "./pages/OverviewPage.vue";

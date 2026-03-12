@@ -2,7 +2,9 @@
 import { computed, onBeforeUnmount, onMounted, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 import RequestDetailDialog from "./components/RequestDetailDialog.vue";
-import { type DashboardPage, getPageTitle, useDashboardStore } from "./dashboard-core";
+import { useDashboardStore } from "./composables/useDashboardStore";
+import { getPageTitle } from "./dashboard-bootstrap";
+import type { DashboardPage } from "./types/dashboard";
 
 const store = useDashboardStore();
 const route = useRoute();

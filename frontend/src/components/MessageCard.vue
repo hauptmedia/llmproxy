@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { type UiBadge, renderMessageHtml } from "../dashboard-core";
+import type { UiBadge } from "../types/dashboard";
+import { renderMessageHtml } from "../utils/message-rendering";
 
 interface MessageLike extends Record<string, unknown> {
   role?: string;

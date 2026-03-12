@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import {
-  buildModelSpecs,
   type BackendDraft,
   type BackendSnapshot,
-  formatDate,
-  formatDuration,
-} from "../dashboard-core";
+} from "../types/dashboard";
+import { formatDate, formatDuration } from "../utils/formatters";
+import { buildModelSpecs } from "../utils/model-specs";
 
 const props = defineProps<{
   backends: BackendSnapshot[];

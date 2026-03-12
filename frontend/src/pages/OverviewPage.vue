@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import BackendTable from "../components/BackendTable.vue";
-import { useDashboardStore } from "../dashboard-core";
+import { useDashboardStore } from "../composables/useDashboardStore";
 
 const store = useDashboardStore();
 </script>
