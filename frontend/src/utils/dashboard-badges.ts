@@ -44,6 +44,12 @@ export function badgeClass(badge: UiBadge): string {
 export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
   const enabledCount = snapshot.backends.filter((backend) => backend.enabled).length;
   const healthyCount = snapshot.backends.filter((backend) => backend.enabled && backend.healthy).length;
+  const healthyTone =
+    healthyCount === 0
+      ? "bad"
+      : healthyCount < enabledCount
+        ? "warn"
+        : "good";
   const waitingConnections = snapshot.activeConnections.filter(
     (connection) => connection.phase === "queued" && !connection.backendId,
   ).length;
@@ -51,39 +57,51 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
 
   return [
     {
-      key: "live-connections",
-      label: "Live Connections",
-      value: snapshot.activeConnections.length,
-      note: `${snapshot.totals.activeRequests} currently occupy backend slots, ${waitingConnections} are still waiting`,
-      title: "Requests currently active inside llmproxy. This includes in-flight requests on a backend and requests waiting in the queue.",
-    },
-    {
-      key: "waiting-connections",
-      label: "Waiting For Backend",
-      value: waitingConnections,
-      note: `${snapshot.queueDepth} queued according to the scheduler`,
-      title: "Live requests that are still queued because no backend slot has been assigned to them yet.",
-    },
-    {
       key: "healthy-backends",
       label: "Healthy Backends",
       value: `${healthyCount} / ${enabledCount}`,
-      note: `${snapshot.backends.length} configured in total`,
+      note: "",
       title: "Enabled backends that passed their most recent health check.",
+      tone: healthyTone,
+    },
+    {
+      key: "live-connections",
+      label: "Active Connections",
+      value: snapshot.activeConnections.length,
+      note: "",
+      title: "Requests that are currently running through llmproxy or already assigned to a backend slot.",
+      tone: "info",
+    },
+    {
+      key: "waiting-connections",
+      label: "Queued Connections",
+      value: waitingConnections,
+      note: "",
+      title: "Requests that are still waiting in the scheduler queue because no backend slot is available yet.",
+      tone: "warn",
     },
     {
       key: "successful-requests",
       label: "Successful Requests",
       value: snapshot.totals.successfulRequests,
-      note: `${snapshot.totals.rejectedRequests} rejected, ${snapshot.totals.failedRequests} failed`,
+      note: "",
       title: "Successfully completed requests observed since this llmproxy instance started.",
+      tone: "good",
+    },
+    {
+      key: "failed-requests",
+      label: "Failed Requests",
+      value: snapshot.totals.failedRequests,
+      note: "",
+      title: "Requests that failed while being proxied or returned an upstream/server error.",
+      tone: "bad",
     },
     {
       key: "uptime",
       label: "Uptime",
       value: formatDuration(uptimeMs),
-      note: `Started: ${formatDate(snapshot.startedAt)}`,
-      title: "How long the current llmproxy process has been running.",
+      note: "",
+      title: `How long the current llmproxy process has been running. Started: ${formatDate(snapshot.startedAt)}.`,
     },
   ];
 }

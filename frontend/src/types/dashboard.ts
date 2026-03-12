@@ -214,6 +214,7 @@ export interface SummaryCard {
   value: string | number;
   note: string;
   title: string;
+  tone?: "good" | "warn" | "bad" | "neutral" | "info";
 }
 
 export interface RenderMessageOptions {

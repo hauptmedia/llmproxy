@@ -95,5 +95,5 @@ Dashboard changes to `enabled` and `maxConcurrency` are written back to your loc
 - Chat and completion requests always use upstream streaming so the proxy can collect live metrics such as `tok/s`, TTFB, and in-flight token counts.
 - If the client does not request streaming, the proxy buffers the upstream stream internally and returns a normal JSON response at the end.
 - `multipart/form-data` and unknown formats are routed without model-based selection to a matching free backend.
-- The `Live Connections` dashboard section shows all currently active connections in real time, including queue state, streaming mode, token counts, and `tok/s`.
+- The `Active Connections` dashboard section shows all currently active connections in real time, including queue state, streaming mode, token counts, and `tok/s`.
 - The `Chat Debugger` lets you send debug requests to `/v1/chat/completions` and inspect transcript, parameters, routing, and raw responses.

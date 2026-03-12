@@ -284,6 +284,42 @@
     @apply p-[18px];
   }
 
+  .summary-card.good {
+    border-color: rgba(21, 128, 61, 0.14);
+    background-image: linear-gradient(180deg, rgba(240, 253, 244, 0.95), rgba(255, 255, 255, 0.9));
+  }
+
+  .summary-card.good .card-value {
+    color: #166534;
+  }
+
+  .summary-card.bad {
+    border-color: rgba(185, 28, 28, 0.14);
+    background-image: linear-gradient(180deg, rgba(254, 242, 242, 0.95), rgba(255, 255, 255, 0.9));
+  }
+
+  .summary-card.bad .card-value {
+    color: #b91c1c;
+  }
+
+  .summary-card.warn {
+    border-color: rgba(180, 83, 9, 0.14);
+    background-image: linear-gradient(180deg, rgba(255, 247, 237, 0.95), rgba(255, 255, 255, 0.9));
+  }
+
+  .summary-card.warn .card-value {
+    color: #b45309;
+  }
+
+  .summary-card.info {
+    border-color: rgba(14, 116, 144, 0.14);
+    background-image: linear-gradient(180deg, rgba(236, 254, 255, 0.95), rgba(255, 255, 255, 0.9));
+  }
+
+  .summary-card.info .card-value {
+    color: #0f766e;
+  }
+
   .card-label {
     @apply text-xs font-medium uppercase tracking-[0.06em] text-stone-500;
   }

@@ -142,7 +142,7 @@ function createDashboardStoreInternal() {
 
     const connectionLabel = `${connection.method} ${connection.path}`;
     const confirmed = window.confirm(
-      `End the live connection "${connectionLabel}" now?\n\nThe client will receive a cancelled request, and any partial response already received will stay in request history.`,
+      `End the active connection "${connectionLabel}" now?\n\nThe client will receive a cancelled request, and any partial response already received will stay in request history.`,
     );
     if (!confirmed) {
       return;
@@ -167,7 +167,7 @@ function createDashboardStoreInternal() {
       if (state.requestDetail.requestId === requestId) {
         state.requestDetail.error = message;
       }
-      window.alert(`Could not end the live connection.\n\n${message}`);
+      window.alert(`Could not end the active connection.\n\n${message}`);
     }
   }
 

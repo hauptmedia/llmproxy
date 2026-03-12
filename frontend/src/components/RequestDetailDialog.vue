@@ -24,7 +24,7 @@ const store = useDashboardStore();
             class="button secondary small"
             type="button"
             :disabled="store.isRequestCancelling(store.state.requestDetail.requestId)"
-            :title="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the live connection...' : 'End this live connection after confirmation.'"
+            :title="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection...' : 'End this active connection after confirmation.'"
             @click="store.cancelActiveRequest(store.state.requestDetail.requestId)"
           >
             {{ store.isRequestCancelling(store.state.requestDetail.requestId) ? "Ending..." : "End" }}
