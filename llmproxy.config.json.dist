@@ -1,0 +1,23 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 4100,
+    "dashboardPath": "/dashboard",
+    "requestTimeoutMs": 600000,
+    "queueTimeoutMs": 30000,
+    "healthCheckIntervalMs": 10000
+  },
+  "backends": [
+    {
+      "id": "llama-cpp-local",
+      "name": "Local llama.cpp",
+      "baseUrl": "http://127.0.0.1:8080",
+      "enabled": true,
+      "maxConcurrency": 1,
+      "healthPath": "/v1/models",
+      "models": [
+        "*"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,621 @@
+import { EventEmitter } from "node:events";
+import {
+  BackendLease,
+  BackendRuntimeSnapshot,
+  KnownModel,
+  LeaseReleaseResult,
+  ProxyConfig,
+  ProxyRouteRequest,
+  ProxySnapshot,
+  RequestLogDetail,
+  RequestLogEntry,
+} from "./types";
+import { joinUrl, toErrorMessage } from "./utils";
+import { resolveBackendHeaders } from "./config-store";
+
+interface BackendRuntime {
+  config: ProxyConfig["backends"][number];
+  resolvedHeaders: Record<string, string>;
+  activeRequests: number;
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  cancelledRequests: number;
+  healthy: boolean;
+  lastLatencyMs?: number;
+  avgLatencyMs?: number;
+  lastCheckedAt?: string;
+  lastError?: string;
+  discoveredModels: string[];
+}
+
+interface PendingRequest {
+  route: ProxyRouteRequest;
+  enqueuedAt: number;
+  resolve: (lease: BackendLease) => void;
+  reject: (error: Error) => void;
+  timeout: NodeJS.Timeout;
+  abortCleanup?: () => void;
+}
+
+interface LoadBalancerOptions {
+  fetcher?: typeof fetch;
+}
+
+const MAX_RECENT_REQUESTS = 60;
+
+export class LoadBalancer extends EventEmitter {
+  private readonly fetcher: typeof fetch;
+  private readonly startedAt = new Date().toISOString();
+  private config: ProxyConfig;
+  private backends: BackendRuntime[] = [];
+  private queue: PendingRequest[] = [];
+  private recentRequests: RequestLogEntry[] = [];
+  private recentRequestDetails = new Map<string, Omit<RequestLogDetail, "entry">>();
+  private rejectedRequests = 0;
+  private nextIndex = 0;
+  private healthTimer?: NodeJS.Timeout;
+  private healthRefreshPromise?: Promise<void>;
+
+  public constructor(config: ProxyConfig, options: LoadBalancerOptions = {}) {
+    super();
+    this.fetcher = options.fetcher ?? fetch;
+    this.config = config;
+    this.replaceConfig(config);
+  }
+
+  public getServerConfig(): ProxyConfig["server"] {
+    return this.config.server;
+  }
+
+  public getSnapshot(): ProxySnapshot {
+    const backends = this.backends.map((backend) => this.toSnapshot(backend));
+
+    return {
+      startedAt: this.startedAt,
+      queueDepth: this.queue.length,
+      totals: {
+        activeRequests: backends.reduce((sum, backend) => sum + backend.activeRequests, 0),
+        successfulRequests: backends.reduce((sum, backend) => sum + backend.successfulRequests, 0),
+        failedRequests: backends.reduce((sum, backend) => sum + backend.failedRequests, 0),
+        cancelledRequests: backends.reduce((sum, backend) => sum + backend.cancelledRequests, 0),
+        rejectedRequests: this.rejectedRequests,
+      },
+      backends,
+      activeConnections: [],
+      recentRequests: [...this.recentRequests],
+    };
+  }
+
+  public listKnownModels(): KnownModel[] {
+    const models = new Map<string, KnownModel>();
+
+    for (const backend of this.backends) {
+      for (const model of backend.config.models ?? []) {
+        if (!model.includes("*")) {
+          models.set(model, {
+            id: model,
+            backendId: backend.config.id,
+            ownedBy: backend.config.name,
+            source: "configured",
+          });
+        }
+      }
+
+      for (const model of backend.discoveredModels) {
+        if (!model.includes("*") && !models.has(model)) {
+          models.set(model, {
+            id: model,
+            backendId: backend.config.id,
+            ownedBy: backend.config.name,
+            source: "discovered",
+          });
+        }
+      }
+    }
+
+    return Array.from(models.values()).sort((left, right) => left.id.localeCompare(right.id));
+  }
+
+  public getRequestLogDetail(id: string): RequestLogDetail | undefined {
+    const entry = this.recentRequests.find((candidate) => candidate.id === id);
+
+    if (!entry) {
+      return undefined;
+    }
+
+    const detail = this.recentRequestDetails.get(id);
+    return {
+      entry: { ...entry },
+      requestBody: detail?.requestBody,
+      responseBody: detail?.responseBody,
+    };
+  }
+
+  public replaceConfig(nextConfig: ProxyConfig): void {
+    const previous = new Map(this.backends.map((backend) => [backend.config.id, backend] as const));
+    this.config = nextConfig;
+    this.backends = nextConfig.backends.map((config) => {
+      const existing = previous.get(config.id);
+
+      return {
+        config,
+        resolvedHeaders: resolveBackendHeaders(config),
+        activeRequests: existing?.activeRequests ?? 0,
+        totalRequests: existing?.totalRequests ?? 0,
+        successfulRequests: existing?.successfulRequests ?? 0,
+        failedRequests: existing?.failedRequests ?? 0,
+        cancelledRequests: existing?.cancelledRequests ?? 0,
+        healthy: existing?.healthy ?? config.enabled,
+        lastLatencyMs: existing?.lastLatencyMs,
+        avgLatencyMs: existing?.avgLatencyMs,
+        lastCheckedAt: existing?.lastCheckedAt,
+        lastError: existing?.lastError,
+        discoveredModels: existing?.discoveredModels ?? [],
+      };
+    });
+
+    this.emitSnapshot();
+    void this.refreshHealth();
+  }
+
+  public async start(): Promise<void> {
+    await this.refreshHealth();
+    this.healthTimer = setInterval(() => {
+      void this.refreshHealth();
+    }, this.config.server.healthCheckIntervalMs);
+  }
+
+  public async stop(): Promise<void> {
+    if (this.healthTimer) {
+      clearInterval(this.healthTimer);
+      this.healthTimer = undefined;
+    }
+  }
+
+  public async acquire(route: ProxyRouteRequest, signal?: AbortSignal): Promise<BackendLease> {
+    if (this.backends.length === 0) {
+      this.recordRejectedRequest(route, "No backends configured.");
+      throw new Error("No backends configured.");
+    }
+
+    if (!this.backends.some((backend) => backend.config.enabled)) {
+      this.recordRejectedRequest(route, "No enabled backends available.");
+      throw new Error("No enabled backends available.");
+    }
+
+    if (!this.hasMatchingBackend(route.model)) {
+      const message = route.model
+        ? `No backend configured for model "${route.model}".`
+        : "No backend can serve this request.";
+      this.recordRejectedRequest(route, message);
+      throw new Error(message);
+    }
+
+    const immediate = this.tryAcquire(route);
+    if (immediate) {
+      return immediate;
+    }
+
+    return new Promise<BackendLease>((resolve, reject) => {
+      const pending: PendingRequest = {
+        route,
+        enqueuedAt: Date.now(),
+        resolve,
+        reject,
+        timeout: setTimeout(() => {
+          this.dequeuePending(pending);
+          const waitedMs = Date.now() - pending.enqueuedAt;
+          const message = `Timed out after ${waitedMs}ms waiting for a free backend slot.`;
+          this.recordRejectedRequest(route, message, "queued_timeout", waitedMs);
+          reject(new Error(message));
+          this.emitSnapshot();
+        }, this.config.server.queueTimeoutMs),
+      };
+
+      if (signal) {
+        const onAbort = () => {
+          this.dequeuePending(pending);
+          const message = signal.reason instanceof Error ? signal.reason.message : "Request was aborted while queued.";
+          this.recordRejectedRequest(route, message, "cancelled", Date.now() - pending.enqueuedAt);
+          reject(new Error(message));
+          this.emitSnapshot();
+        };
+
+        if (signal.aborted) {
+          onAbort();
+          return;
+        }
+
+        signal.addEventListener("abort", onAbort, { once: true });
+        pending.abortCleanup = () => signal.removeEventListener("abort", onAbort);
+      }
+
+      this.queue.push(pending);
+      this.emitSnapshot();
+    });
+  }
+
+  public markBackendUnhealthy(id: string, error: string): void {
+    const backend = this.backends.find((entry) => entry.config.id === id);
+
+    if (!backend) {
+      return;
+    }
+
+    backend.healthy = false;
+    backend.lastCheckedAt = new Date().toISOString();
+    backend.lastError = error;
+    this.emitSnapshot();
+  }
+
+  private hasMatchingBackend(model?: string): boolean {
+    return this.backends.some((backend) => backend.config.enabled && this.backendSupportsModel(backend, model));
+  }
+
+  private tryAcquire(route: ProxyRouteRequest): BackendLease | undefined {
+    const available = this.pickBackend(route.model);
+
+    if (!available) {
+      return undefined;
+    }
+
+    const queueMs = Date.now() - route.receivedAt;
+    available.activeRequests += 1;
+    available.totalRequests += 1;
+    available.lastError = undefined;
+    this.emitSnapshot();
+
+    let released = false;
+
+    return {
+      requestId: route.id,
+      backend: available.config,
+      resolvedHeaders: { ...available.resolvedHeaders },
+      queueMs,
+      release: (result: LeaseReleaseResult) => {
+        if (released) {
+          return;
+        }
+
+        released = true;
+        available.activeRequests = Math.max(0, available.activeRequests - 1);
+        available.lastLatencyMs = result.latencyMs;
+        available.avgLatencyMs = updateAverageLatency(available, result.latencyMs);
+        available.lastCheckedAt = new Date().toISOString();
+
+        if (result.outcome === "success") {
+          available.successfulRequests += 1;
+          available.healthy = true;
+          available.lastError = undefined;
+        } else if (result.outcome === "cancelled") {
+          available.cancelledRequests += 1;
+          available.lastError = result.error;
+        } else {
+          available.failedRequests += 1;
+          available.lastError = result.error;
+
+          if (result.outcome === "error") {
+            available.healthy = false;
+          }
+        }
+
+        this.recentRequests.unshift({
+          id: route.id,
+          time: new Date().toISOString(),
+          method: route.method,
+          path: route.path,
+          model: route.model,
+          backendId: available.config.id,
+          backendName: available.config.name,
+          outcome: result.outcome,
+          latencyMs: result.latencyMs,
+          queuedMs: result.queuedMs,
+          statusCode: result.statusCode,
+          error: result.error,
+          promptTokens: result.promptTokens,
+          completionTokens: result.completionTokens,
+          totalTokens: result.totalTokens,
+          contentTokens: result.contentTokens,
+          reasoningTokens: result.reasoningTokens,
+          textTokens: result.textTokens,
+          promptMs: result.promptMs,
+          generationMs: result.generationMs,
+          promptTokensPerSecond: result.promptTokensPerSecond,
+          completionTokensPerSecond: result.completionTokensPerSecond,
+          timeToFirstTokenMs: result.timeToFirstTokenMs,
+          finishReason: result.finishReason,
+          metricsExact: result.metricsExact,
+          hasDetail: route.requestBody !== undefined || result.responseBody !== undefined,
+        });
+        this.recentRequests = this.recentRequests.slice(0, MAX_RECENT_REQUESTS);
+        this.storeRecentRequestDetail(route.id, route.requestBody, result.responseBody);
+
+        this.pumpQueue();
+        this.emitSnapshot();
+      },
+    };
+  }
+
+  private pickBackend(model?: string): BackendRuntime | undefined {
+    if (this.backends.length === 0) {
+      return undefined;
+    }
+
+    for (let offset = 0; offset < this.backends.length; offset += 1) {
+      const index = (this.nextIndex + offset) % this.backends.length;
+      const backend = this.backends[index];
+
+      if (!backend.config.enabled || !backend.healthy) {
+        continue;
+      }
+
+      if (backend.activeRequests >= backend.config.maxConcurrency) {
+        continue;
+      }
+
+      if (!this.backendSupportsModel(backend, model)) {
+        continue;
+      }
+
+      this.nextIndex = (index + 1) % this.backends.length;
+      return backend;
+    }
+
+    return undefined;
+  }
+
+  private backendSupportsModel(backend: BackendRuntime, model?: string): boolean {
+    if (!model) {
+      return true;
+    }
+
+    const patterns = backend.config.models?.length ? backend.config.models : backend.discoveredModels;
+
+    if (!patterns || patterns.length === 0) {
+      return true;
+    }
+
+    return patterns.some((pattern) => matchesPattern(pattern, model));
+  }
+
+  private dequeuePending(pending: PendingRequest): void {
+    const index = this.queue.indexOf(pending);
+
+    if (index >= 0) {
+      this.queue.splice(index, 1);
+    }
+
+    pending.abortCleanup?.();
+    clearTimeout(pending.timeout);
+  }
+
+  private pumpQueue(): void {
+    let progressed = true;
+
+    while (progressed) {
+      progressed = false;
+
+      for (let index = 0; index < this.queue.length; index += 1) {
+        const pending = this.queue[index];
+        const lease = this.tryAcquire(pending.route);
+
+        if (!lease) {
+          continue;
+        }
+
+        this.queue.splice(index, 1);
+        pending.abortCleanup?.();
+        clearTimeout(pending.timeout);
+        pending.resolve(lease);
+        progressed = true;
+        break;
+      }
+    }
+  }
+
+  private async refreshHealth(): Promise<void> {
+    if (this.healthRefreshPromise) {
+      return this.healthRefreshPromise;
+    }
+
+    this.healthRefreshPromise = (async () => {
+      try {
+        await Promise.all(
+          this.backends.map(async (backend) => {
+            await this.refreshBackendHealth(backend);
+          }),
+        );
+        this.emitSnapshot();
+        this.pumpQueue();
+      } finally {
+        this.healthRefreshPromise = undefined;
+      }
+    })();
+
+    return this.healthRefreshPromise;
+  }
+
+  private async refreshBackendHealth(backend: BackendRuntime): Promise<void> {
+    if (!backend.config.enabled) {
+      backend.healthy = false;
+      backend.lastCheckedAt = new Date().toISOString();
+      backend.lastError = "Backend disabled.";
+      return;
+    }
+
+    const healthPaths = backend.config.healthPath ? [backend.config.healthPath] : ["/health", "/v1/models"];
+    let lastError = "Health check failed.";
+    let discoveredModels = backend.discoveredModels;
+
+    for (const healthPath of healthPaths) {
+      try {
+        const response = await fetchWithTimeout(
+          this.fetcher,
+          joinUrl(backend.config.baseUrl, healthPath),
+          {
+            method: "GET",
+            headers: backend.resolvedHeaders,
+          },
+          backend.config.timeoutMs ?? 5000,
+        );
+
+        if (!response.ok) {
+          lastError = `${healthPath} returned HTTP ${response.status}.`;
+          continue;
+        }
+
+        if (healthPath === "/v1/models") {
+          discoveredModels = await tryExtractModels(response, discoveredModels);
+        }
+
+        backend.healthy = true;
+        backend.lastError = undefined;
+        backend.lastCheckedAt = new Date().toISOString();
+        backend.discoveredModels = discoveredModels;
+        return;
+      } catch (error) {
+        lastError = toErrorMessage(error);
+      }
+    }
+
+    backend.healthy = false;
+    backend.lastCheckedAt = new Date().toISOString();
+    backend.lastError = lastError;
+  }
+
+  private toSnapshot(backend: BackendRuntime): BackendRuntimeSnapshot {
+    return {
+      id: backend.config.id,
+      name: backend.config.name,
+      baseUrl: backend.config.baseUrl,
+      enabled: backend.config.enabled,
+      healthy: backend.healthy,
+      maxConcurrency: backend.config.maxConcurrency,
+      activeRequests: backend.activeRequests,
+      availableSlots: Math.max(0, backend.config.maxConcurrency - backend.activeRequests),
+      totalRequests: backend.totalRequests,
+      successfulRequests: backend.successfulRequests,
+      failedRequests: backend.failedRequests,
+      cancelledRequests: backend.cancelledRequests,
+      lastLatencyMs: backend.lastLatencyMs,
+      avgLatencyMs: backend.avgLatencyMs,
+      lastCheckedAt: backend.lastCheckedAt,
+      lastError: backend.lastError,
+      configuredModels: backend.config.models ?? [],
+      discoveredModels: backend.discoveredModels,
+    };
+  }
+
+  private emitSnapshot(): void {
+    this.emit("snapshot", this.getSnapshot());
+  }
+
+  private recordRejectedRequest(
+    route: ProxyRouteRequest,
+    error: string,
+    outcome: RequestLogEntry["outcome"] = "error",
+    queuedMs = 0,
+  ): void {
+    this.rejectedRequests += 1;
+    this.recentRequests.unshift({
+      id: route.id,
+      time: new Date().toISOString(),
+      method: route.method,
+      path: route.path,
+      model: route.model,
+      outcome,
+      latencyMs: Date.now() - route.receivedAt,
+      queuedMs,
+      error,
+      hasDetail: route.requestBody !== undefined,
+    });
+    this.recentRequests = this.recentRequests.slice(0, MAX_RECENT_REQUESTS);
+    this.storeRecentRequestDetail(route.id, route.requestBody, undefined);
+  }
+
+  private storeRecentRequestDetail(
+    requestId: string,
+    requestBody: ProxyRouteRequest["requestBody"],
+    responseBody: LeaseReleaseResult["responseBody"],
+  ): void {
+    if (requestBody !== undefined || responseBody !== undefined) {
+      this.recentRequestDetails.set(requestId, {
+        requestBody,
+        responseBody,
+      });
+    } else {
+      this.recentRequestDetails.delete(requestId);
+    }
+
+    const activeIds = new Set(this.recentRequests.map((entry) => entry.id));
+    for (const id of Array.from(this.recentRequestDetails.keys())) {
+      if (!activeIds.has(id)) {
+        this.recentRequestDetails.delete(id);
+      }
+    }
+  }
+}
+
+function matchesPattern(pattern: string, value: string): boolean {
+  if (pattern === "*") {
+    return true;
+  }
+
+  if (pattern.includes("*")) {
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*");
+    return new RegExp(`^${escaped}$`).test(value);
+  }
+
+  return pattern === value;
+}
+
+function updateAverageLatency(backend: BackendRuntime, latencyMs: number): number {
+  const completedRequests =
+    backend.successfulRequests + backend.failedRequests + backend.cancelledRequests + 1;
+
+  if (backend.avgLatencyMs === undefined) {
+    return latencyMs;
+  }
+
+  return Math.round(((backend.avgLatencyMs * (completedRequests - 1)) + latencyMs) / completedRequests);
+}
+
+async function tryExtractModels(response: Response, fallback: string[]): Promise<string[]> {
+  try {
+    const body = (await response.json()) as { data?: Array<{ id?: unknown }> };
+
+    if (!Array.isArray(body.data)) {
+      return fallback;
+    }
+
+    const models = body.data
+      .map((entry) => (typeof entry.id === "string" ? entry.id : undefined))
+      .filter((entry): entry is string => Boolean(entry));
+
+    return models.length > 0 ? models : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function fetchWithTimeout(
+  fetcher: typeof fetch,
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort(new Error(`Timed out after ${timeoutMs}ms.`));
+  }, timeoutMs);
+
+  try {
+    return await fetcher(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}

@@ -1,0 +1,113 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { LoadBalancer } from "./load-balancer";
+import { ProxyConfig } from "./types";
+import { delay } from "./utils";
+
+const TEST_CONFIG: ProxyConfig = {
+  server: {
+    host: "127.0.0.1",
+    port: 4000,
+    dashboardPath: "/dashboard",
+    requestTimeoutMs: 5_000,
+    queueTimeoutMs: 500,
+    healthCheckIntervalMs: 10_000,
+  },
+  backends: [
+    {
+      id: "llama-a",
+      name: "llama A",
+      baseUrl: "http://127.0.0.1:8080",
+      enabled: true,
+      maxConcurrency: 1,
+      models: ["chat-*"],
+    },
+    {
+      id: "llama-b",
+      name: "llama B",
+      baseUrl: "http://127.0.0.1:8081",
+      enabled: true,
+      maxConcurrency: 1,
+      models: ["embed-*"],
+    },
+  ],
+};
+
+test("routes by model and queues when the slot is full", async () => {
+  const balancer = new LoadBalancer(TEST_CONFIG, {
+    fetcher: async () =>
+      new Response(JSON.stringify({ object: "list", data: [] }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+  });
+  const firstLease = await balancer.acquire({
+    id: "req-1",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "chat-local",
+    stream: true,
+  });
+
+  assert.equal(firstLease.backend.id, "llama-a");
+
+  let secondResolved = false;
+  const secondLeasePromise = balancer
+    .acquire({
+      id: "req-2",
+      receivedAt: Date.now(),
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "chat-local",
+      stream: true,
+    })
+    .then((lease) => {
+      secondResolved = true;
+      return lease;
+    });
+
+  await delay(50);
+  assert.equal(secondResolved, false);
+
+  firstLease.release({
+    outcome: "success",
+    latencyMs: 120,
+    statusCode: 200,
+    queuedMs: firstLease.queueMs,
+  });
+
+  const secondLease = await secondLeasePromise;
+  assert.equal(secondLease.backend.id, "llama-a");
+
+  secondLease.release({
+    outcome: "success",
+    latencyMs: 90,
+    statusCode: 200,
+    queuedMs: secondLease.queueMs,
+  });
+
+  const embedLease = await balancer.acquire({
+    id: "req-3",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/embeddings",
+    model: "embed-local",
+    stream: false,
+  });
+
+  assert.equal(embedLease.backend.id, "llama-b");
+  embedLease.release({
+    outcome: "success",
+    latencyMs: 80,
+    statusCode: 200,
+    queuedMs: embedLease.queueMs,
+  });
+
+  const snapshot = balancer.getSnapshot();
+  assert.equal(snapshot.queueDepth, 0);
+  assert.equal(snapshot.backends[0]?.successfulRequests, 2);
+  assert.equal(snapshot.backends[1]?.successfulRequests, 1);
+});
