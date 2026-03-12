@@ -113,33 +113,12 @@
   }
 
   .hero {
-    @apply relative overflow-hidden p-6;
+    @apply p-6;
     align-self: stretch;
   }
 
-  .hero::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-      linear-gradient(135deg, rgba(255, 255, 255, 0.28), transparent 48%),
-      radial-gradient(circle at 18% 18%, rgba(251, 191, 36, 0.18), transparent 30%);
-    pointer-events: none;
-  }
-
-  .hero::after {
-    content: "";
-    position: absolute;
-    inset: auto -40px -40px auto;
-    width: 220px;
-    height: 220px;
-    border-radius: 9999px;
-    background: radial-gradient(circle, rgba(251, 146, 60, 0.24), transparent 70%);
-    pointer-events: none;
-  }
-
   .hero-bar {
-    @apply relative z-10 flex flex-wrap items-center justify-between gap-4;
+    @apply flex flex-wrap items-center justify-between gap-4;
   }
 
   .hero-nav-group {
@@ -192,10 +171,7 @@
   }
 
   .page-nav {
-    @apply flex flex-wrap items-center gap-2 rounded-[1.35rem] border border-amber-900/10 bg-white/72 p-1.5 shadow-sm;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.72),
-      0 14px 26px rgba(120, 53, 15, 0.08);
+    @apply flex flex-wrap items-center gap-2 rounded-[1.35rem] border border-amber-900/10 bg-white/88 p-1.5 shadow-sm;
   }
 
   .page-link {
@@ -221,7 +197,7 @@
   }
 
   .meta {
-    @apply inline-flex items-center justify-center border border-amber-900/10 bg-white/60 p-0 text-stone-600 shadow-sm;
+    @apply inline-flex items-center justify-center border border-amber-900/10 bg-white/88 p-0 text-stone-600 shadow-sm;
     width: 44px;
     height: 44px;
     border-radius: 9999px;
