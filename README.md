@@ -2,12 +2,14 @@
 
 A small TypeScript proxy with an OpenAI-compatible `/v1/*` interface, health checks, queueing, and a live dashboard for local `llama.cpp` instances or other OpenAI-compatible backends.
 
+Prerequisite: Node.js 18+ should be available on your system `PATH` or configured as the project interpreter in WebStorm.
+
 ## Features
 
 - OpenAI-compatible forwarding for arbitrary `/v1/*` routes
 - Load balancing across multiple backends with configurable `maxConcurrency`
 - Queueing when local backends are fully utilized
-- Live dashboard with SSE updates, metrics, an active connection list, and backend controls
+- Vue-based single page dashboard served by the backend under `/dashboard`, refactored into Vue single-file components and built with Vite plus Tailwind CSS
 - Overview page with health status and live active connections, plus dedicated subpages for chat debugging and backend management
 - Built-in chat debugger with model selection, live token metrics, sampler parameters, and raw request/response views
 - Aggregated `/v1/models`
@@ -27,6 +29,8 @@ After that:
 - Overview dashboard: `http://localhost:4100/dashboard`
 - Chat Debugger: `http://localhost:4100/dashboard/chat`
 - Backends: `http://localhost:4100/dashboard/backends`
+
+The backend serves the built Vue dashboard app directly on the `/dashboard` routes, so frontend and backend stay separated while deployment still stays simple.
 
 ## Configuration
 

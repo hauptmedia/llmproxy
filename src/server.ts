@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createServer, IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from "node:http";
+import { extname, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { ConfigStore, BackendPatch } from "./config-store";
@@ -175,6 +177,12 @@ export class LlmProxyServer {
       return;
     }
 
+    const dashboardAssetPath = method === "GET" ? resolveDashboardAssetPath(url.pathname, dashboardPath) : undefined;
+    if (dashboardAssetPath) {
+      await this.handleDashboardAsset(response, dashboardAssetPath);
+      return;
+    }
+
     const dashboardRoute = method === "GET" ? matchDashboardRoute(url.pathname, dashboardPath) : undefined;
 
     if (dashboardRoute) {
@@ -261,6 +269,24 @@ export class LlmProxyServer {
     }
 
     sendJson(response, 200, detail);
+  }
+
+  private async handleDashboardAsset(response: ServerResponse, assetPath: string): Promise<void> {
+    try {
+      const payload = await readFile(assetPath);
+      response.statusCode = 200;
+      response.setHeader("content-type", assetContentType(assetPath));
+      response.setHeader("cache-control", "no-store");
+      response.end(payload);
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code?: unknown }).code) : "";
+      if (code === "ENOENT") {
+        sendJson(response, 404, proxyError(`Dashboard asset "${assetPath}" was not found.`));
+        return;
+      }
+
+      sendJson(response, 500, proxyError(`Failed to load dashboard asset "${assetPath}".`));
+    }
   }
 
   private handleModels(response: ServerResponse, models: KnownModel[]): void {
@@ -926,6 +952,58 @@ function normalizeDashboardSubPath(pathname: string): string {
   return pathname !== "/" && pathname.endsWith("/")
     ? pathname.slice(0, -1)
     : pathname;
+}
+
+function resolveDashboardAssetPath(pathname: string, dashboardPath: string): string | undefined {
+  const assetPrefix = `${dashboardPath}/assets/`;
+  if (!pathname.startsWith(assetPrefix)) {
+    return undefined;
+  }
+
+  const rawAssetPath = pathname.slice(assetPrefix.length);
+  if (!rawAssetPath) {
+    return undefined;
+  }
+
+  const segments = rawAssetPath
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => decodeURIComponent(segment));
+
+  if (
+    segments.length === 0 ||
+    segments.some((segment) => segment === "." || segment === ".." || segment.includes("\\"))
+  ) {
+    return undefined;
+  }
+
+  const assetRoot = resolve(__dirname, "dashboard-app", "assets");
+  const candidate = resolve(assetRoot, ...segments);
+  const allowedPrefix = assetRoot.endsWith(sep) ? assetRoot : `${assetRoot}${sep}`;
+
+  if (candidate !== assetRoot && !candidate.startsWith(allowedPrefix)) {
+    return undefined;
+  }
+
+  return candidate;
+}
+
+function assetContentType(pathname: string): string {
+  const extension = extname(pathname).toLowerCase();
+
+  if (extension === ".css") {
+    return "text/css; charset=utf-8";
+  }
+
+  if (extension === ".js") {
+    return "text/javascript; charset=utf-8";
+  }
+
+  if (extension === ".json" || extension === ".map") {
+    return "application/json; charset=utf-8";
+  }
+
+  return "application/octet-stream";
 }
 
 function selectProxyStatus(message: string, aborted: boolean, clientDisconnected: boolean): number {

@@ -1,0 +1,67 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, watch } from "vue";
+import { RouterLink, RouterView, useRoute } from "vue-router";
+import RequestDetailDialog from "./components/RequestDetailDialog.vue";
+import { type DashboardPage, getPageTitle, useDashboardStore } from "./dashboard-core";
+
+const store = useDashboardStore();
+const route = useRoute();
+
+const pageLinks: Array<{ page: DashboardPage; label: string }> = [
+  { page: "overview", label: "📊 Overview" },
+  { page: "chat", label: "💬 Chat Debugger" },
+  { page: "backends", label: "🧩 Backends" },
+];
+
+const currentPage = computed(() => {
+  const routeName = route.name;
+  if (routeName === "chat" || routeName === "backends" || routeName === "overview") {
+    return routeName;
+  }
+
+  return "overview";
+});
+
+onMounted(() => {
+  store.start();
+});
+
+onBeforeUnmount(() => {
+  store.stop();
+});
+
+watch(
+  currentPage,
+  (page) => {
+    document.title = `llmproxy - ${getPageTitle(page)}`;
+  },
+  { immediate: true },
+);
+</script>
+
+<template>
+  <div class="shell">
+    <header class="hero">
+      <div class="hero-bar">
+        <nav class="page-nav" aria-label="Dashboard pages">
+          <RouterLink
+            v-for="link in pageLinks"
+            :key="link.page"
+            :to="{ name: link.page }"
+            class="page-link"
+            :class="{ active: currentPage === link.page }"
+          >
+            {{ link.label }}
+          </RouterLink>
+        </nav>
+        <div :class="['meta', store.state.connectionStatus]" :title="store.state.connectionText">
+          <span class="connection-dot" aria-hidden="true"></span>
+          <span>{{ store.state.connectionText }}</span>
+        </div>
+      </div>
+    </header>
+
+    <RouterView />
+    <RequestDetailDialog />
+  </div>
+</template>

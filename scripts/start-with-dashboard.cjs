@@ -51,14 +51,24 @@ function getChromePath() {
 
 function buildProject() {
   const tscPath = path.join(repoRoot, 'node_modules', 'typescript', 'bin', 'tsc');
-  const result = spawnSync(process.execPath, [tscPath, '-p', 'tsconfig.json'], {
+  const backendBuild = spawnSync(process.execPath, [tscPath, '-p', 'tsconfig.json'], {
     cwd: repoRoot,
     stdio: 'inherit',
     windowsHide: false,
   });
 
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+  if (backendBuild.status !== 0) {
+    process.exit(backendBuild.status ?? 1);
+  }
+
+  const dashboardBuild = spawnSync(process.execPath, [path.join(repoRoot, 'scripts', 'build-dashboard-client.cjs')], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+    windowsHide: false,
+  });
+
+  if (dashboardBuild.status !== 0) {
+    process.exit(dashboardBuild.status ?? 1);
   }
 }
 
