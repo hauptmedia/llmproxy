@@ -122,7 +122,6 @@ const store = useDashboardStore();
               v-if="store.state.debug.systemPrompt.trim()"
               :message="{ role: 'system', content: store.state.debug.systemPrompt.trim() }"
               :index="0"
-              heading="system prompt"
               :reasoning-collapsed="true"
             />
             <MessageCard
@@ -130,7 +129,6 @@ const store = useDashboardStore();
               :key="index + ':' + entry.role + ':' + (entry.backend || '')"
               :message="entry"
               :index="Number(index) + (store.state.debug.systemPrompt.trim() ? 1 : 0)"
-              :heading="'turn ' + (Number(index) + 1)"
               :finish-reason="entry.finish_reason || ''"
               :reasoning-collapsed="true"
             />

@@ -281,7 +281,7 @@ function renderMessageContentHtml(content: unknown): string {
 
   if (Array.isArray(content)) {
     if (content.length === 0) {
-      return '<div class="empty">No message content.</div>';
+      return "";
     }
 
     return (
@@ -307,11 +307,11 @@ function renderMessageContentHtml(content: unknown): string {
   }
 
   if (content === null) {
-    return '<div class="empty">Content is null.</div>';
+    return "";
   }
 
   if (content === undefined) {
-    return '<div class="empty">No message content.</div>';
+    return "";
   }
 
   return renderDetailBlock("Content", content);
@@ -338,27 +338,347 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
   return (
     `<article class="turn ${escapeHtml(role)}">` +
       `<div class="turn-head">` +
-        `<span class="turn-role">${escapeHtml(options.heading ?? `message ${index + 1}`)}</span>` +
+        (options.heading
+          ? `<span class="turn-role">${escapeHtml(options.heading)}</span>`
+          : "") +
         `<div class="message-meta">` +
           metaBits.map((bit) => (
             `<span class="badge ${escapeHtml(bit.tone ?? "neutral")}" title="${escapeHtml(bit.title ?? "")}">${escapeHtml(bit.text)}</span>`
           )).join("") +
         `</div>` +
       `</div>` +
-      renderReasoningPanel(message?.reasoning_content, options.reasoningCollapsed ?? false) +
+      renderReasoningPanel(message?.reasoning_content, options.reasoningCollapsed ?? true) +
       ((hasVisibleMessageContent(message?.content) || !message?.reasoning_content)
         ? renderMessageContentHtml(message?.content)
         : "") +
       (typeof message?.refusal === "string" && message.refusal.length > 0
         ? renderDetailBlock("Refusal", message.refusal)
         : "") +
-      (message?.function_call ? renderDetailBlock("Function Call", message.function_call) : "") +
+      (isClientRecord(message?.function_call)
+        ? renderFunctionInvocationHtml("Function Call", message.function_call, { note: "Legacy function call" })
+        : (message?.function_call ? renderDetailBlock("Function Call", message.function_call) : "")) +
       (Array.isArray(message?.tool_calls) && message.tool_calls.length > 0
-        ? message.tool_calls.map((toolCall: unknown, toolIndex: number) => renderDetailBlock(`Tool Call ${toolIndex + 1}`, toolCall)).join("")
+        ? message.tool_calls.map((toolCall: unknown, toolIndex: number) => {
+            if (isClientRecord(toolCall) && isClientRecord(toolCall.function)) {
+              return renderFunctionInvocationHtml(`Tool Call ${toolIndex + 1}`, toolCall.function, {
+                id: typeof toolCall.id === "string" ? toolCall.id : "",
+                type: typeof toolCall.type === "string" ? toolCall.type : "",
+              });
+            }
+
+            return renderDetailBlock(`Tool Call ${toolIndex + 1}`, toolCall);
+          }).join("")
         : "") +
       (typeof message?.audio === "object" && message.audio !== null
         ? renderDetailBlock("Audio", message.audio)
         : "") +
+    `</article>`
+  );
+}
+
+function pluralize(value: number, singular: string, plural = `${singular}s`): string {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function schemaTypeLabel(schema: Record<string, any>): string {
+  if (typeof schema.type === "string" && schema.type.trim()) {
+    return schema.type.trim();
+  }
+
+  if (Array.isArray(schema.type)) {
+    const labels = schema.type.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+    if (labels.length > 0) {
+      return labels.join(" | ");
+    }
+  }
+
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+    return "enum";
+  }
+
+  if (Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
+    return pluralize(schema.oneOf.length, "variant");
+  }
+
+  if (Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
+    return pluralize(schema.anyOf.length, "option");
+  }
+
+  return "value";
+}
+
+function schemaNotes(schema: Record<string, any>): string[] {
+  const notes: string[] = [];
+
+  if (typeof schema.format === "string" && schema.format.trim()) {
+    notes.push(`format ${schema.format.trim()}`);
+  }
+
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+    const values = schema.enum.slice(0, 4).map((item) => formatUiValue(item)).filter(Boolean);
+    if (values.length > 0) {
+      const suffix = schema.enum.length > values.length ? ", ..." : "";
+      notes.push(`one of ${values.join(", ")}${suffix}`);
+    }
+  }
+
+  if (typeof schema.minLength === "number") {
+    notes.push(`min length ${schema.minLength}`);
+  }
+
+  if (typeof schema.maxLength === "number") {
+    notes.push(`max length ${schema.maxLength}`);
+  }
+
+  if (typeof schema.minimum === "number") {
+    notes.push(`min ${schema.minimum}`);
+  }
+
+  if (typeof schema.maximum === "number") {
+    notes.push(`max ${schema.maximum}`);
+  }
+
+  if (typeof schema.minItems === "number") {
+    notes.push(`min items ${schema.minItems}`);
+  }
+
+  if (typeof schema.maxItems === "number") {
+    notes.push(`max items ${schema.maxItems}`);
+  }
+
+  if (schema.type === "array" && isClientRecord(schema.items)) {
+    notes.push(`items ${schemaTypeLabel(schema.items)}`);
+  }
+
+  if (schema.type === "object" && isClientRecord(schema.properties)) {
+    notes.push(`${pluralize(Object.keys(schema.properties).length, "field")}`);
+  }
+
+  return notes;
+}
+
+function renderToolParameterHtml(
+  name: string,
+  definition: unknown,
+  requiredNames: Set<string>,
+): string {
+  const schema = isClientRecord(definition) ? definition : null;
+  const typeLabel = schema ? schemaTypeLabel(schema) : "value";
+  const description =
+    schema && typeof schema.description === "string" && schema.description.trim().length > 0
+      ? schema.description.trim()
+      : "";
+  const notes = schema ? schemaNotes(schema) : [];
+
+  return (
+    `<div class="tool-parameter-row">` +
+      `<div class="tool-parameter-head">` +
+        `<span class="tool-parameter-name">${escapeHtml(name)}</span>` +
+        `<span class="badge ${requiredNames.has(name) ? "good" : "neutral"}">${requiredNames.has(name) ? "required" : "optional"}</span>` +
+        `<span class="badge neutral">${escapeHtml(typeLabel)}</span>` +
+      `</div>` +
+      (description ? `<div class="tool-parameter-description">${escapeHtml(description)}</div>` : "") +
+      (notes.length > 0 ? `<div class="tool-parameter-note">${escapeHtml(notes.join(" • "))}</div>` : "") +
+    `</div>`
+  );
+}
+
+function parseStructuredArguments(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return value;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
+
+function valueTypeLabel(value: unknown): string {
+  if (Array.isArray(value)) {
+    return "array";
+  }
+
+  if (value === null) {
+    return "null";
+  }
+
+  if (isClientRecord(value)) {
+    return "object";
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return typeof value;
+  }
+
+  return "value";
+}
+
+function renderInvocationValueHtml(value: unknown): string {
+  if (typeof value === "string") {
+    return renderMessageStringHtml(value);
+  }
+
+  if (typeof value === "number" || typeof value === "boolean" || value === null) {
+    return `<div class="tool-parameter-description mono">${escapeHtml(formatUiValue(value) || "null")}</div>`;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return '<div class="tool-parameter-note">Empty array.</div>';
+    }
+
+    return (
+      `<div class="tool-argument-tree">` +
+        value.map((item, index) => renderInvocationNodeHtml(`[${index}]`, item)).join("") +
+      `</div>`
+    );
+  }
+
+  if (isClientRecord(value)) {
+    const entries = Object.entries(value);
+    if (entries.length === 0) {
+      return '<div class="tool-parameter-note">Empty object.</div>';
+    }
+
+    return (
+      `<div class="tool-argument-tree">` +
+        entries.map(([key, item]) => renderInvocationNodeHtml(key, item)).join("") +
+      `</div>`
+    );
+  }
+
+  return `<div class="tool-parameter-description">${escapeHtml(formatUiValue(value) || "n/a")}</div>`;
+}
+
+function renderInvocationNodeHtml(name: string, value: unknown): string {
+  return (
+    `<div class="tool-parameter-row">` +
+      `<div class="tool-parameter-head">` +
+        `<span class="tool-parameter-name">${escapeHtml(name)}</span>` +
+        `<span class="badge neutral">${escapeHtml(valueTypeLabel(value))}</span>` +
+      `</div>` +
+      renderInvocationValueHtml(value) +
+    `</div>`
+  );
+}
+
+function renderFunctionInvocationHtml(
+  label: string,
+  payload: Record<string, any>,
+  options: { id?: string; type?: string; note?: string } = {},
+): string {
+  const name =
+    typeof payload.name === "string" && payload.name.trim().length > 0
+      ? payload.name.trim()
+      : label;
+  const summaryBadges = [
+    options.id ? `<span class="badge neutral">id ${escapeHtml(options.id)}</span>` : "",
+    options.type && options.type !== "function" ? `<span class="badge neutral">${escapeHtml(options.type)}</span>` : "",
+  ].filter(Boolean).join("");
+  const argumentsValue = parseStructuredArguments(payload.arguments);
+  const argumentRows = isClientRecord(argumentsValue)
+    ? Object.entries(argumentsValue).map(([key, value]) => renderInvocationNodeHtml(key, value)).join("")
+    : renderInvocationNodeHtml("value", argumentsValue);
+
+  return (
+    `<article class="tool-definition-card">` +
+      `<div class="tool-definition-head">` +
+        `<div>` +
+          `<div class="tool-definition-title">${escapeHtml(name)}</div>` +
+          (options.note ? `<div class="tool-definition-subtitle">${escapeHtml(options.note)}</div>` : "") +
+        `</div>` +
+        (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
+      `</div>` +
+      `<div class="tool-parameter-list">` +
+        argumentRows +
+      `</div>` +
+    `</article>`
+  );
+}
+
+function renderFunctionToolHtml(tool: Record<string, any>, index: number): string {
+  const fn = isClientRecord(tool.function) ? tool.function : null;
+  const name =
+    fn && typeof fn.name === "string" && fn.name.trim().length > 0
+      ? fn.name.trim()
+      : `Tool ${index + 1}`;
+  const description =
+    fn && typeof fn.description === "string" && fn.description.trim().length > 0
+      ? fn.description.trim()
+      : "";
+  const schema = fn && isClientRecord(fn.parameters) ? fn.parameters : null;
+  const properties =
+    schema && isClientRecord(schema.properties)
+      ? Object.entries(schema.properties)
+      : [];
+  const requiredNames = new Set(
+    schema && Array.isArray(schema.required)
+      ? schema.required.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : [],
+  );
+
+  const summaryBadges = [
+    schema?.additionalProperties === false ? `<span class="badge warn">no extra fields</span>` : "",
+    typeof fn?.strict === "boolean" ? `<span class="badge ${fn.strict ? "good" : "neutral"}">${fn.strict ? "strict" : "non-strict"}</span>` : "",
+  ].filter(Boolean).join("");
+
+  return (
+    `<article class="tool-definition-card">` +
+      `<div class="tool-definition-head">` +
+        `<div>` +
+          `<div class="tool-definition-title">${escapeHtml(name)}</div>` +
+        `</div>` +
+        (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
+      `</div>` +
+      (description ? `<p class="tool-definition-description">${escapeHtml(description)}</p>` : "") +
+      (properties.length > 0
+        ? (
+            `<div class="tool-parameter-list">` +
+              properties.map(([propertyName, propertyDefinition]) => renderToolParameterHtml(propertyName, propertyDefinition, requiredNames)).join("") +
+            `</div>`
+          )
+        : '<div class="empty">This tool did not declare any top-level JSON schema properties.</div>') +
+    `</article>`
+  );
+}
+
+function renderGenericToolHtml(tool: Record<string, any>, index: number): string {
+  const toolType =
+    typeof tool.type === "string" && tool.type.trim().length > 0
+      ? tool.type.trim()
+      : `tool-${index + 1}`;
+  const fields = Object.entries(tool).filter(([key]) => key !== "type");
+
+  return (
+    `<article class="tool-definition-card">` +
+      `<div class="tool-definition-head">` +
+        `<div>` +
+          `<div class="tool-definition-title">${escapeHtml(toolType)}</div>` +
+          `<div class="tool-definition-subtitle">Tool ${index + 1}</div>` +
+        `</div>` +
+        `<div class="message-meta"><span class="badge neutral">${escapeHtml(toolType)}</span></div>` +
+      `</div>` +
+      (fields.length > 0
+        ? (
+            `<div class="tool-parameter-list">` +
+              fields.map(([key, value]) => (
+                `<div class="tool-parameter-row">` +
+                  `<div class="tool-parameter-head">` +
+                    `<span class="tool-parameter-name">${escapeHtml(key)}</span>` +
+                  `</div>` +
+                  `<div class="tool-parameter-description">${escapeHtml(formatUiValue(value) || "n/a")}</div>` +
+                `</div>`
+              )).join("") +
+            `</div>`
+          )
+        : '<div class="empty">No additional configuration fields were stored for this tool.</div>') +
     `</article>`
   );
 }
@@ -368,9 +688,31 @@ export function renderToolsHtml(tools: unknown): string {
     return '<div class="empty">No tools were included in this request.</div>';
   }
 
-  return tools
-    .map((tool, index) => renderDetailBlock(`Tool ${index + 1}`, tool))
-    .join("");
+  return (
+    `<div class="tool-definition-list">` +
+      tools.map((tool, index) => {
+        if (!isClientRecord(tool)) {
+          return (
+            `<article class="tool-definition-card">` +
+              `<div class="tool-definition-head">` +
+                `<div>` +
+                  `<div class="tool-definition-title">Tool ${index + 1}</div>` +
+                  `<div class="tool-definition-subtitle">Stored tool payload</div>` +
+                `</div>` +
+              `</div>` +
+              `<div class="tool-parameter-description">${escapeHtml(formatUiValue(tool) || "No readable tool payload was stored.")}</div>` +
+            `</article>`
+          );
+        }
+
+        if (tool.type === "function" && isClientRecord(tool.function)) {
+          return renderFunctionToolHtml(tool, index);
+        }
+
+        return renderGenericToolHtml(tool, index);
+      }).join("") +
+    `</div>`
+  );
 }
 
 export function renderResponseChoicesHtml(responseBody: unknown): string {

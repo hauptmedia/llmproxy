@@ -1,9 +1,20 @@
 <script setup lang="ts">
+import { ref, watch } from "vue";
 import CodeView from "./CodeView.vue";
 import MessageCard from "./MessageCard.vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
 
 const store = useDashboardStore();
+const showRawRequest = ref(false);
+const showRawResponse = ref(false);
+
+watch(
+  () => [store.state.requestDetail.open, store.state.requestDetail.requestId],
+  () => {
+    showRawRequest.value = false;
+    showRawResponse.value = false;
+  },
+);
 </script>
 
 <template>
@@ -95,7 +106,6 @@ const store = useDashboardStore();
                 :key="index + ':' + (message.role || 'unknown')"
                 :message="message"
                 :index="Number(index)"
-                :heading="'message ' + (Number(index) + 1)"
               />
             </div>
             <div v-else class="empty">No OpenAI messages were stored for this request.</div>
@@ -104,7 +114,7 @@ const store = useDashboardStore();
 
         <div class="request-detail-card">
           <section class="request-detail-section">
-            <h3>Tools</h3>
+            <h3>Provided Tools</h3>
             <div class="detail-stack" v-html="store.requestToolsHtml"></div>
           </section>
 
@@ -114,16 +124,36 @@ const store = useDashboardStore();
           </section>
 
           <section class="request-detail-section">
-            <h3>Raw Request</h3>
+            <div class="mb-3 flex items-center justify-between gap-3">
+              <h3 class="mb-0">Raw Request</h3>
+              <button
+                class="button secondary small"
+                type="button"
+                @click="showRawRequest = !showRawRequest"
+              >
+                {{ showRawRequest ? "Hide Raw Request" : "Show Raw Request" }}
+              </button>
+            </div>
             <CodeView
+              v-if="showRawRequest"
               :value="store.state.requestDetail.detail && store.state.requestDetail.detail.requestBody"
               placeholder="No raw request payload was stored."
             />
           </section>
 
           <section class="request-detail-section">
-            <h3>Raw Response</h3>
+            <div class="mb-3 flex items-center justify-between gap-3">
+              <h3 class="mb-0">Raw Response</h3>
+              <button
+                class="button secondary small"
+                type="button"
+                @click="showRawResponse = !showRawResponse"
+              >
+                {{ showRawResponse ? "Hide Raw Response" : "Show Raw Response" }}
+              </button>
+            </div>
             <CodeView
+              v-if="showRawResponse"
               :value="store.state.requestDetail.detail && store.state.requestDetail.detail.responseBody"
               placeholder="No raw response payload was stored."
             />

@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   heading: "",
   finishReason: "",
-  reasoningCollapsed: false,
+  reasoningCollapsed: true,
   extraBadges: () => [],
 });
 

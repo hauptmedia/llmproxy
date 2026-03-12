@@ -804,6 +804,55 @@
     @apply text-sm font-bold uppercase tracking-[0.04em] text-stone-500;
   }
 
+  .tool-definition-list,
+  .tool-parameter-list {
+    @apply grid gap-3.5;
+  }
+
+  .tool-argument-tree {
+    @apply mt-2 grid gap-2;
+  }
+
+  .tool-definition-card {
+    @apply rounded-3xl border border-amber-900/10 bg-white/80 p-4 shadow-sm;
+  }
+
+  .tool-definition-head {
+    @apply flex flex-wrap items-start justify-between gap-3;
+  }
+
+  .tool-definition-title {
+    @apply text-base font-semibold text-stone-950;
+  }
+
+  .tool-definition-subtitle {
+    @apply mt-1 text-sm text-stone-600;
+  }
+
+  .tool-definition-description {
+    @apply mt-3 text-sm leading-relaxed text-stone-700;
+  }
+
+  .tool-parameter-row {
+    @apply rounded-2xl border border-amber-900/10 bg-white/70 px-4 py-3;
+  }
+
+  .tool-parameter-head {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .tool-parameter-name {
+    @apply text-sm font-semibold text-stone-950;
+  }
+
+  .tool-parameter-description {
+    @apply mt-1.5 text-sm leading-relaxed text-stone-700 break-words;
+  }
+
+  .tool-parameter-note {
+    @apply mt-2 text-xs leading-relaxed text-stone-500;
+  }
+
   .raw-grid {
     @apply grid gap-[18px];
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
