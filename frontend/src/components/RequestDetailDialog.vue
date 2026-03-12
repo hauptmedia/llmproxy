@@ -18,15 +18,27 @@ const store = useDashboardStore();
           <h2 id="request-detail-title" class="panel-title">{{ store.requestDetailTitle }}</h2>
           <p class="hint">{{ store.requestDetailSubtitle }}</p>
         </div>
-        <button
-          class="button secondary small"
-          type="button"
-          title="Close request details"
-          aria-label="Close request details"
-          @click="store.closeRequestDetail()"
-        >
-          X
-        </button>
+        <div class="request-actions">
+          <button
+            v-if="store.canCancelRequest(store.state.requestDetail.requestId)"
+            class="button secondary small"
+            type="button"
+            :disabled="store.isRequestCancelling(store.state.requestDetail.requestId)"
+            :title="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the live connection...' : 'End this live connection after confirmation.'"
+            @click="store.cancelActiveRequest(store.state.requestDetail.requestId)"
+          >
+            {{ store.isRequestCancelling(store.state.requestDetail.requestId) ? "Ending..." : "End" }}
+          </button>
+          <button
+            class="button secondary small"
+            type="button"
+            title="Close request details"
+            aria-label="Close request details"
+            @click="store.closeRequestDetail()"
+          >
+            X
+          </button>
+        </div>
       </div>
 
       <div v-if="store.state.requestDetail.loading && !store.state.requestDetail.detail" class="empty">

@@ -283,24 +283,25 @@ export class LoadBalancer extends EventEmitter {
         }
 
         released = true;
-        available.activeRequests = Math.max(0, available.activeRequests - 1);
-        available.lastLatencyMs = result.latencyMs;
-        available.avgLatencyMs = updateAverageLatency(available, result.latencyMs);
-        available.lastCheckedAt = new Date().toISOString();
+        const runtime = this.resolveBackendRuntime(available.config.id, available);
+        runtime.activeRequests = Math.max(0, runtime.activeRequests - 1);
+        runtime.lastLatencyMs = result.latencyMs;
+        runtime.avgLatencyMs = updateAverageLatency(runtime, result.latencyMs);
+        runtime.lastCheckedAt = new Date().toISOString();
 
         if (result.outcome === "success") {
-          available.successfulRequests += 1;
-          available.healthy = true;
-          available.lastError = undefined;
+          runtime.successfulRequests += 1;
+          runtime.healthy = true;
+          runtime.lastError = undefined;
         } else if (result.outcome === "cancelled") {
-          available.cancelledRequests += 1;
-          available.lastError = result.error;
+          runtime.cancelledRequests += 1;
+          runtime.lastError = result.error;
         } else {
-          available.failedRequests += 1;
-          available.lastError = result.error;
+          runtime.failedRequests += 1;
+          runtime.lastError = result.error;
 
           if (result.outcome === "error") {
-            available.healthy = false;
+            runtime.healthy = false;
           }
         }
 
@@ -310,8 +311,8 @@ export class LoadBalancer extends EventEmitter {
           method: route.method,
           path: route.path,
           model: route.model,
-          backendId: available.config.id,
-          backendName: available.config.name,
+          backendId: runtime.config.id,
+          backendName: runtime.config.name,
           outcome: result.outcome,
           latencyMs: result.latencyMs,
           queuedMs: result.queuedMs,
@@ -367,6 +368,10 @@ export class LoadBalancer extends EventEmitter {
     }
 
     return undefined;
+  }
+
+  private resolveBackendRuntime(id: string, fallback: BackendRuntime): BackendRuntime {
+    return this.backends.find((backend) => backend.config.id === id) ?? fallback;
   }
 
   private backendSupportsModel(backend: BackendRuntime, model?: string): boolean {

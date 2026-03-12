@@ -15,6 +15,7 @@ import { createInitialDebugMetrics, useDebugChat } from "./useDebugChat";
 import { useBackendControls } from "./useBackendControls";
 import { useLiveFeed } from "./useLiveFeed";
 import { useRequestDetail } from "./useRequestDetail";
+import { readErrorResponse } from "../utils/http";
 
 function createInitialState(): DashboardState {
   return {
@@ -61,6 +62,7 @@ function createInitialState(): DashboardState {
 
 function createDashboardStoreInternal() {
   const state = shallowReactive(createInitialState()) as DashboardState;
+  const pendingCancels = reactive<Record<string, boolean>>({});
 
   const backendControls = useBackendControls(state);
   const requestDetail = useRequestDetail(state);
@@ -68,6 +70,23 @@ function createDashboardStoreInternal() {
 
   const applySnapshot = (snapshot: typeof state.snapshot): void => {
     backendControls.applySnapshot(snapshot);
+
+    const activeRequestIds = new Set(snapshot.activeConnections.map((connection) => connection.id));
+    for (const requestId of Object.keys(pendingCancels)) {
+      if (!activeRequestIds.has(requestId)) {
+        delete pendingCancels[requestId];
+      }
+    }
+
+    if (state.requestDetail.open && state.requestDetail.requestId && state.requestDetail.detail?.live) {
+      if (activeRequestIds.has(state.requestDetail.requestId)) {
+        requestDetail.scheduleOpenDetailRefresh();
+      } else {
+        void requestDetail.refreshRequestDetail(state.requestDetail.requestId, false);
+      }
+      return;
+    }
+
     requestDetail.scheduleOpenDetailRefresh();
   };
 
@@ -107,6 +126,51 @@ function createDashboardStoreInternal() {
     window.removeEventListener("keydown", handleKeyDown);
   }
 
+  function isRequestCancelling(requestId: string): boolean {
+    return Boolean(pendingCancels[requestId]);
+  }
+
+  function canCancelRequest(requestId: string): boolean {
+    return state.snapshot.activeConnections.some((connection) => connection.id === requestId);
+  }
+
+  async function cancelActiveRequest(requestId: string): Promise<void> {
+    const connection = state.snapshot.activeConnections.find((entry) => entry.id === requestId);
+    if (!connection || pendingCancels[requestId]) {
+      return;
+    }
+
+    const connectionLabel = `${connection.method} ${connection.path}`;
+    const confirmed = window.confirm(
+      `End the live connection "${connectionLabel}" now?\n\nThe client will receive a cancelled request, and any partial response already received will stay in request history.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    pendingCancels[requestId] = true;
+
+    try {
+      const response = await fetch(`/api/requests/${encodeURIComponent(requestId)}/cancel`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorResponse(response));
+      }
+
+      if (state.requestDetail.requestId === requestId) {
+        await requestDetail.refreshRequestDetail(requestId, false);
+      }
+    } catch (error) {
+      delete pendingCancels[requestId];
+      const message = error instanceof Error ? error.message : String(error);
+      if (state.requestDetail.requestId === requestId) {
+        state.requestDetail.error = message;
+      }
+      window.alert(`Could not end the live connection.\n\n${message}`);
+    }
+  }
+
   return reactive({
     state,
     summaryCards,
@@ -123,6 +187,9 @@ function createDashboardStoreInternal() {
     connectionMetricBadges: buildConnectionMetricBadges,
     openRequestDetail: requestDetail.openRequestDetail,
     closeRequestDetail: requestDetail.closeRequestDetail,
+    canCancelRequest,
+    cancelActiveRequest,
+    isRequestCancelling,
     refreshModels: backendControls.refreshModels,
     saveBackend: backendControls.saveBackend,
     sendDebugChat: debugChat.sendDebugChat,

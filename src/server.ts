@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createServer, IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from "node:http";
 import { extname, resolve, sep } from "node:path";
@@ -27,6 +28,7 @@ import {
   extractSseDataPayload,
   splitSseBlocks,
 } from "./streaming";
+import { shouldForwardUpstreamHeader } from "./proxy-headers";
 import { extractClientIp, isPositiveInteger, joinUrl, readRequestBody, sendJson, toErrorMessage, tryParseJsonBuffer } from "./utils";
 
 const HOP_BY_HOP_HEADERS = new Set([
@@ -73,10 +75,12 @@ interface ActiveConnectionRuntime {
   metricsExact: boolean;
   requestBody?: JsonValue;
   responseBody?: JsonValue;
+  cancelSource?: "client_disconnect" | "dashboard" | "timeout";
+  cancel?: (message?: string) => void;
 }
 
 interface DashboardRoute {
-  page: "overview" | "chat" | "backends";
+  page: "overview" | "logs" | "chat" | "backends";
 }
 
 export class LlmProxyServer {
@@ -203,6 +207,11 @@ export class LlmProxyServer {
       return;
     }
 
+    if (method === "POST" && url.pathname.startsWith("/api/requests/") && url.pathname.endsWith("/cancel")) {
+      this.handleRequestCancel(response, url.pathname);
+      return;
+    }
+
     if (method === "GET" && url.pathname.startsWith("/api/requests/")) {
       this.handleRequestDetail(response, url.pathname);
       return;
@@ -260,7 +269,12 @@ export class LlmProxyServer {
   }
 
   private handleRequestDetail(response: ServerResponse, pathname: string): void {
-    const requestId = decodeURIComponent(pathname.replace("/api/requests/", ""));
+    const requestId = extractApiRequestId(pathname);
+    if (!requestId) {
+      sendJson(response, 404, proxyError("Request details were not found."));
+      return;
+    }
+
     const detail = this.buildActiveRequestDetail(requestId) ?? this.loadBalancer.getRequestLogDetail(requestId);
 
     if (!detail) {
@@ -269,6 +283,23 @@ export class LlmProxyServer {
     }
 
     sendJson(response, 200, detail);
+  }
+
+  private handleRequestCancel(response: ServerResponse, pathname: string): void {
+    const requestId = extractApiRequestId(pathname, "/cancel");
+    if (!requestId) {
+      sendJson(response, 404, proxyError("Live request was not found."));
+      return;
+    }
+
+    const connection = this.activeConnections.get(requestId);
+    if (!connection?.cancel) {
+      sendJson(response, 404, proxyError(`Live request "${requestId}" is no longer active.`));
+      return;
+    }
+
+    connection.cancel("Request cancelled from dashboard.");
+    sendJson(response, 202, { ok: true, requestId });
   }
 
   private async handleDashboardAsset(response: ServerResponse, assetPath: string): Promise<void> {
@@ -368,24 +399,38 @@ export class LlmProxyServer {
     const upstreamStream = streamingKind ? true : route.stream;
     const upstreamBody = this.buildUpstreamBody(method, body, parsedBody, Boolean(streamingKind));
 
-    this.trackActiveConnection(route, streamingKind ?? "other", upstreamStream);
-
     const abortController = new AbortController();
     let clientDisconnected = false;
-    const abortRequest = (message: string) => {
+    const abortRequest = (
+      message: string,
+      cancelSource?: ActiveConnectionRuntime["cancelSource"],
+    ) => {
       if (!abortController.signal.aborted) {
+        this.updateActiveConnection(route.id, {
+          cancelSource,
+          error: message,
+        }, true);
         abortController.abort(new Error(message));
       }
     };
+    const cancelActiveRequest = (message = "Request cancelled from dashboard.") => {
+      abortRequest(message, "dashboard");
+    };
+
+    this.trackActiveConnection(route, streamingKind ?? "other", upstreamStream);
+    const activeConnection = this.activeConnections.get(route.id);
+    if (activeConnection) {
+      activeConnection.cancel = cancelActiveRequest;
+    }
 
     const onAborted = () => {
       clientDisconnected = true;
-      abortRequest("Client disconnected.");
+      abortRequest("Client disconnected.", "client_disconnect");
     };
     const onResponseClose = () => {
       if (!response.writableEnded) {
         clientDisconnected = true;
-        abortRequest("Client disconnected.");
+        abortRequest("Client disconnected.", "client_disconnect");
       }
     };
 
@@ -405,7 +450,7 @@ export class LlmProxyServer {
       }, true);
       const timeoutMs = lease.backend.timeoutMs ?? this.loadBalancer.getServerConfig().requestTimeoutMs;
       timeout = setTimeout(() => {
-        abortRequest(`Upstream timeout after ${timeoutMs}ms.`);
+        abortRequest(`Upstream timeout after ${timeoutMs}ms.`, "timeout");
       }, timeoutMs);
 
       const upstreamResponse = await fetch(joinUrl(lease.backend.baseUrl, `${url.pathname}${url.search}`), {
@@ -464,12 +509,14 @@ export class LlmProxyServer {
       });
     } catch (error) {
       const message = toErrorMessage(error);
-      const statusCode = selectProxyStatus(message, abortController.signal.aborted, clientDisconnected);
+      const connection = this.activeConnections.get(route.id);
+      const wasCancelled = connection?.cancelSource === "dashboard" || connection?.cancelSource === "client_disconnect";
+      const statusCode = selectProxyStatus(message, abortController.signal.aborted, clientDisconnected, wasCancelled);
 
       if (lease) {
         this.updateActiveConnection(route.id, { error: message }, true);
         lease.release({
-          outcome: abortController.signal.aborted && clientDisconnected ? "cancelled" : "error",
+          outcome: wasCancelled ? "cancelled" : "error",
           latencyMs: Date.now() - route.receivedAt,
           queuedMs: lease.queueMs,
           error: message,
@@ -787,7 +834,9 @@ export class LlmProxyServer {
         model: snapshot.model,
         backendId: snapshot.backendId,
         backendName: snapshot.backendName,
-        outcome: snapshot.error ? "error" : "success",
+        outcome: connection.cancelSource === "dashboard" || connection.cancelSource === "client_disconnect"
+          ? "cancelled"
+          : (snapshot.error ? "error" : "success"),
         latencyMs: snapshot.elapsedMs,
         queuedMs: snapshot.queueMs,
         statusCode: snapshot.statusCode,
@@ -835,7 +884,7 @@ export class LlmProxyServer {
     for (const [key, value] of Object.entries(incomingHeaders)) {
       const lowerKey = key.toLowerCase();
 
-      if (HOP_BY_HOP_HEADERS.has(lowerKey) || value === undefined) {
+      if (HOP_BY_HOP_HEADERS.has(lowerKey) || value === undefined || !shouldForwardUpstreamHeader(lowerKey)) {
         continue;
       }
 
@@ -942,6 +991,10 @@ function matchDashboardRoute(pathname: string, dashboardPath: string): Dashboard
     return { page: "chat" };
   }
 
+  if (normalizedPathname === `${dashboardPath}/logs`) {
+    return { page: "logs" };
+  }
+
   if (normalizedPathname === `${dashboardPath}/backends`) {
     return { page: "backends" };
   }
@@ -978,7 +1031,22 @@ function resolveDashboardAssetPath(pathname: string, dashboardPath: string): str
     return undefined;
   }
 
-  const assetRoot = resolve(__dirname, "dashboard-app", "assets");
+  const assetRoots = [
+    resolve(__dirname, "dashboard-app", "assets"),
+    resolve(__dirname, "..", "frontend", "src", "assets"),
+  ];
+
+  for (const assetRoot of assetRoots) {
+    const candidate = resolveDashboardAssetCandidate(assetRoot, segments);
+    if (candidate && existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return resolveDashboardAssetCandidate(assetRoots[0], segments);
+}
+
+function resolveDashboardAssetCandidate(assetRoot: string, segments: string[]): string | undefined {
   const candidate = resolve(assetRoot, ...segments);
   const allowedPrefix = assetRoot.endsWith(sep) ? assetRoot : `${assetRoot}${sep}`;
 
@@ -1007,9 +1075,18 @@ function assetContentType(pathname: string): string {
   return "application/octet-stream";
 }
 
-function selectProxyStatus(message: string, aborted: boolean, clientDisconnected: boolean): number {
+function selectProxyStatus(
+  message: string,
+  aborted: boolean,
+  clientDisconnected: boolean,
+  dashboardCancelled: boolean,
+): number {
   if (aborted && clientDisconnected) {
     return 499;
+  }
+
+  if (aborted && dashboardCancelled) {
+    return 409;
   }
 
   if (message.includes("Timed out after") && message.includes("waiting for a free backend slot")) {
@@ -1025,4 +1102,23 @@ function selectProxyStatus(message: string, aborted: boolean, clientDisconnected
   }
 
   return 502;
+}
+
+function extractApiRequestId(pathname: string, suffix = ""): string | undefined {
+  const prefix = "/api/requests/";
+  if (!pathname.startsWith(prefix)) {
+    return undefined;
+  }
+
+  if (suffix && !pathname.endsWith(suffix)) {
+    return undefined;
+  }
+
+  const endIndex = suffix ? pathname.length - suffix.length : pathname.length;
+  const rawRequestId = pathname.slice(prefix.length, endIndex);
+  if (!rawRequestId) {
+    return undefined;
+  }
+
+  return decodeURIComponent(rawRequestId);
 }

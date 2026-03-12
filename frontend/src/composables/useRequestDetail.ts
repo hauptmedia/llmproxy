@@ -58,6 +58,14 @@ export function useRequestDetail(state: DashboardState) {
     await loadRequestDetail(requestId);
   }
 
+  async function refreshRequestDetail(requestId = state.requestDetail.requestId, useCache = false): Promise<void> {
+    if (!requestId) {
+      return;
+    }
+
+    await loadRequestDetail(requestId, useCache);
+  }
+
   function closeRequestDetail(): void {
     state.requestDetail.open = false;
     state.requestDetail.loading = false;
@@ -133,6 +141,7 @@ export function useRequestDetail(state: DashboardState) {
   return {
     closeRequestDetail,
     openRequestDetail,
+    refreshRequestDetail,
     requestDetailSubtitle,
     requestDetailTitle,
     requestMessages,

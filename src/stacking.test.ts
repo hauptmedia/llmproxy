@@ -1274,3 +1274,130 @@ test("cancelled requests retain the partial streamed response in request history
   assert.equal(detailPayload.entry.outcome, "cancelled");
   assert.match(detailPayload.responseBody?.choices?.[0]?.message?.content ?? "", /Streaming/);
 });
+
+test("dashboard can cancel a live connection and retain the partial response in history", async (t) => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-dashboard-cancel-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  t.after(async () => {
+    for (const entry of cleanup.reverse()) {
+      await entry();
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  const mockPort = await getFreePort();
+  const routerPort = await getFreePort();
+
+  const mockServer = await startMockSlowStreamingBackend(mockPort);
+  cleanup.push(async () => {
+    await new Promise<void>((resolve, reject) => {
+      mockServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  });
+
+  const config: ProxyConfig = {
+    server: {
+      host: "127.0.0.1",
+      port: routerPort,
+      dashboardPath: "/dashboard",
+      requestTimeoutMs: 15_000,
+      queueTimeoutMs: 2_000,
+      healthCheckIntervalMs: 60_000,
+    },
+    backends: [
+      {
+        id: "mock-dashboard-cancel-upstream",
+        name: "mock dashboard cancel upstream",
+        baseUrl: `http://127.0.0.1:${mockPort}`,
+        enabled: true,
+        maxConcurrency: 1,
+        healthPath: "/v1/models",
+        models: ["mock-live-model"],
+      },
+    ],
+  };
+
+  const router = await startRouter(config, path.join(tempDir, "dashboard-cancel-router.config.json"));
+  cleanup.push(async () => {
+    await router.server.stop();
+    await router.loadBalancer.stop();
+  });
+
+  const baseUrl = `http://127.0.0.1:${routerPort}`;
+  await waitForHealthyBackend(baseUrl, "mock-dashboard-cancel-upstream");
+
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "mock-live-model",
+      stream: true,
+      messages: [
+        {
+          role: "user",
+          content: "Cancel this request from the dashboard.",
+        },
+      ],
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const reader = response.body?.getReader();
+  assert.ok(reader);
+
+  const firstChunk = await reader.read();
+  assert.equal(firstChunk.done, false);
+  const firstChunkText = new TextDecoder().decode(firstChunk.value);
+  assert.match(firstChunkText, /Streaming /);
+
+  const activeConnection = await waitForActiveConnection(baseUrl);
+  const cancelResponse = await fetch(`${baseUrl}/api/requests/${encodeURIComponent(activeConnection.id)}/cancel`, {
+    method: "POST",
+  });
+  assert.equal(cancelResponse.status, 202);
+  const cancelPayload = await cancelResponse.json() as {
+    ok?: boolean;
+    requestId?: string;
+  };
+  assert.equal(cancelPayload.ok, true);
+  assert.equal(cancelPayload.requestId, activeConnection.id);
+
+  try {
+    await reader.read();
+  } catch {
+    // The dashboard-triggered abort can terminate the client stream abruptly.
+  }
+
+  const cancelledEntry = await waitForRecentRequest(baseUrl, (entry) => (
+    entry.id === activeConnection.id && entry.outcome === "cancelled"
+  ));
+
+  const detailResponse = await fetch(`${baseUrl}/api/requests/${encodeURIComponent(cancelledEntry.id)}`);
+  assert.equal(detailResponse.status, 200);
+  const detailPayload = await detailResponse.json() as {
+    entry: {
+      outcome: string;
+    };
+    responseBody?: {
+      choices?: Array<{
+        message?: {
+          content?: string | null;
+        };
+      }>;
+    };
+  };
+
+  assert.equal(detailPayload.entry.outcome, "cancelled");
+  assert.match(detailPayload.responseBody?.choices?.[0]?.message?.content ?? "", /Streaming/);
+});

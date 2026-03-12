@@ -200,3 +200,68 @@ test("captures discovered model metadata from /v1/models for backend snapshots",
 
   await balancer.stop();
 });
+
+test("releasing a lease after replaceConfig updates the current backend runtime", async () => {
+  const balancer = new LoadBalancer(TEST_CONFIG, {
+    fetcher: async () =>
+      new Response(JSON.stringify({ object: "list", data: [] }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+  });
+
+  const firstLease = await balancer.acquire({
+    id: "req-replace-1",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "chat-local",
+    stream: true,
+  });
+
+  balancer.replaceConfig({
+    ...TEST_CONFIG,
+    backends: TEST_CONFIG.backends.map((backend) => ({
+      ...backend,
+    })),
+  });
+
+  let secondResolved = false;
+  const secondLeasePromise = balancer.acquire({
+    id: "req-replace-2",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "chat-local",
+    stream: true,
+  }).then((lease) => {
+    secondResolved = true;
+    return lease;
+  });
+
+  await delay(50);
+  assert.equal(secondResolved, false);
+
+  firstLease.release({
+    outcome: "success",
+    latencyMs: 75,
+    statusCode: 200,
+    queuedMs: firstLease.queueMs,
+  });
+
+  const secondLease = await secondLeasePromise;
+  assert.equal(secondLease.backend.id, "llama-a");
+
+  secondLease.release({
+    outcome: "success",
+    latencyMs: 65,
+    statusCode: 200,
+    queuedMs: secondLease.queueMs,
+  });
+
+  const snapshot = balancer.getSnapshot();
+  assert.equal(snapshot.backends[0]?.activeRequests, 0);
+  assert.equal(snapshot.backends[0]?.successfulRequests, 2);
+});
