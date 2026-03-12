@@ -816,6 +816,79 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         tab-size: 2;
       }
 
+      .markdown-content {
+        color: var(--ink);
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        font-size: 0.96rem;
+        line-height: 1.65;
+        white-space: normal;
+      }
+
+      .markdown-content > :first-child {
+        margin-top: 0;
+      }
+
+      .markdown-content > :last-child {
+        margin-bottom: 0;
+      }
+
+      .markdown-content p,
+      .markdown-content ul,
+      .markdown-content ol,
+      .markdown-content blockquote,
+      .markdown-content pre,
+      .markdown-content h1,
+      .markdown-content h2,
+      .markdown-content h3,
+      .markdown-content h4,
+      .markdown-content h5,
+      .markdown-content h6 {
+        margin: 0 0 0.9em;
+      }
+
+      .markdown-content ul,
+      .markdown-content ol {
+        padding-left: 1.4rem;
+      }
+
+      .markdown-content li + li {
+        margin-top: 0.28rem;
+      }
+
+      .markdown-content blockquote {
+        padding: 0.1rem 0 0.1rem 0.95rem;
+        border-left: 4px solid rgba(194, 65, 12, 0.25);
+        color: var(--muted);
+      }
+
+      .markdown-content a {
+        color: var(--accent-deep);
+        text-decoration: underline;
+        text-decoration-thickness: 0.08em;
+      }
+
+      .markdown-content code {
+        font-family: "IBM Plex Mono", "Consolas", monospace;
+        font-size: 0.88em;
+        padding: 0.14em 0.38em;
+        border-radius: 8px;
+        background: rgba(28, 25, 23, 0.08);
+      }
+
+      .markdown-content pre {
+        overflow: auto;
+        padding: 12px;
+        border-radius: 16px;
+        background: rgba(28, 25, 23, 0.05);
+      }
+
+      .markdown-content pre code {
+        display: block;
+        padding: 0;
+        background: transparent;
+        border-radius: 0;
+      }
+
       .json-view {
         color: #1f2937;
       }
@@ -1947,6 +2020,164 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         }
       }
 
+      function renderMarkdownInline(markdown) {
+        const placeholders = [];
+        const store = (html) => {
+          const token = "@@MDTOKEN" + placeholders.length + "@@";
+          placeholders.push({
+            token,
+            html,
+          });
+          return token;
+        };
+
+        let html = escapeCodeHtml(markdown ?? "");
+
+        html = html.replace(
+          new RegExp(String.fromCharCode(96) + "([^" + String.fromCharCode(96) + "\\\\n]+)" + String.fromCharCode(96), "g"),
+          (_match, code) => store("<code>" + code + "</code>"),
+        );
+
+        html = html.replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g, (_match, label, href) => (
+          store('<a href="' + escapeClientHtml(href) + '" target="_blank" rel="noreferrer noopener">' + label + "</a>")
+        ));
+
+        html = html.replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>");
+        html = html.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+        html = html.replace(/~~([^~]+)~~/g, "<del>$1</del>");
+        html = html.replace(/(^|[\\s(])\\*([^*]+)\\*(?=[$\\s).,!?:;]|$)/g, "$1<em>$2</em>");
+        html = html.replace(/(^|[\\s(])_([^_]+)_(?=[$\\s).,!?:;]|$)/g, "$1<em>$2</em>");
+        html = html.replace(/(^|[\\s(])(https?:\\/\\/[^\\s<]+)/g, (_match, prefix, href) => (
+          prefix + store('<a href="' + escapeClientHtml(href) + '" target="_blank" rel="noreferrer noopener">' + href + "</a>")
+        ));
+
+        for (const placeholder of placeholders) {
+          html = html.replaceAll(placeholder.token, placeholder.html);
+        }
+
+        return html;
+      }
+
+      function isMarkdownBlockBoundary(line) {
+        const fence = String.fromCharCode(96).repeat(3);
+        return (
+          line.startsWith(fence) ||
+          /^(#{1,6})\\s+/.test(line) ||
+          /^[-*+]\\s+/.test(line) ||
+          /^\\d+\\.\\s+/.test(line) ||
+          /^>\\s?/.test(line)
+        );
+      }
+
+      function renderMarkdownToHtml(markdown) {
+        const fence = String.fromCharCode(96).repeat(3);
+        const normalized = String(markdown ?? "").replace(/\\r\\n?/g, "\\n").trim();
+
+        if (!normalized) {
+          return '<div class="empty">No message content.</div>';
+        }
+
+        const lines = normalized.split("\\n");
+        const blocks = [];
+        let index = 0;
+
+        while (index < lines.length) {
+          const line = lines[index];
+
+          if (!line.trim()) {
+            index += 1;
+            continue;
+          }
+
+          if (line.startsWith(fence)) {
+            const codeLines = [];
+            const language = line.slice(3).trim().toLowerCase();
+            index += 1;
+
+            while (index < lines.length && !lines[index].startsWith(fence)) {
+              codeLines.push(lines[index]);
+              index += 1;
+            }
+
+            if (index < lines.length && lines[index].startsWith(fence)) {
+              index += 1;
+            }
+
+            const codeValue = codeLines.join("\\n");
+            const rendered = renderCodeInnerHtml(codeValue);
+            const codeClass = "turn-content" + (rendered.isJson || language === "json" ? " json-view" : "");
+            blocks.push('<pre class="' + escapeClientHtml(codeClass) + '"><code>' + rendered.html + "</code></pre>");
+            continue;
+          }
+
+          const headingMatch = /^(#{1,6})\\s+(.*)$/.exec(line);
+          if (headingMatch) {
+            const level = Math.min(6, headingMatch[1].length);
+            blocks.push("<h" + level + ">" + renderMarkdownInline(headingMatch[2]) + "</h" + level + ">");
+            index += 1;
+            continue;
+          }
+
+          if (/^>\\s?/.test(line)) {
+            const quoteLines = [];
+
+            while (index < lines.length && /^>\\s?/.test(lines[index])) {
+              quoteLines.push(lines[index].replace(/^>\\s?/, ""));
+              index += 1;
+            }
+
+            blocks.push("<blockquote><p>" + renderMarkdownInline(quoteLines.join("\\n")).replace(/\\n/g, "<br />") + "</p></blockquote>");
+            continue;
+          }
+
+          if (/^[-*+]\\s+/.test(line)) {
+            const items = [];
+
+            while (index < lines.length && /^[-*+]\\s+/.test(lines[index])) {
+              items.push(lines[index].replace(/^[-*+]\\s+/, ""));
+              index += 1;
+            }
+
+            blocks.push("<ul>" + items.map((item) => "<li>" + renderMarkdownInline(item) + "</li>").join("") + "</ul>");
+            continue;
+          }
+
+          if (/^\\d+\\.\\s+/.test(line)) {
+            const items = [];
+
+            while (index < lines.length && /^\\d+\\.\\s+/.test(lines[index])) {
+              items.push(lines[index].replace(/^\\d+\\.\\s+/, ""));
+              index += 1;
+            }
+
+            blocks.push("<ol>" + items.map((item) => "<li>" + renderMarkdownInline(item) + "</li>").join("") + "</ol>");
+            continue;
+          }
+
+          const paragraphLines = [];
+          while (index < lines.length && lines[index].trim() && !isMarkdownBlockBoundary(lines[index])) {
+            paragraphLines.push(lines[index]);
+            index += 1;
+          }
+
+          blocks.push("<p>" + renderMarkdownInline(paragraphLines.join("\\n")).replace(/\\n/g, "<br />") + "</p>");
+        }
+
+        return blocks.join("");
+      }
+
+      function renderMarkdownBlockHtml(markdown) {
+        return '<div class="markdown-content">' + renderMarkdownToHtml(markdown) + "</div>";
+      }
+
+      function renderMessageStringHtml(value) {
+        if (getJsonDocuments(value)) {
+          return renderCodeBlockHtml(value, "turn-content");
+        }
+
+        return renderMarkdownBlockHtml(String(value ?? ""));
+      }
+
       function formatCompactValue(value) {
         if (value === undefined) {
           return "";
@@ -2081,7 +2312,26 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
               '<span class="reasoning-chevron" aria-hidden="true">▶</span>' +
             '</summary>' +
             '<div class="reasoning-content">' +
-              renderCodeBlockHtml(reasoningContent, "turn-content") +
+              renderMessageStringHtml(reasoningContent) +
+            '</div>' +
+          '</details>'
+        );
+      }
+
+      function renderCollapsedReasoningHtml(reasoningContent) {
+        if (typeof reasoningContent !== "string" || reasoningContent.length === 0) {
+          return "";
+        }
+
+        return (
+          '<details class="reasoning-panel">' +
+            '<summary class="reasoning-summary" title="Model reasoning captured for this message. Expand it to inspect the chain-of-thought style output.">' +
+              '<span aria-hidden="true">🧠</span>' +
+              '<span>Reasoning</span>' +
+              '<span class="reasoning-chevron" aria-hidden="true">▶</span>' +
+            '</summary>' +
+            '<div class="reasoning-content">' +
+              renderMessageStringHtml(reasoningContent) +
             '</div>' +
           '</details>'
         );
@@ -2089,7 +2339,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
 
       function renderMessageContentHtml(content) {
         if (typeof content === "string") {
-          return renderCodeBlockHtml(content, "turn-content");
+          return renderMessageStringHtml(content);
         }
 
         if (Array.isArray(content)) {
@@ -2111,7 +2361,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
                 return (
                   '<div class="message-part">' +
                     '<div class="message-part-type">' + escapeClientHtml(partType) + '</div>' +
-                    renderCodeBlockHtml(displayValue, "turn-content") +
+                    renderMessageStringHtml(displayValue) +
                   '</div>'
                 );
               }).join("") +
