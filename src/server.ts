@@ -624,6 +624,7 @@ export class LlmProxyServer {
       timeToFirstTokenMs: connection.firstTokenAt ? connection.firstTokenAt - connection.receivedAt : undefined,
       finishReason: connection.finishReason,
       metricsExact: connection.metricsExact,
+      responseBody: connection.responseBody,
     };
   }
 

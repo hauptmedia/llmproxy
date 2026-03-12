@@ -584,6 +584,51 @@ async function waitForActiveConnection(
   throw new Error(`Timed out waiting for an active connection. Last state: ${JSON.stringify(lastPayload)}`);
 }
 
+async function waitForRecentRequest(
+  baseUrl: string,
+  predicate: (entry: {
+    id: string;
+    path: string;
+    outcome: string;
+  }) => boolean,
+): Promise<{
+  id: string;
+  path: string;
+  outcome: string;
+}> {
+  let lastPayload:
+    | {
+        recentRequests: Array<{
+          id: string;
+          path: string;
+          outcome: string;
+        }>;
+      }
+    | undefined;
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const response = await fetch(`${baseUrl}/api/state`);
+    assert.equal(response.status, 200);
+    const payload = await response.json() as {
+      recentRequests: Array<{
+        id: string;
+        path: string;
+        outcome: string;
+      }>;
+    };
+    lastPayload = payload;
+
+    const match = payload.recentRequests.find(predicate);
+    if (match) {
+      return match;
+    }
+
+    await delay(50);
+  }
+
+  throw new Error(`Timed out waiting for recent request state. Last state: ${JSON.stringify(lastPayload)}`);
+}
+
 test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", async (t) => {
   const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-stack-"));
   const streamModes: boolean[] = [];
@@ -1109,4 +1154,123 @@ test("active connections expose live request details for chat history inspection
   const liveBody = await liveResponse.text();
   assert.match(liveBody, /Streaming /);
   assert.match(liveBody, /response\./);
+});
+
+test("cancelled requests retain the partial streamed response in request history", async (t) => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-cancelled-history-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  t.after(async () => {
+    for (const entry of cleanup.reverse()) {
+      await entry();
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  const mockPort = await getFreePort();
+  const routerPort = await getFreePort();
+
+  const mockServer = await startMockSlowStreamingBackend(mockPort);
+  cleanup.push(async () => {
+    await new Promise<void>((resolve, reject) => {
+      mockServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  });
+
+  const config: ProxyConfig = {
+    server: {
+      host: "127.0.0.1",
+      port: routerPort,
+      dashboardPath: "/dashboard",
+      requestTimeoutMs: 15_000,
+      queueTimeoutMs: 2_000,
+      healthCheckIntervalMs: 60_000,
+    },
+    backends: [
+      {
+        id: "mock-cancel-upstream",
+        name: "mock cancel upstream",
+        baseUrl: `http://127.0.0.1:${mockPort}`,
+        enabled: true,
+        maxConcurrency: 1,
+        healthPath: "/v1/models",
+        models: ["mock-live-model"],
+      },
+    ],
+  };
+
+  const router = await startRouter(config, path.join(tempDir, "cancel-router.config.json"));
+  cleanup.push(async () => {
+    await router.server.stop();
+    await router.loadBalancer.stop();
+  });
+
+  const baseUrl = `http://127.0.0.1:${routerPort}`;
+  await waitForHealthyBackend(baseUrl, "mock-cancel-upstream");
+
+  const clientAbortController = new AbortController();
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "mock-live-model",
+      stream: true,
+      messages: [
+        {
+          role: "user",
+          content: "Cancel after the first streamed chunk.",
+        },
+      ],
+    }),
+    signal: clientAbortController.signal,
+  });
+
+  assert.equal(response.status, 200);
+  const reader = response.body?.getReader();
+  assert.ok(reader);
+
+  const firstChunk = await reader.read();
+  assert.equal(firstChunk.done, false);
+  const firstChunkText = new TextDecoder().decode(firstChunk.value);
+  assert.match(firstChunkText, /Streaming /);
+
+  clientAbortController.abort(new Error("Client cancelled request."));
+
+  try {
+    await reader.read();
+  } catch {
+    // Node fetch rejects the body stream once the client aborts, which is expected here.
+  }
+
+  const cancelledEntry = await waitForRecentRequest(baseUrl, (entry) => (
+    entry.path === "/v1/chat/completions" && entry.outcome === "cancelled"
+  ));
+
+  const detailResponse = await fetch(`${baseUrl}/api/requests/${encodeURIComponent(cancelledEntry.id)}`);
+  assert.equal(detailResponse.status, 200);
+  const detailPayload = await detailResponse.json() as {
+    entry: {
+      outcome: string;
+    };
+    responseBody?: {
+      choices?: Array<{
+        message?: {
+          content?: string | null;
+        };
+      }>;
+    };
+  };
+
+  assert.equal(detailPayload.entry.outcome, "cancelled");
+  assert.match(detailPayload.responseBody?.choices?.[0]?.message?.content ?? "", /Streaming/);
 });
