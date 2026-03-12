@@ -1258,13 +1258,12 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
             <h2 class="panel-title" id="request-detail-title">Request Details</h2>
             <p class="hint" id="request-detail-subtitle">Inspect the original request payload, messages, tools, and final response.</p>
           </div>
-          <button class="button ghost" id="request-detail-close" type="button">Close</button>
+          <button class="button ghost" id="request-detail-close" type="button" aria-label="Close request details" title="Close request details">X</button>
         </div>
 
         <div class="request-detail-grid">
           <section class="request-detail-card">
             <h3>Conversation</h3>
-            <p class="hint">OpenAI messages exactly as they were sent through llmproxy for this request.</p>
             <div id="request-detail-messages" class="transcript"></div>
           </section>
 
