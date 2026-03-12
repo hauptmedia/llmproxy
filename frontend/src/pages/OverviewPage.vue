@@ -88,8 +88,8 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
                     Chat Completion
                   </span>
                   <span
-                    v-for="badge in buildConnectionTransportBadges(connection)"
-                    :key="badge.text + badge.title"
+                    v-for="(badge, index) in buildConnectionTransportBadges(connection)"
+                    :key="`${connection.id}-active-transport-${index}`"
                     :class="badgeClass(badge)"
                     :title="badge.title"
                   >
@@ -179,8 +179,8 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
                     Chat Completion
                   </span>
                   <span
-                    v-for="badge in buildConnectionTransportBadges(connection)"
-                    :key="badge.text + badge.title"
+                    v-for="(badge, index) in buildConnectionTransportBadges(connection)"
+                    :key="`${connection.id}-queued-transport-${index}`"
                     :class="badgeClass(badge)"
                     :title="badge.title"
                   >

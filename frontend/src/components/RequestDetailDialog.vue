@@ -21,22 +21,30 @@ const store = useDashboardStore();
         <div class="request-actions">
           <button
             v-if="store.canCancelRequest(store.state.requestDetail.requestId)"
-            class="button secondary small"
+            class="icon-button danger"
             type="button"
             :disabled="store.isRequestCancelling(store.state.requestDetail.requestId)"
+            :aria-label="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection' : 'End this active connection'"
             :title="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection...' : 'End this active connection after confirmation.'"
             @click="store.cancelActiveRequest(store.state.requestDetail.requestId)"
           >
-            {{ store.isRequestCancelling(store.state.requestDetail.requestId) ? "Ending..." : "End" }}
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3.5v7"></path>
+              <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
+            </svg>
           </button>
           <button
-            class="button secondary small"
+            class="icon-button"
             type="button"
             title="Close request details"
             aria-label="Close request details"
             @click="store.closeRequestDetail()"
           >
-            X
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M9 9l6 6"></path>
+              <path d="M15 9l-6 6"></path>
+            </svg>
           </button>
         </div>
       </div>
