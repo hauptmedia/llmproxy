@@ -93,6 +93,12 @@ export interface BackendRuntimeSnapshot {
   lastError?: string;
   configuredModels: string[];
   discoveredModels: string[];
+  discoveredModelDetails: DiscoveredModelDetail[];
+}
+
+export interface DiscoveredModelDetail {
+  id: string;
+  metadata?: JsonValue;
 }
 
 export interface RequestLogEntry {

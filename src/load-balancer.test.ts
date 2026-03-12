@@ -111,3 +111,92 @@ test("routes by model and queues when the slot is full", async () => {
   assert.equal(snapshot.backends[0]?.successfulRequests, 2);
   assert.equal(snapshot.backends[1]?.successfulRequests, 1);
 });
+
+test("captures discovered model metadata from /v1/models for backend snapshots", async () => {
+  const config: ProxyConfig = {
+    server: {
+      host: "127.0.0.1",
+      port: 4001,
+      dashboardPath: "/dashboard",
+      requestTimeoutMs: 5_000,
+      queueTimeoutMs: 500,
+      healthCheckIntervalMs: 10_000,
+    },
+    backends: [
+      {
+        id: "meta-backend",
+        name: "Metadata Backend",
+        baseUrl: "http://127.0.0.1:9090",
+        enabled: true,
+        maxConcurrency: 1,
+        healthPath: "/v1/models",
+      },
+    ],
+  };
+
+  const balancer = new LoadBalancer(config, {
+    fetcher: async () =>
+      new Response(JSON.stringify({
+        object: "list",
+        models: [
+          {
+            name: "meta-model",
+            model: "meta-model",
+            description: "Metadata-rich test model",
+            capabilities: ["completion", "multimodal"],
+            details: {
+              format: "gguf",
+            },
+          },
+        ],
+        data: [
+          {
+            id: "meta-model",
+            object: "model",
+            created: 1773335036,
+            owned_by: "llamacpp",
+            aliases: ["meta-model"],
+            meta: {
+              n_ctx_train: 262144,
+              n_params: 1234567890,
+            },
+          },
+        ],
+      }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+  });
+
+  await balancer.start();
+
+  const snapshot = balancer.getSnapshot();
+  assert.deepEqual(snapshot.backends[0]?.discoveredModels, ["meta-model"]);
+  assert.deepEqual(snapshot.backends[0]?.discoveredModelDetails, [
+    {
+      id: "meta-model",
+      metadata: {
+        id: "meta-model",
+        object: "model",
+        created: 1773335036,
+        owned_by: "llamacpp",
+        aliases: ["meta-model"],
+        meta: {
+          n_ctx_train: 262144,
+          n_params: 1234567890,
+        },
+        name: "meta-model",
+        model: "meta-model",
+        description: "Metadata-rich test model",
+        capabilities: ["completion", "multimodal"],
+        details: {
+          format: "gguf",
+        },
+      },
+    },
+  ]);
+
+  await balancer.stop();
+});

@@ -2,6 +2,8 @@ import { EventEmitter } from "node:events";
 import {
   BackendLease,
   BackendRuntimeSnapshot,
+  DiscoveredModelDetail,
+  JsonValue,
   KnownModel,
   LeaseReleaseResult,
   ProxyConfig,
@@ -27,6 +29,7 @@ interface BackendRuntime {
   lastCheckedAt?: string;
   lastError?: string;
   discoveredModels: string[];
+  discoveredModelDetails: DiscoveredModelDetail[];
 }
 
 interface PendingRequest {
@@ -152,6 +155,7 @@ export class LoadBalancer extends EventEmitter {
         lastCheckedAt: existing?.lastCheckedAt,
         lastError: existing?.lastError,
         discoveredModels: existing?.discoveredModels ?? [],
+        discoveredModelDetails: existing?.discoveredModelDetails ?? [],
       };
     });
 
@@ -446,7 +450,7 @@ export class LoadBalancer extends EventEmitter {
 
     const healthPaths = backend.config.healthPath ? [backend.config.healthPath] : ["/health", "/v1/models"];
     let lastError = "Health check failed.";
-    let discoveredModels = backend.discoveredModels;
+    let discoveredModelDetails = backend.discoveredModelDetails;
 
     for (const healthPath of healthPaths) {
       try {
@@ -466,13 +470,14 @@ export class LoadBalancer extends EventEmitter {
         }
 
         if (healthPath === "/v1/models") {
-          discoveredModels = await tryExtractModels(response, discoveredModels);
+          discoveredModelDetails = await tryExtractModels(response, discoveredModelDetails);
         }
 
         backend.healthy = true;
         backend.lastError = undefined;
         backend.lastCheckedAt = new Date().toISOString();
-        backend.discoveredModels = discoveredModels;
+        backend.discoveredModelDetails = discoveredModelDetails;
+        backend.discoveredModels = discoveredModelDetails.map((entry) => entry.id);
         return;
       } catch (error) {
         lastError = toErrorMessage(error);
@@ -504,6 +509,7 @@ export class LoadBalancer extends EventEmitter {
       lastError: backend.lastError,
       configuredModels: backend.config.models ?? [],
       discoveredModels: backend.discoveredModels,
+      discoveredModelDetails: backend.discoveredModelDetails,
     };
   }
 
@@ -581,22 +587,160 @@ function updateAverageLatency(backend: BackendRuntime, latencyMs: number): numbe
   return Math.round(((backend.avgLatencyMs * (completedRequests - 1)) + latencyMs) / completedRequests);
 }
 
-async function tryExtractModels(response: Response, fallback: string[]): Promise<string[]> {
+async function tryExtractModels(response: Response, fallback: DiscoveredModelDetail[]): Promise<DiscoveredModelDetail[]> {
   try {
-    const body = (await response.json()) as { data?: Array<{ id?: unknown }> };
+    const body = await response.json() as {
+      data?: unknown;
+      models?: unknown;
+    };
+    const discovered = new Map<string, DiscoveredModelDetail>();
 
-    if (!Array.isArray(body.data)) {
+    for (const entry of fallback) {
+      if (typeof entry?.id === "string" && entry.id.length > 0) {
+        discovered.set(entry.id, entry);
+      }
+    }
+
+    let foundModel = false;
+
+    if (Array.isArray(body.data)) {
+      for (const entry of body.data) {
+        const modelId = readDiscoveredModelId(entry);
+        if (!modelId) {
+          continue;
+        }
+
+        foundModel = true;
+        const previous = discovered.get(modelId);
+        discovered.set(modelId, {
+          id: modelId,
+          metadata: mergeModelMetadata(previous?.metadata, normalizeModelMetadata(entry, modelId)),
+        });
+      }
+    }
+
+    if (Array.isArray(body.models)) {
+      for (const entry of body.models) {
+        const modelId = readDiscoveredModelId(entry);
+        if (!modelId) {
+          continue;
+        }
+
+        foundModel = true;
+        const previous = discovered.get(modelId);
+        discovered.set(modelId, {
+          id: modelId,
+          metadata: mergeModelMetadata(previous?.metadata, normalizeModelMetadata(entry, modelId)),
+        });
+      }
+    }
+
+    if (!foundModel) {
       return fallback;
     }
 
-    const models = body.data
-      .map((entry) => (typeof entry.id === "string" ? entry.id : undefined))
-      .filter((entry): entry is string => Boolean(entry));
-
-    return models.length > 0 ? models : fallback;
+    return Array.from(discovered.values());
   } catch {
     return fallback;
   }
+}
+
+function readDiscoveredModelId(value: unknown): string | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (typeof value.id === "string" && value.id.length > 0) {
+    return value.id;
+  }
+
+  if (typeof value.model === "string" && value.model.length > 0) {
+    return value.model;
+  }
+
+  if (typeof value.name === "string" && value.name.length > 0) {
+    return value.name;
+  }
+
+  return undefined;
+}
+
+function normalizeModelMetadata(value: unknown, modelId: string): JsonValue | undefined {
+  const normalized = normalizeJsonValue(value);
+
+  if (isJsonObject(normalized)) {
+    return {
+      id: modelId,
+      ...normalized,
+    };
+  }
+
+  if (normalized === undefined) {
+    return undefined;
+  }
+
+  return {
+    id: modelId,
+    value: normalized,
+  };
+}
+
+function mergeModelMetadata(left: JsonValue | undefined, right: JsonValue | undefined): JsonValue | undefined {
+  if (left === undefined) {
+    return right;
+  }
+
+  if (right === undefined) {
+    return left;
+  }
+
+  if (isJsonObject(left) && isJsonObject(right)) {
+    return {
+      ...left,
+      ...right,
+    };
+  }
+
+  return right;
+}
+
+function normalizeJsonValue(value: unknown): JsonValue | undefined {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const items = value
+      .map((entry) => normalizeJsonValue(entry))
+      .filter((entry): entry is JsonValue => entry !== undefined);
+    return items;
+  }
+
+  if (isRecord(value)) {
+    const entries = Object.entries(value)
+      .map(([key, entry]) => {
+        const normalized = normalizeJsonValue(entry);
+        return normalized === undefined ? undefined : [key, normalized] as const;
+      })
+      .filter((entry): entry is readonly [string, JsonValue] => Boolean(entry));
+
+    return Object.fromEntries(entries);
+  }
+
+  return undefined;
+}
+
+function isJsonObject(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function fetchWithTimeout(
