@@ -813,6 +813,33 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         font-family: "IBM Plex Mono", "Consolas", monospace;
         font-size: 0.88rem;
         line-height: 1.45;
+        tab-size: 2;
+      }
+
+      .json-view {
+        color: #1f2937;
+      }
+
+      .json-key {
+        color: #9a3412;
+      }
+
+      .json-string {
+        color: #166534;
+      }
+
+      .json-number {
+        color: #1d4ed8;
+      }
+
+      .json-boolean {
+        color: #7c3aed;
+        font-weight: 700;
+      }
+
+      .json-null {
+        color: #b45309;
+        font-weight: 700;
       }
 
       .reasoning {
@@ -1784,6 +1811,143 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         }
       }
 
+      function escapeCodeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
+
+      function tryParseJsonString(value) {
+        if (typeof value !== "string") {
+          return undefined;
+        }
+
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return undefined;
+        }
+
+        const first = trimmed[0];
+        const looksLikeJson =
+          first === "{" ||
+          first === "[" ||
+          first === '"' ||
+          first === "-" ||
+          (first >= "0" && first <= "9") ||
+          trimmed === "true" ||
+          trimmed === "false" ||
+          trimmed === "null";
+
+        if (!looksLikeJson) {
+          return undefined;
+        }
+
+        try {
+          return JSON.parse(trimmed);
+        } catch {
+          return undefined;
+        }
+      }
+
+      function tryParseJsonSequence(value) {
+        if (typeof value !== "string") {
+          return null;
+        }
+
+        const blocks = value
+          .split(/\n\s*\n/)
+          .map((block) => block.trim())
+          .filter(Boolean);
+
+        if (blocks.length < 2) {
+          return null;
+        }
+
+        const docs = [];
+        for (const block of blocks) {
+          const parsed = tryParseJsonString(block);
+          if (parsed === undefined) {
+            return null;
+          }
+
+          docs.push(parsed);
+        }
+
+        return docs;
+      }
+
+      function getJsonDocuments(value) {
+        if (value === undefined) {
+          return null;
+        }
+
+        if (typeof value === "string") {
+          const sequence = tryParseJsonSequence(value);
+          if (sequence) {
+            return sequence;
+          }
+
+          const parsed = tryParseJsonString(value);
+          return parsed === undefined ? null : [parsed];
+        }
+
+        if (typeof value === "object" || typeof value === "number" || typeof value === "boolean") {
+          return [value];
+        }
+
+        return null;
+      }
+
+      function syntaxHighlightJson(jsonText) {
+        return escapeCodeHtml(jsonText).replace(
+          /("(\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+          (match) => {
+            let className = "json-number";
+
+            if (match[0] === '"') {
+              className = match.endsWith(":") ? "json-key" : "json-string";
+            } else if (match === "true" || match === "false") {
+              className = "json-boolean";
+            } else if (match === "null") {
+              className = "json-null";
+            }
+
+            return '<span class="' + className + '">' + match + "</span>";
+          },
+        );
+      }
+
+      function renderCodeInnerHtml(value) {
+        const docs = getJsonDocuments(value);
+        if (docs) {
+          return {
+            html: docs.map((doc) => syntaxHighlightJson(prettyJson(doc))).join("\n\n"),
+            isJson: true,
+          };
+        }
+
+        return {
+          html: escapeClientHtml(value ?? ""),
+          isJson: false,
+        };
+      }
+
+      function renderCodeBlockHtml(value, baseClass = "turn-content") {
+        const rendered = renderCodeInnerHtml(value);
+        const className = rendered.isJson ? (baseClass + " json-view") : baseClass;
+        return '<pre class="' + escapeClientHtml(className) + '">' + rendered.html + "</pre>";
+      }
+
+      function setCodeBlockContent(element, value) {
+        const rendered = renderCodeInnerHtml(value);
+
+        element.classList.toggle("json-view", rendered.isJson);
+        if (element.innerHTML !== rendered.html) {
+          element.innerHTML = rendered.html;
+        }
+      }
+
       function formatCompactValue(value) {
         if (value === undefined) {
           return "";
@@ -1888,7 +2052,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         return (
           '<div class="detail-block">' +
             '<div class="detail-block-label">' + escapeClientHtml(label) + '</div>' +
-            '<pre class="turn-content">' + escapeClientHtml(typeof value === "string" ? value : prettyJson(value)) + '</pre>' +
+            renderCodeBlockHtml(value, "turn-content") +
           '</div>'
         );
       }
@@ -1918,7 +2082,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
               '<span class="reasoning-chevron" aria-hidden="true">▶</span>' +
             '</summary>' +
             '<div class="reasoning-content">' +
-              '<pre class="turn-content">' + escapeClientHtml(reasoningContent) + '</pre>' +
+              renderCodeBlockHtml(reasoningContent, "turn-content") +
             '</div>' +
           '</details>'
         );
@@ -1926,7 +2090,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
 
       function renderMessageContentHtml(content) {
         if (typeof content === "string") {
-          return '<pre class="turn-content">' + escapeClientHtml(content) + '</pre>';
+          return renderCodeBlockHtml(content, "turn-content");
         }
 
         if (Array.isArray(content)) {
@@ -1948,7 +2112,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
                 return (
                   '<div class="message-part">' +
                     '<div class="message-part-type">' + escapeClientHtml(partType) + '</div>' +
-                    '<pre class="turn-content">' + escapeClientHtml(displayValue) + '</pre>' +
+                    renderCodeBlockHtml(displayValue, "turn-content") +
                   '</div>'
                 );
               }).join("") +
@@ -2110,8 +2274,8 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
           requestDetailResponseMessage.innerHTML = '<div class="empty">Loading response details...</div>';
           requestDetailSummary.innerHTML = "";
           requestDetailParams.innerHTML = "";
-          requestDetailRequest.textContent = "// loading request details";
-          requestDetailResponse.textContent = "// loading response details";
+          setCodeBlockContent(requestDetailRequest, "// loading request details");
+          setCodeBlockContent(requestDetailResponse, "// loading response details");
           return;
         }
 
@@ -2121,8 +2285,8 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
           requestDetailResponseMessage.innerHTML = '<div class="empty">No response details available.</div>';
           requestDetailSummary.innerHTML = "";
           requestDetailParams.innerHTML = "";
-          requestDetailRequest.textContent = "// request details unavailable";
-          requestDetailResponse.textContent = "// response details unavailable";
+          setCodeBlockContent(requestDetailRequest, "// request details unavailable");
+          setCodeBlockContent(requestDetailResponse, "// response details unavailable");
           return;
         }
 
@@ -2132,8 +2296,8 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
           requestDetailResponseMessage.innerHTML = '<div class="empty">No response details available.</div>';
           requestDetailSummary.innerHTML = "";
           requestDetailParams.innerHTML = "";
-          requestDetailRequest.textContent = "// request details unavailable";
-          requestDetailResponse.textContent = "// response details unavailable";
+          setCodeBlockContent(requestDetailRequest, "// request details unavailable");
+          setCodeBlockContent(requestDetailResponse, "// response details unavailable");
           return;
         }
 
@@ -2155,12 +2319,18 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         requestDetailMessages.innerHTML = renderRequestMessagesHtml(detail);
         requestDetailTools.innerHTML = renderToolsHtml(isClientRecord(detail.requestBody) ? detail.requestBody.tools : undefined);
         requestDetailResponseMessage.innerHTML = renderResponseChoicesHtml(detail.responseBody);
-        requestDetailRequest.textContent = detail.requestBody !== undefined
-          ? prettyJson(detail.requestBody)
-          : "// no stored request body";
-        requestDetailResponse.textContent = detail.responseBody !== undefined
-          ? prettyJson(detail.responseBody)
-          : "// no stored response body";
+        setCodeBlockContent(
+          requestDetailRequest,
+          detail.requestBody !== undefined
+            ? detail.requestBody
+            : "// no stored request body",
+        );
+        setCodeBlockContent(
+          requestDetailResponse,
+          detail.responseBody !== undefined
+            ? detail.responseBody
+            : "// no stored response body",
+        );
       }
 
       function closeRequestDetail() {
@@ -3235,9 +3405,9 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
               '<span class="turn-role">' + escapeClientHtml(entry.role) + '</span>' +
               (entry.backend ? '<span class="badge good">' + escapeClientHtml(entry.backend) + '</span>' : '') +
             '</div>' +
-            '<pre class="turn-content">' + escapeClientHtml(entry.content || "") + '</pre>' +
+            renderCodeBlockHtml(entry.content || "", "turn-content") +
             (entry.reasoningContent
-              ? '<div class="reasoning"><strong>Reasoning</strong><pre class="turn-content">' + escapeClientHtml(entry.reasoningContent) + '</pre></div>'
+              ? '<div class="reasoning"><strong>Reasoning</strong>' + renderCodeBlockHtml(entry.reasoningContent, "turn-content") + '</div>'
               : '') +
           '</article>'
         )).join("");
@@ -3282,8 +3452,8 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         renderDebugModelOptions();
         renderDebugTranscript();
         renderDebugMeta();
-        debugRequest.textContent = state.debug.rawRequest || "// request appears here";
-        debugResponse.textContent = state.debug.rawResponse || "// response appears here";
+        setCodeBlockContent(debugRequest, state.debug.rawRequest || "// request appears here");
+        setCodeBlockContent(debugResponse, state.debug.rawResponse || "// response appears here");
         debugSendChat.disabled = state.debug.sending;
         debugStopChat.disabled = !state.debug.sending;
       }
