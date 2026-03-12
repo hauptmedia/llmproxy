@@ -13,5 +13,4 @@ llmproxy.config.json
 
 .idea/*
 .vscode/*
-/.run/llmproxy Install.run.xml
-/.run/llmproxy Start.run.xml
+/.run/
