@@ -1,3 +1,4 @@
+import "../dashboard.css";
 import { createApp } from "vue";
 import App from "./App.vue";
 import { createDashboardRouter } from "./router";

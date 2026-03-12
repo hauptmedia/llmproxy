@@ -1,4 +1,4 @@
-export type DashboardPage = "overview" | "chat" | "backends";
+export type DashboardPage = "overview" | "logs" | "chat" | "backends";
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 export interface DashboardBootstrap {
@@ -224,8 +224,26 @@ export interface RenderMessageOptions {
   extraBadges?: UiBadge[];
 }
 
+export interface ModelDetailField {
+  label: string;
+  value: string;
+}
+
+export interface ModelDetailSection {
+  title: string;
+  fields: ModelDetailField[];
+}
+
+export interface ModelDetailView {
+  title: string;
+  subtitle: string;
+  summary: ModelDetailField[];
+  sections: ModelDetailSection[];
+  rawMetadata?: JsonValue;
+}
+
 export interface ModelSpec {
   text: string;
   className: string;
-  title: string;
+  detail?: ModelDetailView;
 }

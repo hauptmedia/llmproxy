@@ -1,6 +1,34 @@
-import type { ModelSpec } from "../types/dashboard";
+import type { JsonValue, ModelDetailField, ModelDetailSection, ModelDetailView, ModelSpec } from "../types/dashboard";
 import { formatDate } from "./formatters";
 import { isClientRecord } from "./guards";
+
+type MetadataRecord = Record<string, unknown>;
+
+const FIELD_LABELS: Record<string, string> = {
+  owned_by: "Owner",
+  created: "Created",
+  modified_at: "Modified",
+  aliases: "Aliases",
+  tags: "Tags",
+  capabilities: "Capabilities",
+  description: "Description",
+  type: "Type",
+  object: "Object",
+  parameters: "Parameters",
+  size: "Size",
+  digest: "Digest",
+  details: "Details",
+  meta: "Meta",
+  format: "Format",
+  quantization: "Quantization",
+  family: "Family",
+  basename: "Base Name",
+  n_ctx_train: "Training Context",
+  n_params: "Parameters",
+  n_vocab: "Vocabulary",
+  name: "Name",
+  model: "Model",
+};
 
 function matchesModelPattern(pattern: string, value: string): boolean {
   if (pattern === "*") {
@@ -33,11 +61,26 @@ function uniqueStrings(values: unknown): string[] {
   return [...new Set((Array.isArray(values) ? values : []).filter((value) => typeof value === "string" && value.length > 0))];
 }
 
-function formatModelMetadataScalar(key: string, value: unknown): string {
+function humanizeLabel(key: string): string {
+  if (FIELD_LABELS[key]) {
+    return FIELD_LABELS[key];
+  }
+
+  const normalized = key
+    .split(".")
+    .at(-1)
+    ?.replaceAll("_", " ")
+    .replaceAll("-", " ")
+    ?? key;
+
+  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatMetadataScalar(key: string, value: unknown): string {
   if (typeof value === "number") {
     if (key === "created" && value >= 1_000_000_000 && value < 10_000_000_000) {
       try {
-        return `${formatDate(new Date(value * 1000).toISOString())} (${new Intl.NumberFormat("en-US").format(value)})`;
+        return formatDate(new Date(value * 1000).toISOString());
       } catch {
         return new Intl.NumberFormat("en-US").format(value);
       }
@@ -46,110 +89,180 @@ function formatModelMetadataScalar(key: string, value: unknown): string {
     return new Intl.NumberFormat("en-US").format(value);
   }
 
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
   return String(value);
 }
 
-function appendModelMetadataLines(lines: string[], key: string, value: unknown): void {
-  if (lines.length >= 18 || value === undefined || value === null || value === "") {
-    return;
-  }
-
+function formatMetadataValue(key: string, value: unknown): string {
   if (Array.isArray(value)) {
-    const items = value
+    return value
       .map((entry) => (
         typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean"
-          ? String(entry).trim()
+          ? formatMetadataScalar(key, entry)
           : ""
       ))
-      .filter(Boolean);
-
-    if (items.length > 0) {
-      lines.push(`${key}: ${items.join(", ")}`);
-    }
-    return;
+      .filter(Boolean)
+      .join(", ");
   }
 
   if (isClientRecord(value)) {
-    for (const [childKey, childValue] of Object.entries(value)) {
-      if (childKey === "id" || childValue === undefined || childValue === null || childValue === "") {
-        continue;
-      }
-
-      appendModelMetadataLines(lines, key ? `${key}.${childKey}` : childKey, childValue);
-      if (lines.length >= 18) {
-        return;
-      }
-    }
-    return;
+    const items = Object.entries(value)
+      .map(([childKey, childValue]) => `${humanizeLabel(childKey)}: ${formatMetadataValue(childKey, childValue)}`)
+      .filter((entry) => !entry.endsWith(": "));
+    return items.join(" · ");
   }
 
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    lines.push(`${key}: ${formatModelMetadataScalar(key, value)}`);
-  }
+  return formatMetadataScalar(key, value);
 }
 
-function buildModelMetadataTooltip(modelName: string, metadata: unknown): string {
-  if (!isClientRecord(metadata)) {
-    return "";
-  }
-
-  const lines: string[] = [];
-  const primaryKeys = [
-    "owned_by",
-    "created",
-    "aliases",
-    "tags",
-    "capabilities",
-    "description",
-    "type",
-    "object",
-    "parameters",
-    "modified_at",
-    "size",
-    "digest",
-  ];
-  const handledKeys = new Set(["id", "name", "model", ...primaryKeys]);
-
-  for (const key of primaryKeys) {
-    appendModelMetadataLines(lines, key, metadata[key]);
-  }
-
-  appendModelMetadataLines(lines, "details", metadata.details);
-  handledKeys.add("details");
-  appendModelMetadataLines(lines, "meta", metadata.meta);
-  handledKeys.add("meta");
-
-  for (const [key, value] of Object.entries(metadata)) {
-    if (handledKeys.has(key)) {
-      continue;
-    }
-
-    appendModelMetadataLines(lines, key, value);
-    if (lines.length >= 18) {
-      break;
-    }
-  }
-
-  if (lines.length === 0) {
-    return "";
-  }
-
-  return `Model info for ${modelName}:\n${lines.join("\n")}`;
-}
-
-function buildDiscoveredModelDetailMap(discoveredModelDetails: unknown): Map<string, any> {
+function buildDiscoveredModelDetailMap(discoveredModelDetails: unknown): Map<string, { id: string; metadata?: JsonValue }> {
   const entries = Array.isArray(discoveredModelDetails) ? discoveredModelDetails : [];
-  const map = new Map<string, any>();
+  const map = new Map<string, { id: string; metadata?: JsonValue }>();
 
   for (const entry of entries) {
     if (!isClientRecord(entry) || typeof entry.id !== "string" || entry.id.length === 0) {
       continue;
     }
 
-    map.set(entry.id, entry);
+    map.set(entry.id, {
+      id: entry.id,
+      metadata: entry.metadata as JsonValue | undefined,
+    });
   }
 
   return map;
+}
+
+function pushField(fields: ModelDetailField[], key: string, value: unknown): void {
+  if (value === undefined || value === null || value === "") {
+    return;
+  }
+
+  const formatted = formatMetadataValue(key, value);
+  if (!formatted) {
+    return;
+  }
+
+  fields.push({
+    label: humanizeLabel(key),
+    value: formatted,
+  });
+}
+
+function collectResidualFields(
+  sectionTitle: string,
+  value: unknown,
+  pathPrefix = "",
+): ModelDetailSection | null {
+  if (!isClientRecord(value)) {
+    return null;
+  }
+
+  const fields: ModelDetailField[] = [];
+  for (const [key, childValue] of Object.entries(value)) {
+    const nextPath = pathPrefix ? `${pathPrefix}.${key}` : key;
+    if (isClientRecord(childValue)) {
+      const nested = collectResidualFields(sectionTitle, childValue, nextPath);
+      if (nested) {
+        fields.push(...nested.fields);
+      }
+      continue;
+    }
+
+    pushField(fields, nextPath, childValue);
+  }
+
+  if (fields.length === 0) {
+    return null;
+  }
+
+  return {
+    title: sectionTitle,
+    fields,
+  };
+}
+
+function buildModelDetailView(
+  model: string,
+  metadata: JsonValue | undefined,
+  routeSummary: string,
+): ModelDetailView | undefined {
+  if (!isClientRecord(metadata)) {
+    return undefined;
+  }
+
+  const metadataRecord = metadata as MetadataRecord;
+
+  const summary: ModelDetailField[] = [
+    { label: "Model", value: model },
+    { label: "Routing", value: routeSummary },
+  ];
+  pushField(summary, "owned_by", metadataRecord.owned_by);
+  pushField(summary, "created", metadataRecord.created);
+
+  const sections: ModelDetailSection[] = [];
+
+  const identityFields: ModelDetailField[] = [];
+  pushField(identityFields, "aliases", metadataRecord.aliases);
+  pushField(identityFields, "tags", metadataRecord.tags);
+  pushField(identityFields, "description", metadataRecord.description);
+  pushField(identityFields, "type", metadataRecord.type);
+  pushField(identityFields, "object", metadataRecord.object);
+  if (identityFields.length > 0) {
+    sections.push({ title: "Identity", fields: identityFields });
+  }
+
+  const capabilityFields: ModelDetailField[] = [];
+  pushField(capabilityFields, "capabilities", metadataRecord.capabilities);
+  pushField(capabilityFields, "parameters", metadataRecord.parameters);
+  if (capabilityFields.length > 0) {
+    sections.push({ title: "Capabilities", fields: capabilityFields });
+  }
+
+  const detailsFields: ModelDetailField[] = [];
+  if (isClientRecord(metadataRecord.details)) {
+    for (const [key, value] of Object.entries(metadataRecord.details)) {
+      pushField(detailsFields, key, value);
+    }
+  }
+  if (detailsFields.length > 0) {
+    sections.push({ title: "Details", fields: detailsFields });
+  }
+
+  const metaFields: ModelDetailField[] = [];
+  if (isClientRecord(metadataRecord.meta)) {
+    for (const [key, value] of Object.entries(metadataRecord.meta)) {
+      pushField(metaFields, key, value);
+    }
+  }
+  if (metaFields.length > 0) {
+    sections.push({ title: "Capacity", fields: metaFields });
+  }
+
+  const residualMetadata: MetadataRecord = {};
+  for (const [key, value] of Object.entries(metadataRecord)) {
+    if (["id", "owned_by", "created", "aliases", "tags", "description", "type", "object", "capabilities", "parameters", "details", "meta"].includes(key)) {
+      continue;
+    }
+
+    residualMetadata[key] = value;
+  }
+
+  const residualSection = collectResidualFields("Additional Metadata", residualMetadata);
+  if (residualSection) {
+    sections.push(residualSection);
+  }
+
+  return {
+    title: model,
+    subtitle: routeSummary,
+    summary,
+    sections,
+    rawMetadata: metadataRecord as JsonValue,
+  };
 }
 
 export function buildModelSpecs(
@@ -167,29 +280,25 @@ export function buildModelSpecs(
   if (discovered.length > 0) {
     for (const model of discovered) {
       const allowed = configured.length === 0 || configured.some((pattern) => matchesModelPattern(pattern, model));
-      let title = "Discovered from /v1/models.";
-      const metadataTooltip = buildModelMetadataTooltip(model, discoveredDetailMap.get(model)?.metadata);
+      let routeSummary = "Discovered from /v1/models.";
+      const metadata = discoveredDetailMap.get(model)?.metadata;
 
       if (allowed) {
         if (configured.length === 0) {
-          title += " Routable because no explicit model allowlist is configured.";
+          routeSummary = "Routable because no explicit model allowlist is configured.";
         } else if (hasWildcard) {
-          title += ' Routable because this backend whitelist includes "*".';
+          routeSummary = 'Routable because this backend whitelist includes "*".';
         } else {
-          title += " Routable because this model matches the backend whitelist.";
+          routeSummary = "Routable because this model matches the backend whitelist.";
         }
       } else {
-        title += " Not routable here because it is not whitelisted by this backend config.";
-      }
-
-      if (metadataTooltip) {
-        title += `\n\n${metadataTooltip}`;
+        routeSummary = "Discovered, but not routable here because it is not whitelisted.";
       }
 
       specs.push({
         text: model,
         className: `chip ${allowed ? "good" : "bad"}`,
-        title,
+        detail: buildModelDetailView(model, metadata, routeSummary),
       });
     }
 
@@ -201,7 +310,6 @@ export function buildModelSpecs(
       specs.push({
         text: model,
         className: "chip good",
-        title: "Explicitly whitelisted in config. llmproxy will route this exact configured model here even though it was not returned by /v1/models.",
       });
     }
 
@@ -212,7 +320,6 @@ export function buildModelSpecs(
     specs.push({
       text: model,
       className: "chip good",
-      title: "Explicitly whitelisted in config. The backend did not return a model list, so availability could not be validated via /v1/models.",
     });
   }
 
@@ -220,11 +327,6 @@ export function buildModelSpecs(
   specs.push({
     text: "any",
     className: `chip ${anyAllowed ? "good" : "bad"}`,
-    title: anyAllowed
-      ? (hasWildcard
-        ? 'No models were returned by /v1/models. Because "*" is configured, llmproxy treats any model name as routable for this backend.'
-        : "No models were returned by /v1/models and no explicit whitelist is configured, so llmproxy currently treats any model name as routable here.")
-      : "No models were returned by /v1/models. Arbitrary model names are not whitelisted for this backend, so only explicitly configured models will be routed here.",
   });
 
   return specs;

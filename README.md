@@ -1,5 +1,7 @@
 # llmproxy
 
+![llmproxy logo](frontend/src/assets/llmproxy-logo.svg)
+
 A small TypeScript proxy with an OpenAI-compatible `/v1/*` interface, health checks, queueing, and a live dashboard for local `llama.cpp` instances or other OpenAI-compatible backends.
 
 Prerequisite: Node.js 18+ should be available on your system `PATH` or configured as the project interpreter in WebStorm.
@@ -31,6 +33,28 @@ After that:
 - Backends: `http://localhost:4100/dashboard/backends`
 
 The backend serves the built Vue dashboard app directly on the `/dashboard` routes, so frontend and backend stay separated while deployment still stays simple.
+
+## Development
+
+Use the dev mode when you want to see frontend changes immediately:
+
+```bash
+npm run dev
+```
+
+That mode does three things for you:
+
+- starts a Vite dev server with Vue HMR for the dashboard
+- watches and recompiles the TypeScript backend
+- restarts the backend automatically when compiled server files change
+
+You still open the dashboard through the backend URL:
+
+- Overview dashboard: `http://localhost:4100/dashboard`
+- Chat Debugger: `http://localhost:4100/dashboard/chat`
+- Backends: `http://localhost:4100/dashboard/backends`
+
+In dev mode, those routes load the dashboard code from the Vite dev server automatically, so UI changes show up immediately without rebuilding manually.
 
 ## Configuration
 

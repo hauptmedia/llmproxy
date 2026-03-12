@@ -44,6 +44,9 @@ export function badgeClass(badge: UiBadge): string {
 export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
   const enabledCount = snapshot.backends.filter((backend) => backend.enabled).length;
   const healthyCount = snapshot.backends.filter((backend) => backend.enabled && backend.healthy).length;
+  const waitingConnections = snapshot.activeConnections.filter(
+    (connection) => connection.phase === "queued" && !connection.backendId,
+  ).length;
   const uptimeMs = Math.max(0, Date.now() - new Date(snapshot.startedAt).getTime());
 
   return [
@@ -51,8 +54,15 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
       key: "live-connections",
       label: "Live Connections",
       value: snapshot.activeConnections.length,
-      note: `${snapshot.totals.activeRequests} currently occupy backend slots, ${snapshot.queueDepth} are queued`,
+      note: `${snapshot.totals.activeRequests} currently occupy backend slots, ${waitingConnections} are still waiting`,
       title: "Requests currently active inside llmproxy. This includes in-flight requests on a backend and requests waiting in the queue.",
+    },
+    {
+      key: "waiting-connections",
+      label: "Waiting For Backend",
+      value: waitingConnections,
+      note: `${snapshot.queueDepth} queued according to the scheduler`,
+      title: "Live requests that are still queued because no backend slot has been assigned to them yet.",
     },
     {
       key: "healthy-backends",

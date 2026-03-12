@@ -3,7 +3,6 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const repoRoot = path.resolve(__dirname, "..");
-const outputDir = path.join(repoRoot, "dist", "dashboard-app", "assets");
 
 function runVueTypeCheck() {
   const vueTscPath = path.join(repoRoot, "node_modules", "vue-tsc", "bin", "vue-tsc.js");
@@ -31,27 +30,24 @@ function buildJavascript() {
   }
 }
 
-function buildCss() {
-  const tailwindCliPath = path.join(repoRoot, "node_modules", "@tailwindcss", "cli", "dist", "index.mjs");
-  const inputPath = path.join(repoRoot, "frontend", "dashboard.css");
-  const outputPath = path.join(outputDir, "dashboard.css");
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-
-  const result = spawnSync(process.execPath, [tailwindCliPath, "-i", inputPath, "-o", outputPath, "--minify"], {
-    cwd: repoRoot,
-    stdio: "inherit",
-    windowsHide: false,
-  });
-
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+function copyStaticAssets(outputDir) {
+  const sourceDir = path.join(repoRoot, "frontend", "src", "assets");
+  if (!fs.existsSync(sourceDir)) {
+    return;
   }
+
+  fs.cpSync(sourceDir, outputDir, {
+    recursive: true,
+    force: true,
+  });
 }
 
 function main() {
+  const outputDir = path.join(repoRoot, "dist", "dashboard-app", "assets");
+  fs.mkdirSync(outputDir, { recursive: true });
   runVueTypeCheck();
   buildJavascript();
-  buildCss();
+  copyStaticAssets(outputDir);
 }
 
 main();

@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import { ref } from "vue";
+import ModelInfoDialog from "./ModelInfoDialog.vue";
 import {
   type BackendDraft,
   type BackendSnapshot,
+  type ModelDetailView,
 } from "../types/dashboard";
 import { formatDate, formatDuration } from "../utils/formatters";
 import { buildModelSpecs } from "../utils/model-specs";
 
-const props = defineProps<{
+defineProps<{
   backends: BackendSnapshot[];
   drafts: Record<string, BackendDraft>;
 }>();
@@ -15,12 +18,48 @@ const emit = defineEmits<{
   (event: "save-backend", backendId: string): void;
 }>();
 
+const selectedModelDetail = ref<ModelDetailView | null>(null);
+
 function modelSpecs(backend: BackendSnapshot) {
   return buildModelSpecs(backend.configuredModels, backend.discoveredModels, backend.discoveredModelDetails);
 }
 
+function backendStateClass(backend: BackendSnapshot): "good" | "bad" | "disabled" {
+  if (!backend.enabled) {
+    return "disabled";
+  }
+
+  return backend.healthy ? "good" : "bad";
+}
+
+function backendStateTitle(backend: BackendSnapshot): string {
+  if (!backend.enabled) {
+    return "Backend is disabled and excluded from routing.";
+  }
+
+  return backend.healthy
+    ? "Backend is healthy and routable."
+    : "Backend is currently unhealthy or unavailable for routing.";
+}
+
+function backendStatusError(backend: BackendSnapshot): string {
+  if (!backend.enabled) {
+    return "";
+  }
+
+  return backend.lastError === "Backend disabled." ? "" : (backend.lastError ?? "");
+}
+
 function saveBackend(backendId: string): void {
   emit("save-backend", backendId);
+}
+
+function openModelDetail(detail: ModelDetailView | undefined): void {
+  if (!detail) {
+    return;
+  }
+
+  selectedModelDetail.value = detail;
 }
 </script>
 
@@ -40,14 +79,18 @@ function saveBackend(backendId: string): void {
       <tbody>
         <tr v-for="backend in backends" :key="backend.id">
           <td>
-            <div class="table-name">{{ backend.name }}</div>
+            <div class="table-name">
+              <span
+                :class="['backend-health-dot', backendStateClass(backend)]"
+                :title="backendStateTitle(backend)"
+                aria-hidden="true"
+              ></span>
+              <span>{{ backend.name }}</span>
+            </div>
             <div class="table-sub">{{ backend.baseUrl }}</div>
           </td>
           <td>
             <div class="request-meta">
-              <span :class="'badge ' + (backend.healthy && backend.enabled ? 'good' : (backend.enabled ? 'bad' : 'warn'))">
-                {{ backend.healthy && backend.enabled ? "healthy" : (backend.enabled ? "unhealthy" : "disabled") }}
-              </span>
               <span class="badge neutral" title="Active requests currently occupying backend slots.">
                 active {{ backend.activeRequests }} / {{ backend.maxConcurrency }}
               </span>
@@ -57,22 +100,31 @@ function saveBackend(backendId: string): void {
             </div>
             <div class="table-sub">
               Last check: {{ formatDate(backend.lastCheckedAt) }}
-              <template v-if="backend.lastError">
+              <template v-if="backendStatusError(backend)">
                 <br />
-                {{ backend.lastError }}
+                {{ backendStatusError(backend) }}
               </template>
             </div>
           </td>
           <td>
             <div class="models">
-              <span
-                v-for="spec in modelSpecs(backend)"
-                :key="spec.text + spec.className"
-                :class="spec.className"
-                :title="spec.title"
-              >
-                {{ spec.text }}
-              </span>
+              <template v-for="spec in modelSpecs(backend)" :key="spec.text + spec.className">
+                <button
+                  v-if="spec.detail"
+                  type="button"
+                  :class="[spec.className, 'model-chip-button']"
+                  @click="openModelDetail(spec.detail)"
+                >
+                  <span>{{ spec.text }}</span>
+                  <span class="model-chip-link" aria-hidden="true">&nearr;</span>
+                </button>
+                <span
+                  v-else
+                  :class="spec.className"
+                >
+                  {{ spec.text }}
+                </span>
+              </template>
             </div>
           </td>
           <td>
@@ -117,4 +169,5 @@ function saveBackend(backendId: string): void {
       </tbody>
     </table>
   </div>
+  <ModelInfoDialog :detail="selectedModelDetail" @close="selectedModelDetail = null" />
 </template>
