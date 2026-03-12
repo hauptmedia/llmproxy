@@ -2394,6 +2394,10 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
           metaBits.push(badgeSpec("finish " + options.finishReason, "good", describeFinishReason(options.finishReason)));
         }
 
+        if (Array.isArray(options.extraBadges) && options.extraBadges.length > 0) {
+          metaBits.push(...options.extraBadges);
+        }
+
         return (
           '<article class="turn ' + escapeClientHtml(role) + '">' +
             '<div class="turn-head">' +
@@ -2406,7 +2410,9 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
                 )).join("") +
               '</div>' +
             '</div>' +
-            renderReasoningHtml(message?.reasoning_content) +
+            (options.reasoningCollapsed
+              ? renderCollapsedReasoningHtml(message?.reasoning_content)
+              : renderReasoningHtml(message?.reasoning_content)) +
             (hasVisibleMessageContent(message?.content) || !message?.reasoning_content
               ? renderMessageContentHtml(message?.content)
               : '') +
@@ -3642,24 +3648,166 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         debugModel.value = state.debug.model;
       }
 
+      function mergeDebugFunctionCall(target, value) {
+        if (!isClientRecord(value)) {
+          return;
+        }
+
+        const nextFunctionCall = isClientRecord(target.function_call)
+          ? {
+              ...target.function_call,
+            }
+          : {
+              arguments: "",
+            };
+
+        if (typeof value.name === "string" && value.name.length > 0) {
+          nextFunctionCall.name = value.name;
+        }
+
+        if (typeof value.arguments === "string") {
+          nextFunctionCall.arguments = String(nextFunctionCall.arguments ?? "") + value.arguments;
+        }
+
+        target.function_call = nextFunctionCall;
+      }
+
+      function mergeDebugToolCalls(target, value) {
+        if (!Array.isArray(value)) {
+          return;
+        }
+
+        const nextToolCalls = Array.isArray(target.tool_calls)
+          ? target.tool_calls
+            .filter((toolCall) => isClientRecord(toolCall))
+            .map((toolCall) => ({ ...toolCall }))
+          : [];
+
+        for (let index = 0; index < value.length; index += 1) {
+          const rawToolCall = value[index];
+          if (!isClientRecord(rawToolCall)) {
+            continue;
+          }
+
+          const toolCallIndex = typeof rawToolCall.index === "number" ? rawToolCall.index : index;
+          const existingIndex = nextToolCalls.findIndex((toolCall) => toolCall.index === toolCallIndex);
+          const existingToolCall = existingIndex >= 0 && isClientRecord(nextToolCalls[existingIndex])
+            ? {
+                ...nextToolCalls[existingIndex],
+              }
+            : {
+                index: toolCallIndex,
+              };
+
+          if (typeof rawToolCall.id === "string" && rawToolCall.id.length > 0) {
+            existingToolCall.id = rawToolCall.id;
+          }
+
+          if (typeof rawToolCall.type === "string" && rawToolCall.type.length > 0) {
+            existingToolCall.type = rawToolCall.type;
+          }
+
+          if (isClientRecord(rawToolCall.function)) {
+            const nextFunction = isClientRecord(existingToolCall.function)
+              ? {
+                  ...existingToolCall.function,
+                }
+              : {
+                  arguments: "",
+                };
+
+            if (typeof rawToolCall.function.name === "string" && rawToolCall.function.name.length > 0) {
+              nextFunction.name = rawToolCall.function.name;
+            }
+
+            if (typeof rawToolCall.function.arguments === "string") {
+              nextFunction.arguments = String(nextFunction.arguments ?? "") + rawToolCall.function.arguments;
+            }
+
+            existingToolCall.function = nextFunction;
+          }
+
+          if (existingIndex >= 0) {
+            nextToolCalls[existingIndex] = existingToolCall;
+          } else {
+            nextToolCalls.push(existingToolCall);
+          }
+        }
+
+        target.tool_calls = nextToolCalls.sort((left, right) => left.index - right.index);
+      }
+
+      function buildDebugHistoryMessage(entry) {
+        if (!isClientRecord(entry) || typeof entry.role !== "string") {
+          return null;
+        }
+
+        const message = {
+          role: entry.role,
+        };
+
+        if (Object.prototype.hasOwnProperty.call(entry, "content")) {
+          message.content = entry.content ?? null;
+        }
+
+        if (typeof entry.name === "string" && entry.name.length > 0) {
+          message.name = entry.name;
+        }
+
+        if (typeof entry.tool_call_id === "string" && entry.tool_call_id.length > 0) {
+          message.tool_call_id = entry.tool_call_id;
+        }
+
+        if (isClientRecord(entry.function_call)) {
+          message.function_call = entry.function_call;
+        }
+
+        if (Array.isArray(entry.tool_calls) && entry.tool_calls.length > 0) {
+          message.tool_calls = entry.tool_calls;
+        }
+
+        if (typeof entry.refusal === "string" && entry.refusal.length > 0) {
+          message.refusal = entry.refusal;
+        }
+
+        return message;
+      }
+
+      function hasReplayableDebugMessage(message) {
+        if (!isClientRecord(message) || typeof message.role !== "string") {
+          return false;
+        }
+
+        if (hasVisibleMessageContent(message.content)) {
+          return true;
+        }
+
+        if (typeof message.refusal === "string" && message.refusal.length > 0) {
+          return true;
+        }
+
+        if (isClientRecord(message.function_call)) {
+          return true;
+        }
+
+        return Array.isArray(message.tool_calls) && message.tool_calls.length > 0;
+      }
+
       function renderDebugTranscript() {
         if (state.debug.transcript.length === 0) {
           debugTranscript.innerHTML = '<div class="empty">No chat yet. Send your first debug request below.</div>';
           return;
         }
 
-        debugTranscript.innerHTML = state.debug.transcript.map((entry) => (
-          '<article class="turn ' + escapeClientHtml(entry.role) + '">' +
-            '<div class="turn-head">' +
-              '<span class="turn-role">' + escapeClientHtml(entry.role) + '</span>' +
-              (entry.backend ? '<span class="badge good">' + escapeClientHtml(entry.backend) + '</span>' : '') +
-            '</div>' +
-            renderCodeBlockHtml(entry.content || "", "turn-content") +
-            (entry.reasoningContent
-              ? '<div class="reasoning"><strong>Reasoning</strong>' + renderCodeBlockHtml(entry.reasoningContent, "turn-content") + '</div>'
-              : '') +
-          '</article>'
-        )).join("");
+        debugTranscript.innerHTML = state.debug.transcript
+          .map((entry, index) => renderMessageHtml(entry, index, {
+            finishReason: typeof entry?.finish_reason === "string" ? entry.finish_reason : "",
+            reasoningCollapsed: true,
+            extraBadges: entry?.backend
+              ? [badgeSpec("backend " + entry.backend, "good", "Backend that served this debug message.")]
+              : [],
+          }))
+          .join("");
       }
 
       function renderDebugMeta() {
@@ -3772,9 +3920,22 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         const choice = Array.isArray(payload.choices) ? payload.choices[0] : undefined;
         const message = choice?.message;
 
-        assistantTurn.content = typeof message?.content === "string" ? message.content : "";
-        assistantTurn.reasoningContent = typeof message?.reasoning_content === "string" ? message.reasoning_content : "";
+        if (typeof message?.role === "string" && message.role.length > 0) {
+          assistantTurn.role = message.role;
+        }
+
+        assistantTurn.content =
+          message && Object.prototype.hasOwnProperty.call(message, "content")
+            ? (message.content ?? null)
+            : "";
+        assistantTurn.reasoning_content = typeof message?.reasoning_content === "string" ? message.reasoning_content : "";
+        assistantTurn.refusal = typeof message?.refusal === "string" ? message.refusal : "";
+        assistantTurn.function_call = isClientRecord(message?.function_call) ? message.function_call : undefined;
+        assistantTurn.tool_calls = Array.isArray(message?.tool_calls) ? message.tool_calls : undefined;
+        assistantTurn.audio = isClientRecord(message?.audio) ? message.audio : undefined;
+        assistantTurn.name = typeof message?.name === "string" ? message.name : "";
         assistantTurn.backend = state.debug.backend;
+        assistantTurn.finish_reason = typeof choice?.finish_reason === "string" ? choice.finish_reason : "";
         applyUsageMetrics(payload.usage, payload.timings, choice?.finish_reason);
         state.debug.usage = formatUsage(payload.usage, payload.timings, choice?.finish_reason);
         state.debug.rawResponse = JSON.stringify(payload, null, 2);
@@ -3784,12 +3945,27 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         const choice = Array.isArray(payload.choices) ? payload.choices[0] : undefined;
         const delta = choice?.delta ?? choice?.message ?? {};
 
+        if (typeof delta.role === "string" && delta.role.length > 0) {
+          assistantTurn.role = delta.role;
+        }
+
         if (typeof delta.content === "string") {
-          assistantTurn.content += delta.content;
+          assistantTurn.content = String(assistantTurn.content ?? "") + delta.content;
         }
 
         if (typeof delta.reasoning_content === "string") {
-          assistantTurn.reasoningContent = (assistantTurn.reasoningContent ?? "") + delta.reasoning_content;
+          assistantTurn.reasoning_content = String(assistantTurn.reasoning_content ?? "") + delta.reasoning_content;
+        }
+
+        if (typeof delta.refusal === "string") {
+          assistantTurn.refusal = String(assistantTurn.refusal ?? "") + delta.refusal;
+        }
+
+        mergeDebugFunctionCall(assistantTurn, delta.function_call);
+        mergeDebugToolCalls(assistantTurn, delta.tool_calls);
+
+        if (typeof choice?.finish_reason === "string" && choice.finish_reason.length > 0) {
+          assistantTurn.finish_reason = choice.finish_reason;
         }
 
         assistantTurn.backend = state.debug.backend;
@@ -3904,11 +4080,8 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         }
 
         const history = state.debug.transcript
-          .filter((entry) => typeof entry.content === "string" && entry.content.trim().length > 0)
-          .map((entry) => ({
-            role: entry.role,
-            content: entry.content,
-          }));
+          .map((entry) => buildDebugHistoryMessage(entry))
+          .filter((entry) => hasReplayableDebugMessage(entry));
 
         history.push({
           role: "user",
@@ -3942,8 +4115,9 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
         const assistantTurn = {
           role: "assistant",
           content: "",
-          reasoningContent: "",
+          reasoning_content: "",
           backend: "",
+          finish_reason: "",
         };
 
         state.debug.transcript.push(userTurn, assistantTurn);
@@ -3990,7 +4164,13 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
           const message = error instanceof Error ? error.message : String(error);
           state.debug.error = message;
 
-          if (!assistantTurn.content && !assistantTurn.reasoningContent) {
+          if (
+            !hasVisibleMessageContent(assistantTurn.content) &&
+            !assistantTurn.reasoning_content &&
+            !(typeof assistantTurn.refusal === "string" && assistantTurn.refusal.length > 0) &&
+            !isClientRecord(assistantTurn.function_call) &&
+            !(Array.isArray(assistantTurn.tool_calls) && assistantTurn.tool_calls.length > 0)
+          ) {
             state.debug.transcript.pop();
           }
         } finally {
