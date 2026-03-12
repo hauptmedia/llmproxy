@@ -11,7 +11,7 @@ const store = useDashboardStore();
     <div class="panel">
       <div class="panel-header">
         <div>
-          <h2 class="panel-title">Chat Debugger</h2>
+          <h2 class="panel-title">Chat</h2>
           <p class="hint">Send OpenAI-compatible chat requests through llmproxy and inspect transcript, metrics, and raw payloads.</p>
         </div>
       </div>

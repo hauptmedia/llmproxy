@@ -36,7 +36,7 @@ After that:
 
 - Proxy API: `http://localhost:4100/v1/...`
 - Overview dashboard: `http://localhost:4100/dashboard`
-- Chat Debugger: `http://localhost:4100/dashboard/chat`
+- Chat: `http://localhost:4100/dashboard/chat`
 - Backends: `http://localhost:4100/dashboard/backends`
 
 The backend serves the built Vue dashboard app directly on the `/dashboard` routes, so frontend and backend stay separated while deployment still stays simple.
@@ -58,7 +58,7 @@ That mode does three things for you:
 You still open the dashboard through the backend URL:
 
 - Overview dashboard: `http://localhost:4100/dashboard`
-- Chat Debugger: `http://localhost:4100/dashboard/chat`
+- Chat: `http://localhost:4100/dashboard/chat`
 - Backends: `http://localhost:4100/dashboard/backends`
 
 In dev mode, those routes load the dashboard code from the Vite dev server automatically, so UI changes show up immediately without rebuilding manually.
@@ -103,4 +103,4 @@ Dashboard changes to `enabled` and `maxConcurrency` are written back to your loc
 - If the client does not request streaming, the proxy buffers the upstream stream internally and returns a normal JSON response at the end.
 - The proxy is intentionally limited to the completion routes listed above; other `/v1/*` routes return `501`.
 - The `Active Connections` dashboard section shows live `chat.completions` requests in real time, including queue state, streaming mode, token counts, and `tok/s`.
-- The `Chat Debugger` lets you send debug requests to `/v1/chat/completions` and inspect transcript, parameters, routing, and raw responses.
+- The `Chat` page lets you send debug requests to `/v1/chat/completions` and inspect transcript, parameters, routing, and raw responses.
