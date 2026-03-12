@@ -80,7 +80,7 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
     },
     {
       key: "waiting-connections",
-      label: "Queued Connections",
+      label: "Queue",
       value: waitingConnections,
       note: "",
       title: "Chat completion requests that are still waiting in the scheduler queue because no backend slot is available yet.",

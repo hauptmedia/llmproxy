@@ -156,7 +156,7 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
     <div class="panel">
       <div class="panel-header">
         <div>
-          <h2 class="panel-title">Queued Connections</h2>
+          <h2 class="panel-title">Queue</h2>
         </div>
       </div>
       <div v-if="queuedConnections.length" class="request-list">

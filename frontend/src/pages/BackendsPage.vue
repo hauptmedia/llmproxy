@@ -11,7 +11,6 @@ const store = useDashboardStore();
       <div class="panel-header">
         <div>
           <h2 class="panel-title">Backends</h2>
-          <p class="hint">Adjust enabled state and concurrency while keeping model discovery and routing visibility in one place.</p>
         </div>
       </div>
       <BackendTable

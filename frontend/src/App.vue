@@ -11,10 +11,10 @@ const store = useDashboardStore();
 const route = useRoute();
 
 const pageLinks: Array<{ page: DashboardPage; label: string }> = [
-  { page: "overview", label: "📊 Overview" },
-  { page: "logs", label: "🧾 Logs" },
-  { page: "chat", label: "💬 Chat" },
-  { page: "backends", label: "🗄️ Backends" },
+  { page: "overview", label: "Overview" },
+  { page: "logs", label: "Logs" },
+  { page: "chat", label: "Chat" },
+  { page: "backends", label: "Backends" },
 ];
 
 const currentPage = computed(() => {
