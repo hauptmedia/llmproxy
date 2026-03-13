@@ -375,6 +375,13 @@
     @apply items-center text-center;
   }
 
+  .summary-card-healthy-backends .card-value-segment,
+  .summary-card-healthy-backends .card-value-segment-button,
+  .summary-card-live-connections .card-value-segment,
+  .summary-card-live-connections .card-value-segment-button {
+    @apply items-center text-center;
+  }
+
   .card-value-segment-number {
     @apply text-3xl font-extrabold leading-none;
   }
