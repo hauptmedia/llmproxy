@@ -435,6 +435,36 @@
     @apply overflow-x-auto;
   }
 
+  .detail-table-wrap {
+    @apply overflow-x-auto rounded-3xl border border-amber-900/10 bg-white/70;
+  }
+
+  .detail-table {
+    @apply w-full border-collapse;
+    table-layout: fixed;
+  }
+
+  .detail-table th,
+  .detail-table td {
+    @apply border-b border-amber-900/10 px-4 py-3 text-left align-top;
+  }
+
+  .detail-table th {
+    @apply text-xs font-medium uppercase tracking-[0.05em] text-stone-500;
+  }
+
+  .detail-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .detail-table-key {
+    @apply w-40 text-sm font-semibold text-stone-900;
+  }
+
+  .detail-table-value {
+    @apply text-sm leading-relaxed break-words text-stone-700;
+  }
+
   .backend-table {
     @apply w-full border-collapse;
   }
@@ -606,6 +636,16 @@
     width: 17px;
     height: 17px;
     display: block;
+  }
+
+  .icon-button.compact {
+    width: 30px;
+    height: 30px;
+  }
+
+  .icon-button.compact svg {
+    width: 15px;
+    height: 15px;
   }
 
   .icon-button:hover:not(:disabled) {
@@ -870,15 +910,16 @@
   }
 
   .request-detail-dialog {
-    @apply w-full p-6;
+    @apply flex w-full flex-col p-6;
     max-height: calc(100vh - 44px);
     max-width: 1420px;
-    overflow: auto;
+    overflow: hidden;
   }
 
   .request-detail-grid {
-    @apply grid gap-[18px];
-    grid-template-columns: minmax(320px, 1.15fr) minmax(320px, 1fr);
+    @apply grid flex-1 gap-[18px];
+    grid-template-columns: minmax(280px, 0.88fr) minmax(360px, 1.22fr);
+    min-height: 0;
   }
 
   .model-info-dialog {
@@ -916,12 +957,16 @@
   }
 
   .request-detail-card {
+    @apply flex flex-col;
     min-width: 0;
+    min-height: 0;
   }
 
+  .detail-card-viewport,
   .conversation-viewport {
     @apply grid gap-[18px] overflow-y-auto pr-1;
-    max-height: min(64vh, 820px);
+    flex: 1 1 auto;
+    min-height: 0;
     scrollbar-gutter: stable;
   }
 
@@ -944,7 +989,19 @@
     grid-template-columns: 1fr;
   }
 
+  .request-detail-dialog {
+    overflow: auto;
+  }
+
+  .request-detail-grid,
+  .request-detail-card {
+    min-height: auto;
+  }
+
+  .detail-card-viewport,
   .conversation-viewport {
+    flex: none;
+    min-height: auto;
     max-height: min(52vh, 640px);
   }
 

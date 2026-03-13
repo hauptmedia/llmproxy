@@ -2,6 +2,7 @@ import type {
   ActiveConnectionSnapshot,
   DebugState,
   ProxySnapshot,
+  RequestFieldRow,
   RequestLogEntry,
   SummaryCard,
   UiBadge,
@@ -112,41 +113,30 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
   ];
 }
 
-export function buildRequestSummaryBadges(entry?: RequestLogEntry): UiBadge[] {
+export function buildRequestStateBadge(entry?: RequestLogEntry, live = false): UiBadge | null {
   if (!entry) {
-    return [];
+    return null;
   }
 
-  const items: UiBadge[] = [
-    badgeSpec(formatDate(entry.time), "neutral", "Time when this request was recorded."),
-  ];
-
-  if (entry.backendName) {
-    items.push(badgeSpec(`backend ${entry.backendName}`, "good", "Backend chosen for this request."));
+  if (live) {
+    return badgeSpec("running", "warn", "This request is still active and has not reached a final state yet.");
   }
 
-  if (entry.statusCode !== undefined) {
-    items.push(badgeSpec(`HTTP ${entry.statusCode}`, entry.statusCode >= 500 ? "bad" : "good", "Final upstream status code."));
-  }
-
-  items.push(badgeSpec(`latency ${formatDuration(entry.latencyMs)}`, "neutral", "End-to-end request latency."));
-  items.push(badgeSpec(`queued ${formatDuration(entry.queuedMs)}`, "neutral", "Time spent waiting for a free backend slot."));
-
-  if (entry.finishReason) {
-    items.push(badgeSpec(`finish ${entry.finishReason}`, "good", describeFinishReason(entry.finishReason)));
-  }
-
-  return items;
+  return buildRequestOutcomeBadge(entry);
 }
 
-export function buildRequestParamBadges(requestBody: unknown): UiBadge[] {
+export function buildRequestParamRows(requestBody: unknown): RequestFieldRow[] {
   if (!isClientRecord(requestBody)) {
     return [];
   }
 
   return Object.entries(requestBody)
     .filter(([key, value]) => key !== "messages" && key !== "tools" && value !== undefined)
-    .map(([key, value]) => badgeSpec(`${key} ${formatCompactValue(value)}`, "neutral", `Top-level OpenAI request field "${key}".`));
+    .map(([key, value]) => ({
+      key,
+      value: formatCompactValue(value),
+      title: `Top-level OpenAI request field "${key}".`,
+    }));
 }
 
 export function buildDebugMetaBadges(debug: DebugState, liveUsage: string): UiBadge[] {
@@ -368,6 +358,73 @@ export function buildRecentRequestMetrics(entry: RequestLogEntry): UiBadge[] {
   const tokenRate = formatTokenRate(entry.completionTokensPerSecond);
   if (tokenRate) {
     items.push(badgeSpec(tokenRate, "good", "Completion tokens generated per second."));
+  }
+
+  return items;
+}
+
+export function buildRequestResponseMetricRows(entry?: RequestLogEntry): RequestFieldRow[] {
+  if (!entry) {
+    return [];
+  }
+
+  const items: RequestFieldRow[] = [];
+
+  if (typeof entry.timeToFirstTokenMs === "number") {
+    items.push({
+      key: "Time to first token",
+      value: formatDuration(entry.timeToFirstTokenMs),
+      title: "Time to first generated token.",
+    });
+  }
+
+  if (typeof entry.generationMs === "number") {
+    items.push({
+      key: "Generation time",
+      value: formatDuration(entry.generationMs),
+      title: "Generation phase duration.",
+    });
+  }
+
+  const tokenRate = formatTokenRate(entry.completionTokensPerSecond);
+  if (tokenRate) {
+    items.push({
+      key: "Tokens per second",
+      value: tokenRate.replace("tok/s", "tokens/s"),
+      title: "Generated completion tokens per second.",
+    });
+  }
+
+  if (typeof entry.reasoningTokens === "number" && entry.reasoningTokens > 0) {
+    items.push({
+      key: "Reasoning tokens",
+      value: `${entry.reasoningTokens} tokens`,
+      title: "Generated tokens attributed to reasoning content.",
+    });
+  }
+
+  if (typeof entry.contentTokens === "number" && entry.contentTokens > 0) {
+    items.push({
+      key: "Content tokens",
+      value: `${entry.contentTokens} tokens`,
+      title: "Generated tokens attributed to normal visible content.",
+    });
+  }
+
+  if (typeof entry.completionTokens === "number") {
+    items.push({
+      key: "Completion tokens",
+      value: `${entry.completionTokens} tokens`,
+      title: "Generated completion tokens reported or inferred for this request.",
+    });
+  }
+
+  if (typeof entry.textTokens === "number" && entry.textTokens > 0) {
+    items.push({
+      key: "Legacy text tokens",
+      value: `${entry.textTokens} tokens`,
+      title: "Generated tokens attributed to legacy text completion output.",
+    });
   }
 
   return items;

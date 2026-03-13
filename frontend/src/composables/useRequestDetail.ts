@@ -1,6 +1,6 @@
 import { computed } from "vue";
 import type { DashboardState, RequestLogDetail } from "../types/dashboard";
-import { buildRequestParamBadges, buildRequestSummaryBadges } from "../utils/dashboard-badges";
+import { buildRequestParamRows, buildRequestResponseMetricRows, buildRequestStateBadge } from "../utils/dashboard-badges";
 import { formatDate, shortId } from "../utils/formatters";
 import { isClientRecord } from "../utils/guards";
 import { readErrorResponse } from "../utils/http";
@@ -8,6 +8,15 @@ import { renderResponseChoicesHtml, renderToolsHtml } from "../utils/message-ren
 
 export function useRequestDetail(state: DashboardState) {
   let detailRefreshTimer: number | undefined;
+
+  function formatClientIp(value?: string): string {
+    const trimmed = value?.trim();
+    if (!trimmed) {
+      return "";
+    }
+
+    return trimmed.startsWith("::ffff:") ? trimmed.slice(7) : trimmed;
+  }
 
   function isActiveRequestId(requestId: string): boolean {
     return state.snapshot.activeConnections.some((connection) => connection.id === requestId);
@@ -120,21 +129,25 @@ export function useRequestDetail(state: DashboardState) {
       return "Inspect the original request payload, messages, tools, and final response.";
     }
 
-    return (
-      `${detail?.live ? "Live request" : `req ${shortId(entry.id)}`}` +
-      `${entry.model ? ` · model ${entry.model}` : ""}` +
-      `${entry.backendName ? ` · backend ${entry.backendName}` : ""}` +
-      ` · ${formatDate(entry.time)}` +
-      `${detail?.live ? " · still running" : ""}`
-    );
+    return [
+      formatDate(entry.time),
+      formatClientIp(entry.clientIp) ? `IP ${formatClientIp(entry.clientIp)}` : "",
+      detail?.live ? "" : `req ${shortId(entry.id)}`,
+      entry.model ? `model ${entry.model}` : "",
+      entry.backendName ? `backend ${entry.backendName}` : "",
+    ].filter(Boolean).join(" · ");
   });
 
   const requestMessages = computed(() => (
     Array.isArray(requestBody.value?.messages) ? requestBody.value.messages : []
   ));
 
-  const requestSummaryBadges = computed(() => buildRequestSummaryBadges(state.requestDetail.detail?.entry));
-  const requestParamBadges = computed(() => buildRequestParamBadges(requestBody.value));
+  const requestStateBadge = computed(() => buildRequestStateBadge(
+    state.requestDetail.detail?.entry,
+    Boolean(state.requestDetail.detail?.live),
+  ));
+  const requestResponseMetricRows = computed(() => buildRequestResponseMetricRows(state.requestDetail.detail?.entry));
+  const requestParamRows = computed(() => buildRequestParamRows(requestBody.value));
   const requestToolsHtml = computed(() => renderToolsHtml(requestBody.value?.tools));
   const requestResponseHtml = computed(() => renderResponseChoicesHtml(
     state.requestDetail.detail?.responseBody,
@@ -148,9 +161,10 @@ export function useRequestDetail(state: DashboardState) {
     requestDetailSubtitle,
     requestDetailTitle,
     requestMessages,
-    requestParamBadges,
+    requestParamRows,
+    requestResponseMetricRows,
     requestResponseHtml,
-    requestSummaryBadges,
+    requestStateBadge,
     requestToolsHtml,
     scheduleOpenDetailRefresh,
     stopRequestDetailRefresh,

@@ -82,6 +82,7 @@ export interface RequestLogEntry {
   time: string;
   method: string;
   path: string;
+  clientIp?: string;
   model?: string;
   backendId?: string;
   backendName?: string;
@@ -216,6 +217,12 @@ export interface SummaryCard {
   note: string;
   title: string;
   tone?: "good" | "warn" | "bad" | "neutral" | "info";
+}
+
+export interface RequestFieldRow {
+  key: string;
+  value: string;
+  title: string;
 }
 
 export interface RenderMessageOptions {

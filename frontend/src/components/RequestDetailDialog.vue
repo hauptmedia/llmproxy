@@ -76,23 +76,33 @@ watch(
       <div class="panel-header">
         <div>
           <h2 id="request-detail-title" class="panel-title">{{ store.requestDetailTitle }}</h2>
-          <p class="hint">{{ store.requestDetailSubtitle }}</p>
+          <div class="mt-1.5 flex flex-wrap items-center gap-2">
+            <p class="hint m-0">{{ store.requestDetailSubtitle }}</p>
+            <div v-if="store.requestStateBadge" class="inline-flex items-center gap-1.5">
+              <span
+                :class="store.badgeClass(store.requestStateBadge)"
+                :title="store.requestStateBadge.title"
+              >
+                {{ store.requestStateBadge.text }}
+              </span>
+              <button
+                v-if="store.canCancelRequest(store.state.requestDetail.requestId)"
+                class="icon-button danger compact"
+                type="button"
+                :disabled="store.isRequestCancelling(store.state.requestDetail.requestId)"
+                :aria-label="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection' : 'End this active connection'"
+                :title="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection...' : 'End this active connection after confirmation.'"
+                @click="store.cancelActiveRequest(store.state.requestDetail.requestId)"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3.5v7"></path>
+                  <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
         <div class="request-actions">
-          <button
-            v-if="store.canCancelRequest(store.state.requestDetail.requestId)"
-            class="icon-button danger"
-            type="button"
-            :disabled="store.isRequestCancelling(store.state.requestDetail.requestId)"
-            :aria-label="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection' : 'End this active connection'"
-            :title="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection...' : 'End this active connection after confirmation.'"
-            @click="store.cancelActiveRequest(store.state.requestDetail.requestId)"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3.5v7"></path>
-              <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
-            </svg>
-          </button>
           <button
             class="icon-button"
             type="button"
@@ -117,76 +127,90 @@ watch(
       </div>
       <div v-else class="request-detail-grid">
         <div class="request-detail-card">
-          <section class="request-detail-section">
-            <h3>Summary</h3>
-            <div v-if="store.requestSummaryBadges.length" class="request-meta">
-              <span
-                v-for="badge in store.requestSummaryBadges"
-                :key="badge.text + badge.title"
-                :class="store.badgeClass(badge)"
-                :title="badge.title"
-              >
-                {{ badge.text }}
-              </span>
-            </div>
-            <div v-else class="empty">No request summary is available.</div>
-          </section>
+          <div class="detail-card-viewport">
+            <section class="request-detail-section">
+              <h3>Request Parameters</h3>
+              <div v-if="store.requestParamRows.length" class="detail-table-wrap">
+                <table class="detail-table">
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in store.requestParamRows" :key="row.key + row.value">
+                      <td :title="row.title" class="detail-table-key">{{ row.key }}</td>
+                      <td :title="row.title" class="detail-table-value mono">{{ row.value }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="empty">No additional top-level request fields were stored.</div>
+            </section>
 
-          <section class="request-detail-section">
-            <h3>Request Fields</h3>
-            <div v-if="store.requestParamBadges.length" class="request-meta">
-              <span
-                v-for="badge in store.requestParamBadges"
-                :key="badge.text + badge.title"
-                :class="store.badgeClass(badge)"
-                :title="badge.title"
-              >
-                {{ badge.text }}
-              </span>
-            </div>
-            <div v-else class="empty">No additional top-level request fields were stored.</div>
-          </section>
+            <section class="request-detail-section">
+              <h3>Response Metrics</h3>
+              <div v-if="store.requestResponseMetricRows.length" class="detail-table-wrap">
+                <table class="detail-table">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in store.requestResponseMetricRows" :key="row.key + row.value">
+                      <td :title="row.title" class="detail-table-key">{{ row.key }}</td>
+                      <td :title="row.title" class="detail-table-value mono">{{ row.value }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="empty">No response metrics have been recorded yet.</div>
+            </section>
 
-          <section class="request-detail-section">
-            <h3>Provided Tools</h3>
-            <div class="detail-stack" v-html="store.requestToolsHtml"></div>
-          </section>
+            <section class="request-detail-section">
+              <h3>Provided Tools</h3>
+              <div class="detail-stack" v-html="store.requestToolsHtml"></div>
+            </section>
 
-          <section class="request-detail-section">
-            <div class="mb-3 flex items-center justify-between gap-3">
-              <h3 class="mb-0">Raw Request</h3>
-              <button
-                class="button secondary small"
-                type="button"
-                @click="showRawRequest = !showRawRequest"
-              >
-                {{ showRawRequest ? "Hide Raw Request" : "Show Raw Request" }}
-              </button>
-            </div>
-            <CodeView
-              v-if="showRawRequest"
-              :value="store.state.requestDetail.detail && store.state.requestDetail.detail.requestBody"
-              placeholder="No raw request payload was stored."
-            />
-          </section>
+            <section class="request-detail-section">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <h3 class="mb-0">Raw Request</h3>
+                <button
+                  class="button secondary small"
+                  type="button"
+                  @click="showRawRequest = !showRawRequest"
+                >
+                  {{ showRawRequest ? "Hide Raw Request" : "Show Raw Request" }}
+                </button>
+              </div>
+              <CodeView
+                v-if="showRawRequest"
+                :value="store.state.requestDetail.detail && store.state.requestDetail.detail.requestBody"
+                placeholder="No raw request payload was stored."
+              />
+            </section>
 
-          <section class="request-detail-section">
-            <div class="mb-3 flex items-center justify-between gap-3">
-              <h3 class="mb-0">Raw Response</h3>
-              <button
-                class="button secondary small"
-                type="button"
-                @click="showRawResponse = !showRawResponse"
-              >
-                {{ showRawResponse ? "Hide Raw Response" : "Show Raw Response" }}
-              </button>
-            </div>
-            <CodeView
-              v-if="showRawResponse"
-              :value="store.state.requestDetail.detail && store.state.requestDetail.detail.responseBody"
-              placeholder="No raw response payload was stored."
-            />
-          </section>
+            <section class="request-detail-section">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <h3 class="mb-0">Raw Response</h3>
+                <button
+                  class="button secondary small"
+                  type="button"
+                  @click="showRawResponse = !showRawResponse"
+                >
+                  {{ showRawResponse ? "Hide Raw Response" : "Show Raw Response" }}
+                </button>
+              </div>
+              <CodeView
+                v-if="showRawResponse"
+                :value="store.state.requestDetail.detail && store.state.requestDetail.detail.responseBody"
+                placeholder="No raw response payload was stored."
+              />
+            </section>
+          </div>
         </div>
 
         <div class="request-detail-card">
