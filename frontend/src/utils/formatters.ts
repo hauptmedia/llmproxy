@@ -52,12 +52,26 @@ export function formatDuration(ms: unknown): string {
     return `${Math.round(ms)}ms`;
   }
 
-  const seconds = ms / 1000;
-  if (seconds < 60) {
-    return `${seconds.toFixed(1)}s`;
+  const totalSeconds = ms / 1000;
+  if (totalSeconds < 60) {
+    return `${totalSeconds.toFixed(1)}s`;
   }
 
-  return `${(seconds / 60).toFixed(1)}m`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  if (totalMinutes < 60) {
+    return seconds > 0 ? `${totalMinutes}m ${seconds}s` : `${totalMinutes}m`;
+  }
+
+  const totalHours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (totalHours < 24) {
+    return minutes > 0 ? `${totalHours}h ${minutes}m` : `${totalHours}h`;
+  }
+
+  const totalDays = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return hours > 0 ? `${totalDays}d ${hours}h` : `${totalDays}d`;
 }
 
 export function formatDate(value: unknown): string {
