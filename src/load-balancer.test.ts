@@ -34,15 +34,18 @@ const TEST_CONFIG: ProxyConfig = {
   ],
 };
 
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: {
+      "content-type": "application/json",
+    },
+  });
+}
+
 test("routes by model and queues when the slot is full", async () => {
   const balancer = new LoadBalancer(TEST_CONFIG, {
-    fetcher: async () =>
-      new Response(JSON.stringify({ object: "list", data: [] }), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-      }),
+    fetcher: async () => jsonResponse({ object: "list", data: [] }),
   });
   const firstLease = await balancer.acquire({
     id: "req-1",
@@ -113,6 +116,138 @@ test("routes by model and queues when the slot is full", async () => {
   assert.equal(snapshot.backends[1]?.successfulRequests, 1);
 });
 
+test("uses discovered models as the routing source of truth even with wildcard configuration", async () => {
+  const config: ProxyConfig = {
+    server: {
+      ...TEST_CONFIG.server,
+      port: 4002,
+    },
+    backends: [
+      {
+        id: "wildcard-a",
+        name: "Wildcard A",
+        baseUrl: "http://127.0.0.1:9100",
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["*"],
+      },
+      {
+        id: "wildcard-b",
+        name: "Wildcard B",
+        baseUrl: "http://127.0.0.1:9101",
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["*"],
+      },
+    ],
+  };
+
+  const balancer = new LoadBalancer(config, {
+    fetcher: async (input) => {
+      const url = new URL(
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url,
+      );
+
+      if (url.port === "9100") {
+        return jsonResponse({ object: "list", data: [{ id: "model-a" }] });
+      }
+
+      return jsonResponse({ object: "list", data: [{ id: "model-b" }] });
+    },
+  });
+
+  await balancer.start();
+
+  const lease = await balancer.acquire({
+    id: "req-discovered-match",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "model-b",
+    stream: true,
+  });
+
+  assert.equal(lease.backend.id, "wildcard-b");
+
+  lease.release({
+    outcome: "success",
+    latencyMs: 40,
+    statusCode: 200,
+    queuedMs: lease.queueMs,
+  });
+
+  await assert.rejects(
+    () => balancer.acquire({
+      id: "req-discovered-miss",
+      receivedAt: Date.now(),
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "model-c",
+      stream: true,
+    }),
+    /No backend configured for model "model-c"\./,
+  );
+
+  await balancer.stop();
+});
+
+test("routes requests using discovered model aliases", async () => {
+  const config: ProxyConfig = {
+    server: {
+      ...TEST_CONFIG.server,
+      port: 4003,
+    },
+    backends: [
+      {
+        id: "alias-backend",
+        name: "Alias Backend",
+        baseUrl: "http://127.0.0.1:9200",
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["*"],
+      },
+    ],
+  };
+
+  const balancer = new LoadBalancer(config, {
+    fetcher: async () => jsonResponse({
+      object: "list",
+      data: [
+        {
+          id: "canonical-model",
+          aliases: ["friendly-model"],
+        },
+      ],
+    }),
+  });
+
+  await balancer.start();
+
+  const lease = await balancer.acquire({
+    id: "req-alias",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "friendly-model",
+    stream: true,
+  });
+
+  assert.equal(lease.backend.id, "alias-backend");
+
+  lease.release({
+    outcome: "success",
+    latencyMs: 35,
+    statusCode: 200,
+    queuedMs: lease.queueMs,
+  });
+
+  await balancer.stop();
+});
+
 test("captures discovered model metadata from /v1/models for backend snapshots", async () => {
   const config: ProxyConfig = {
     server: {
@@ -138,7 +273,7 @@ test("captures discovered model metadata from /v1/models for backend snapshots",
 
   const balancer = new LoadBalancer(config, {
     fetcher: async () =>
-      new Response(JSON.stringify({
+      jsonResponse({
         object: "list",
         models: [
           {
@@ -164,11 +299,6 @@ test("captures discovered model metadata from /v1/models for backend snapshots",
             },
           },
         ],
-      }), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
       }),
   });
 
@@ -205,13 +335,7 @@ test("captures discovered model metadata from /v1/models for backend snapshots",
 
 test("releasing a lease after replaceConfig updates the current backend runtime", async () => {
   const balancer = new LoadBalancer(TEST_CONFIG, {
-    fetcher: async () =>
-      new Response(JSON.stringify({ object: "list", data: [] }), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-      }),
+    fetcher: async () => jsonResponse({ object: "list", data: [] }),
   });
 
   const firstLease = await balancer.acquire({
@@ -276,13 +400,7 @@ test("retains only the configured number of recent requests", async () => {
       recentRequestLimit: 2,
     },
   }, {
-    fetcher: async () =>
-      new Response(JSON.stringify({ object: "list", data: [] }), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-      }),
+    fetcher: async () => jsonResponse({ object: "list", data: [] }),
   });
 
   for (const requestId of ["req-limit-1", "req-limit-2", "req-limit-3"]) {
@@ -315,4 +433,3 @@ test("retains only the configured number of recent requests", async () => {
   assert.equal(balancer.getRequestLogDetail("req-limit-1"), undefined);
   assert.equal(balancer.getRequestLogDetail("req-limit-2")?.entry.id, "req-limit-2");
 });
-

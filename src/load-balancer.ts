@@ -381,13 +381,26 @@ export class LoadBalancer extends EventEmitter {
       return true;
     }
 
-    const patterns = backend.config.models?.length ? backend.config.models : backend.discoveredModels;
+    const configuredPatterns = backend.config.models ?? [];
+    const discoveredNames = collectBackendDiscoveredModelNames(backend);
 
-    if (!patterns || patterns.length === 0) {
+    if (discoveredNames.length > 0) {
+      if (!discoveredNames.includes(model)) {
+        return false;
+      }
+
+      if (configuredPatterns.length === 0) {
+        return true;
+      }
+
+      return configuredPatterns.some((pattern) => matchesPattern(pattern, model));
+    }
+
+    if (configuredPatterns.length === 0) {
       return true;
     }
 
-    return patterns.some((pattern) => matchesPattern(pattern, model));
+    return configuredPatterns.some((pattern) => matchesPattern(pattern, model));
   }
 
   private dequeuePending(pending: PendingRequest): void {
@@ -587,6 +600,41 @@ function matchesPattern(pattern: string, value: string): boolean {
   }
 
   return pattern === value;
+}
+
+function collectBackendDiscoveredModelNames(backend: BackendRuntime): string[] {
+  const names = new Set<string>();
+
+  for (const model of backend.discoveredModels) {
+    if (typeof model === "string" && model.length > 0) {
+      names.add(model);
+    }
+  }
+
+  for (const detail of backend.discoveredModelDetails) {
+    if (typeof detail.id === "string" && detail.id.length > 0) {
+      names.add(detail.id);
+    }
+
+    for (const alias of extractModelAliases(detail.metadata)) {
+      names.add(alias);
+    }
+  }
+
+  return Array.from(names);
+}
+
+function extractModelAliases(metadata: JsonValue | undefined): string[] {
+  if (!isJsonObject(metadata)) {
+    return [];
+  }
+
+  if (!Array.isArray(metadata.aliases)) {
+    return [];
+  }
+
+  return metadata.aliases
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
 }
 
 function updateAverageLatency(backend: BackendRuntime, latencyMs: number): number {
