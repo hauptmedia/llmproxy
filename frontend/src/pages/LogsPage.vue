@@ -83,6 +83,23 @@ const filters = reactive({
   note: "",
 });
 
+const hasActiveFilters = computed(() => (
+  filters.time.trim().length > 0 ||
+  filters.outcome !== "all" ||
+  filters.request.trim().length > 0 ||
+  filters.model !== "all" ||
+  filters.backend !== "all" ||
+  filters.queueComparator !== "any" ||
+  filters.queueValue.trim().length > 0 ||
+  filters.latencyComparator !== "any" ||
+  filters.latencyValue.trim().length > 0 ||
+  filters.tokensComparator !== "any" ||
+  filters.tokensValue.trim().length > 0 ||
+  filters.rateComparator !== "any" ||
+  filters.rateValue.trim().length > 0 ||
+  filters.note.trim().length > 0
+));
+
 const supportedOutcomeFilters = new Set([
   "all",
   "queued",
@@ -911,15 +928,19 @@ onBeforeUnmount(() => {
             {{ filteredEntries.length }} / {{ tableEntries.length }}
           </div>
           <button
+            v-if="hasActiveFilters"
             type="button"
             class="icon-button compact"
             title="Reset all request filters"
             aria-label="Reset all request filters"
             @click="resetFilters()"
           >
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
-              <path d="M6 6 18 18"></path>
-              <path d="M18 6 6 18"></path>
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 4.75h6"></path>
+              <path d="M4.75 7.5h14.5"></path>
+              <path d="M7.5 7.5 8.2 17a2 2 0 0 0 2 1.85h3.6a2 2 0 0 0 2-1.85l.7-9.5"></path>
+              <path d="M10 11v4.5"></path>
+              <path d="M14 11v4.5"></path>
             </svg>
           </button>
         </div>
