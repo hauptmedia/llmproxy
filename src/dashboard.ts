@@ -128,7 +128,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
       : options.dashboardPath;
   const pageTitle =
     options.page === "logs"
-      ? "Logs"
+      ? "Recent Requests"
       : options.page === "chat"
       ? "Chat"
       : (options.page === "backends" ? "Backends" : "Overview");

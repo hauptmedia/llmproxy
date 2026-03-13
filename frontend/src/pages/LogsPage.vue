@@ -1,27 +1,100 @@
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import type { RequestLogEntry } from "../types/dashboard";
+import { describeFinishReason } from "../utils/dashboard-badges";
 import { formatDate, formatDuration, formatTokenRate } from "../utils/formatters";
 
 const store = useDashboardStore();
+type FilterKey =
+  | "time"
+  | "outcome"
+  | "request"
+  | "model"
+  | "backend"
+  | "queue"
+  | "latency"
+  | "tokens"
+  | "rate"
+  | "note";
+
+const openFilterKey = ref<FilterKey | "">("");
+const filterIconPath = [
+  "M4 6h16",
+  "M7 12h10",
+  "M10 18h4",
+];
 
 const filters = reactive({
-  search: "",
+  time: "",
   outcome: "all",
+  request: "",
+  model: "all",
   backend: "all",
-  detail: "all",
-  tokenComparator: "any",
-  tokenValue: "",
+  queueComparator: "any",
+  queueValue: "",
+  latencyComparator: "any",
+  latencyValue: "",
+  tokensComparator: "any",
+  tokensValue: "",
+  rateComparator: "any",
+  rateValue: "",
+  note: "",
 });
 
-const outcomeOptions = [
-  { value: "all", label: "All outcomes" },
-  { value: "success", label: "Successful" },
-  { value: "error", label: "Failed" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "queued_timeout", label: "Queue timeout" },
+const numericComparatorOptions = [
+  { value: "any", label: "Any" },
+  { value: "gt", label: ">" },
+  { value: "gte", label: ">=" },
+  { value: "eq", label: "=" },
+  { value: "lte", label: "<=" },
+  { value: "lt", label: "<" },
 ];
+
+const outcomeOptions = computed(() => {
+  const options = [{ value: "all", label: "All outcomes" }];
+  const finishReasons = Array.from(
+    new Set(
+      store.state.snapshot.recentRequests
+        .filter((entry) => entry.outcome === "success" && typeof entry.finishReason === "string" && entry.finishReason.length > 0)
+        .map((entry) => entry.finishReason as string),
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+
+  for (const finishReason of finishReasons) {
+    options.push({
+      value: finishOutcomeKey(finishReason),
+      label: `Finish: ${finishReason}`,
+    });
+  }
+
+  if (store.state.snapshot.recentRequests.some((entry) => entry.outcome === "success" && !entry.finishReason)) {
+    options.push({ value: "completed", label: "Completed" });
+  }
+
+  options.push(
+    { value: "error", label: "Failed" },
+    { value: "cancelled", label: "Cancelled" },
+    { value: "queued_timeout", label: "Queue timeout" },
+  );
+
+  return options;
+});
+
+const modelOptions = computed(() => {
+  const names = Array.from(
+    new Set(
+      store.state.snapshot.recentRequests
+        .map((entry) => entry.model)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+
+  return [
+    { value: "all", label: "All models" },
+    ...names.map((name) => ({ value: name, label: name })),
+  ];
+});
 
 const backendOptions = computed(() => {
   const names = Array.from(
@@ -38,32 +111,21 @@ const backendOptions = computed(() => {
   ];
 });
 
-const detailOptions = [
-  { value: "all", label: "All entries" },
-  { value: "with-detail", label: "With details" },
-  { value: "without-detail", label: "Without details" },
-];
-
-const tokenComparatorOptions = [
-  { value: "any", label: "Any token count" },
-  { value: "gt", label: "More than" },
-  { value: "gte", label: "At least" },
-  { value: "eq", label: "Exactly" },
-  { value: "lte", label: "At most" },
-  { value: "lt", label: "Less than" },
-];
-
 const filteredEntries = computed(() => {
-  const query = filters.search.trim().toLowerCase();
-  const tokenValue = filters.tokenValue.trim();
-  const parsedTokenValue = tokenValue ? Number(tokenValue) : Number.NaN;
-  const hasTokenFilter =
-    filters.tokenComparator !== "any" &&
-    Number.isFinite(parsedTokenValue) &&
-    parsedTokenValue >= 0;
-
   return store.state.snapshot.recentRequests.filter((entry) => {
-    if (filters.outcome !== "all" && entry.outcome !== filters.outcome) {
+    if (!matchesText(filters.time, [formatDate(entry.time), entry.time])) {
+      return false;
+    }
+
+    if (filters.outcome !== "all" && logOutcomeKey(entry) !== filters.outcome) {
+      return false;
+    }
+
+    if (!matchesText(filters.request, [entry.id, store.shortId(entry.id), entry.method, entry.path, `${entry.method} ${entry.path}`])) {
+      return false;
+    }
+
+    if (filters.model !== "all" && (entry.model ?? "") !== filters.model) {
       return false;
     }
 
@@ -71,72 +133,205 @@ const filteredEntries = computed(() => {
       return false;
     }
 
-    if (filters.detail === "with-detail" && !entry.hasDetail) {
+    if (!matchesNumeric(entry.queuedMs, filters.queueComparator, filters.queueValue)) {
       return false;
     }
 
-    if (filters.detail === "without-detail" && entry.hasDetail) {
+    if (!matchesNumeric(entry.latencyMs, filters.latencyComparator, filters.latencyValue)) {
       return false;
     }
 
-    if (hasTokenFilter) {
-      const tokenCount = entryTokenCount(entry);
-      if (tokenCount === null) {
-        return false;
-      }
-
-      if (filters.tokenComparator === "gt" && !(tokenCount > parsedTokenValue)) {
-        return false;
-      }
-
-      if (filters.tokenComparator === "gte" && !(tokenCount >= parsedTokenValue)) {
-        return false;
-      }
-
-      if (filters.tokenComparator === "eq" && tokenCount !== parsedTokenValue) {
-        return false;
-      }
-
-      if (filters.tokenComparator === "lte" && !(tokenCount <= parsedTokenValue)) {
-        return false;
-      }
-
-      if (filters.tokenComparator === "lt" && !(tokenCount < parsedTokenValue)) {
-        return false;
-      }
+    if (!matchesNumeric(entryTokenCount(entry), filters.tokensComparator, filters.tokensValue)) {
+      return false;
     }
 
-    if (!query) {
-      return true;
+    if (!matchesNumeric(entry.completionTokensPerSecond, filters.rateComparator, filters.rateValue)) {
+      return false;
     }
 
-    const haystack = [
-      entry.id,
-      store.shortId(entry.id),
-      entry.method,
-      entry.path,
-      entry.model,
-      entry.backendName,
-      entry.error,
-      entry.finishReason,
-      entry.statusCode?.toString(),
-      entry.outcome,
-    ]
-      .filter((value): value is string => Boolean(value))
-      .join(" ")
-      .toLowerCase();
+    if (!matchesText(filters.note, [noteSummary(entry)])) {
+      return false;
+    }
 
-    return haystack.includes(query);
+    return true;
   });
 });
 
+function toggleFilter(filterKey: FilterKey): void {
+  openFilterKey.value = openFilterKey.value === filterKey ? "" : filterKey;
+}
+
+function isFilterOpen(filterKey: FilterKey): boolean {
+  return openFilterKey.value === filterKey;
+}
+
+function isFilterActive(filterKey: FilterKey): boolean {
+  if (filterKey === "time") {
+    return filters.time.trim().length > 0;
+  }
+
+  if (filterKey === "outcome") {
+    return filters.outcome !== "all";
+  }
+
+  if (filterKey === "request") {
+    return filters.request.trim().length > 0;
+  }
+
+  if (filterKey === "model") {
+    return filters.model !== "all";
+  }
+
+  if (filterKey === "backend") {
+    return filters.backend !== "all";
+  }
+
+  if (filterKey === "queue") {
+    return filters.queueComparator !== "any" && filters.queueValue.trim().length > 0;
+  }
+
+  if (filterKey === "latency") {
+    return filters.latencyComparator !== "any" && filters.latencyValue.trim().length > 0;
+  }
+
+  if (filterKey === "tokens") {
+    return filters.tokensComparator !== "any" && filters.tokensValue.trim().length > 0;
+  }
+
+  if (filterKey === "rate") {
+    return filters.rateComparator !== "any" && filters.rateValue.trim().length > 0;
+  }
+
+  if (filterKey === "note") {
+    return filters.note.trim().length > 0;
+  }
+
+  return false;
+}
+
 function resetFilters(): void {
-  filters.search = "";
+  filters.time = "";
   filters.outcome = "all";
+  filters.request = "";
+  filters.model = "all";
   filters.backend = "all";
-  filters.detail = "all";
-  filters.tokenComparator = "any";
-  filters.tokenValue = "";
+  filters.queueComparator = "any";
+  filters.queueValue = "";
+  filters.latencyComparator = "any";
+  filters.latencyValue = "";
+  filters.tokensComparator = "any";
+  filters.tokensValue = "";
+  filters.rateComparator = "any";
+  filters.rateValue = "";
+  filters.note = "";
+  openFilterKey.value = "";
+}
+
+function clearFilter(filterKey: FilterKey): void {
+  if (filterKey === "time") {
+    filters.time = "";
+    return;
+  }
+
+  if (filterKey === "outcome") {
+    filters.outcome = "all";
+    return;
+  }
+
+  if (filterKey === "request") {
+    filters.request = "";
+    return;
+  }
+
+  if (filterKey === "model") {
+    filters.model = "all";
+    return;
+  }
+
+  if (filterKey === "backend") {
+    filters.backend = "all";
+    return;
+  }
+
+  if (filterKey === "queue") {
+    filters.queueComparator = "any";
+    filters.queueValue = "";
+    return;
+  }
+
+  if (filterKey === "latency") {
+    filters.latencyComparator = "any";
+    filters.latencyValue = "";
+    return;
+  }
+
+  if (filterKey === "tokens") {
+    filters.tokensComparator = "any";
+    filters.tokensValue = "";
+    return;
+  }
+
+  if (filterKey === "rate") {
+    filters.rateComparator = "any";
+    filters.rateValue = "";
+    return;
+  }
+
+  if (filterKey === "note") {
+    filters.note = "";
+  }
+}
+
+function matchesText(query: string, values: Array<string | undefined>): boolean {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  return values
+    .filter((value): value is string => Boolean(value))
+    .some((value) => value.toLowerCase().includes(normalizedQuery));
+}
+
+function matchesNumeric(
+  value: number | null | undefined,
+  comparator: string,
+  rawFilterValue: string,
+): boolean {
+  if (comparator === "any") {
+    return true;
+  }
+
+  const filterValue = Number(rawFilterValue.trim());
+  if (!Number.isFinite(filterValue)) {
+    return true;
+  }
+
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return false;
+  }
+
+  if (comparator === "gt") {
+    return value > filterValue;
+  }
+
+  if (comparator === "gte") {
+    return value >= filterValue;
+  }
+
+  if (comparator === "eq") {
+    return value === filterValue;
+  }
+
+  if (comparator === "lte") {
+    return value <= filterValue;
+  }
+
+  if (comparator === "lt") {
+    return value < filterValue;
+  }
+
+  return true;
 }
 
 function outcomeBadgeClass(entry: RequestLogEntry): string {
@@ -152,6 +347,14 @@ function outcomeBadgeClass(entry: RequestLogEntry): string {
 }
 
 function outcomeLabel(entry: RequestLogEntry): string {
+  if (entry.outcome === "success" && entry.finishReason) {
+    return `finish: ${entry.finishReason}`;
+  }
+
+  if (entry.outcome === "success") {
+    return "completed";
+  }
+
   if (entry.outcome === "queued_timeout") {
     return "queue timeout";
   }
@@ -159,16 +362,49 @@ function outcomeLabel(entry: RequestLogEntry): string {
   return entry.outcome;
 }
 
-function tokenSummary(entry: RequestLogEntry): string {
-  const tokenCount = entryTokenCount(entry);
-  const completion = tokenCount !== null ? `${tokenCount} tok` : "";
-  const rate = formatTokenRate(entry.completionTokensPerSecond);
-
-  if (completion && rate) {
-    return `${completion} · ${rate}`;
+function outcomeTitle(entry: RequestLogEntry): string {
+  if (entry.outcome === "success" && entry.finishReason) {
+    return describeFinishReason(entry.finishReason);
   }
 
-  return completion || rate || "—";
+  if (entry.outcome === "success") {
+    return "The request completed successfully, but the backend did not report a finish reason.";
+  }
+
+  if (entry.outcome === "queued_timeout") {
+    return "The request timed out while waiting in the queue.";
+  }
+
+  if (entry.outcome === "cancelled") {
+    return "The request was cancelled before completion.";
+  }
+
+  return "The request failed while being proxied or upstream.";
+}
+
+function finishOutcomeKey(finishReason: string): string {
+  return `finish:${finishReason}`;
+}
+
+function logOutcomeKey(entry: RequestLogEntry): string {
+  if (entry.outcome === "success" && entry.finishReason) {
+    return finishOutcomeKey(entry.finishReason);
+  }
+
+  if (entry.outcome === "success") {
+    return "completed";
+  }
+
+  return entry.outcome;
+}
+
+function tokenCountSummary(entry: RequestLogEntry): string {
+  const tokenCount = entryTokenCount(entry);
+  return tokenCount !== null ? `${tokenCount} tok` : "-";
+}
+
+function tokenRateSummary(entry: RequestLogEntry): string {
+  return formatTokenRate(entry.completionTokensPerSecond) || "-";
 }
 
 function entryTokenCount(entry: RequestLogEntry): number | null {
@@ -185,16 +421,27 @@ function entryTokenCount(entry: RequestLogEntry): number | null {
 }
 
 function noteSummary(entry: RequestLogEntry): string {
-  if (entry.error) {
-    return entry.error;
-  }
-
-  if (entry.finishReason) {
-    return `finish: ${entry.finishReason}`;
-  }
-
-  return "—";
+  return entry.error || "";
 }
+
+function handleDocumentPointerDown(event: PointerEvent): void {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  if (!target.closest(".log-header-filter")) {
+    openFilterKey.value = "";
+  }
+}
+
+onMounted(() => {
+  document.addEventListener("pointerdown", handleDocumentPointerDown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", handleDocumentPointerDown);
+});
 </script>
 
 <template>
@@ -202,84 +449,9 @@ function noteSummary(entry: RequestLogEntry): string {
     <div class="panel">
       <div class="panel-header">
         <div>
-          <h2 class="panel-title">Recent Requests</h2>
+          <h2 class="panel-title">Recent Requests ({{ store.state.snapshot.recentRequestLimit }})</h2>
         </div>
-      </div>
-
-      <div class="log-filters">
-        <label class="field">
-          <span>Search</span>
-          <input
-            v-model="filters.search"
-            type="search"
-            placeholder="Request ID, model, backend, path, error..."
-          >
-        </label>
-
-        <label class="field">
-          <span>Outcome</span>
-          <select v-model="filters.outcome">
-            <option
-              v-for="option in outcomeOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Backend</span>
-          <select v-model="filters.backend">
-            <option
-              v-for="option in backendOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Details</span>
-          <select v-model="filters.detail">
-            <option
-              v-for="option in detailOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Tokens</span>
-          <select v-model="filters.tokenComparator">
-            <option
-              v-for="option in tokenComparatorOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Token value</span>
-          <input
-            v-model="filters.tokenValue"
-            type="number"
-            min="0"
-            step="1"
-            placeholder="e.g. 512"
-          >
-        </label>
-
-        <div class="log-filter-actions">
+        <div class="log-toolbar">
           <div class="log-filter-count">
             {{ filteredEntries.length }} / {{ store.state.snapshot.recentRequests.length }}
           </div>
@@ -288,7 +460,7 @@ function noteSummary(entry: RequestLogEntry): string {
             class="button secondary small"
             @click="resetFilters()"
           >
-            Reset
+            Reset Filters
           </button>
         </div>
       </div>
@@ -298,28 +470,224 @@ function noteSummary(entry: RequestLogEntry): string {
           <colgroup>
             <col class="log-col-time">
             <col class="log-col-outcome">
-            <col class="log-col-request">
-            <col class="log-col-model">
-            <col class="log-col-backend">
-            <col class="log-col-http">
-            <col class="log-col-queue">
-            <col class="log-col-latency">
-            <col class="log-col-tokens">
+          <col class="log-col-request">
+          <col class="log-col-model">
+          <col class="log-col-backend">
+          <col class="log-col-queue">
+          <col class="log-col-latency">
+          <col class="log-col-tokens">
+            <col class="log-col-token-rate">
             <col class="log-col-note">
             <col class="log-col-action">
           </colgroup>
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Outcome</th>
-              <th>Request</th>
-              <th>Model</th>
-              <th>Backend</th>
-              <th>HTTP</th>
-              <th>Queue</th>
-              <th>Latency</th>
-              <th>Tokens</th>
-              <th>Note</th>
+              <th>
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <span class="log-header-label">Time</span>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('time') }" title="Filter time" @click.stop="toggleFilter('time')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('time')" class="table-filter-popover" @click.stop>
+                    <input v-model="filters.time" class="table-filter-input" type="search" placeholder="Date / time">
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('time')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th>
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <span class="log-header-label">Outcome</span>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('outcome') }" title="Filter outcome" @click.stop="toggleFilter('outcome')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('outcome')" class="table-filter-popover" @click.stop>
+                    <select v-model="filters.outcome" class="table-filter-select">
+                      <option v-for="option in outcomeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('outcome')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th>
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <span class="log-header-label">Request</span>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('request') }" title="Filter request" @click.stop="toggleFilter('request')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('request')" class="table-filter-popover" @click.stop>
+                    <input v-model="filters.request" class="table-filter-input" type="search" placeholder="ID / path">
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('request')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th>
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <span class="log-header-label">Model</span>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('model') }" title="Filter model" @click.stop="toggleFilter('model')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('model')" class="table-filter-popover" @click.stop>
+                    <select v-model="filters.model" class="table-filter-select">
+                      <option v-for="option in modelOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('model')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th>
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <span class="log-header-label">Backend</span>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('backend') }" title="Filter backend" @click.stop="toggleFilter('backend')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('backend')" class="table-filter-popover" @click.stop>
+                    <select v-model="filters.backend" class="table-filter-select">
+                      <option v-for="option in backendOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('backend')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th>
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <span class="log-header-label">Queue</span>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('queue') }" title="Filter queue" @click.stop="toggleFilter('queue')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('queue')" class="table-filter-popover" @click.stop>
+                    <div class="table-filter-number">
+                      <select v-model="filters.queueComparator" class="table-filter-select">
+                        <option v-for="option in numericComparatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                      <input v-model="filters.queueValue" class="table-filter-input" type="number" min="0" step="1" placeholder="ms">
+                    </div>
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('queue')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th>
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <span class="log-header-label">Latency</span>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('latency') }" title="Filter latency" @click.stop="toggleFilter('latency')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('latency')" class="table-filter-popover" @click.stop>
+                    <div class="table-filter-number">
+                      <select v-model="filters.latencyComparator" class="table-filter-select">
+                        <option v-for="option in numericComparatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                      <input v-model="filters.latencyValue" class="table-filter-input" type="number" min="0" step="1" placeholder="ms">
+                    </div>
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('latency')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th>
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <span class="log-header-label">Tokens</span>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('tokens') }" title="Filter tokens" @click.stop="toggleFilter('tokens')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('tokens')" class="table-filter-popover" @click.stop>
+                    <div class="table-filter-number">
+                      <select v-model="filters.tokensComparator" class="table-filter-select">
+                        <option v-for="option in numericComparatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                      <input v-model="filters.tokensValue" class="table-filter-input" type="number" min="0" step="1" placeholder="tok">
+                    </div>
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('tokens')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th>
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <span class="log-header-label">tok/s</span>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('rate') }" title="Filter token rate" @click.stop="toggleFilter('rate')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('rate')" class="table-filter-popover" @click.stop>
+                    <div class="table-filter-number">
+                      <select v-model="filters.rateComparator" class="table-filter-select">
+                        <option v-for="option in numericComparatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                      <input v-model="filters.rateValue" class="table-filter-input" type="number" min="0" step="0.1" placeholder="tok/s">
+                    </div>
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('rate')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th>
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <span class="log-header-label">Note</span>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('note') }" title="Filter note" @click.stop="toggleFilter('note')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('note')" class="table-filter-popover" @click.stop>
+                    <input v-model="filters.note" class="table-filter-input" type="search" placeholder="Error text">
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('note')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
               <th>Action</th>
             </tr>
           </thead>
@@ -334,7 +702,7 @@ function noteSummary(entry: RequestLogEntry): string {
               <td class="log-cell-tight">
                 <span
                   :class="outcomeBadgeClass(entry)"
-                  :title="entry.outcome"
+                  :title="outcomeTitle(entry)"
                 >
                   {{ outcomeLabel(entry) }}
                 </span>
@@ -344,20 +712,10 @@ function noteSummary(entry: RequestLogEntry): string {
                 <div class="log-secondary">{{ entry.method }} {{ entry.path }}</div>
               </td>
               <td class="log-cell-tight">
-                <div class="log-primary">{{ entry.model || "—" }}</div>
+                <div class="log-primary">{{ entry.model || "-" }}</div>
               </td>
               <td class="log-cell-tight">
-                <div class="log-primary">{{ entry.backendName || "—" }}</div>
-              </td>
-              <td class="log-cell-tight">
-                <span
-                  v-if="entry.statusCode !== undefined"
-                  :class="entry.statusCode >= 500 ? 'badge bad' : 'badge good'"
-                  :title="`Final upstream status: HTTP ${entry.statusCode}`"
-                >
-                  {{ entry.statusCode }}
-                </span>
-                <span v-else class="log-muted">—</span>
+                <div class="log-primary">{{ entry.backendName || "-" }}</div>
               </td>
               <td class="log-cell-tight">
                 <div class="log-primary">{{ formatDuration(entry.queuedMs) }}</div>
@@ -366,11 +724,14 @@ function noteSummary(entry: RequestLogEntry): string {
                 <div class="log-primary">{{ formatDuration(entry.latencyMs) }}</div>
               </td>
               <td class="log-cell-tight">
-                <div class="log-primary">{{ tokenSummary(entry) }}</div>
+                <div class="log-primary">{{ tokenCountSummary(entry) }}</div>
+              </td>
+              <td class="log-cell-tight">
+                <div class="log-primary">{{ tokenRateSummary(entry) }}</div>
               </td>
               <td>
-                <div class="log-note" :title="noteSummary(entry)">
-                  {{ noteSummary(entry) }}
+                <div class="log-note" :title="noteSummary(entry) || 'No note.'">
+                  {{ noteSummary(entry) || "-" }}
                 </div>
               </td>
               <td class="log-cell-tight">

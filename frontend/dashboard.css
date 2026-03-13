@@ -544,22 +544,17 @@
     padding: 7px 9px;
   }
 
-  .log-filters {
-    @apply mb-5 grid gap-3;
-    grid-template-columns: minmax(260px, 1.4fr) repeat(5, minmax(150px, 0.72fr)) auto;
-  }
-
-  .log-filter-actions {
-    @apply flex items-end justify-end gap-3;
-  }
-
   .log-filter-count {
     @apply text-sm font-semibold text-stone-600;
   }
 
+  .log-toolbar {
+    @apply flex flex-wrap items-center justify-end gap-3;
+  }
+
   .log-table {
     table-layout: auto;
-    min-width: 1260px;
+    min-width: 1560px;
   }
 
   .log-table-wrap {
@@ -573,41 +568,101 @@
     vertical-align: top;
   }
 
+  .log-header-filter {
+    position: relative;
+  }
+
+  .log-header-cell {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  .log-header-label {
+    @apply min-w-0;
+  }
+
+  .log-filter-trigger {
+    @apply inline-flex items-center justify-center rounded-full border border-amber-900/10 bg-white/92 text-stone-500 transition duration-150;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+  }
+
+  .log-filter-trigger svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+  }
+
+  .log-filter-trigger:hover {
+    @apply border-amber-700/20 bg-amber-50 text-stone-900;
+  }
+
+  .log-filter-trigger.active {
+    @apply border-amber-700/30 bg-amber-100 text-amber-900;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  }
+
+  .table-filter-popover {
+    @apply absolute left-0 top-full z-20 mt-2 grid gap-2.5 border border-amber-900/10 bg-white/96 p-3 shadow-xl backdrop-blur-sm;
+    min-width: min(260px, calc(100vw - 64px));
+    border-radius: 1rem;
+  }
+
+  .table-filter-actions {
+    @apply flex justify-end;
+  }
+
+  .table-filter-input,
+  .table-filter-select {
+    @apply w-full rounded-2xl border border-amber-900/15 bg-white/95 px-3 py-2 text-sm text-stone-950 shadow-sm outline-none transition;
+    min-width: 0;
+  }
+
+  .table-filter-input:focus,
+  .table-filter-select:focus {
+    @apply border-amber-700/30 ring-2 ring-amber-500/20;
+  }
+
+  .table-filter-number {
+    @apply grid gap-2;
+    grid-template-columns: minmax(72px, 82px) minmax(0, 1fr);
+  }
+
   .log-col-time {
-    width: 154px;
+    width: 168px;
   }
 
   .log-col-outcome {
-    width: 132px;
+    width: 170px;
   }
 
   .log-col-request {
-    width: 260px;
+    width: 290px;
   }
 
   .log-col-model {
-    width: 186px;
+    width: 190px;
   }
 
   .log-col-backend {
-    width: 186px;
-  }
-
-  .log-col-http {
-    width: 82px;
+    width: 190px;
   }
 
   .log-col-queue,
   .log-col-latency {
-    width: 102px;
+    width: 164px;
   }
 
   .log-col-tokens {
     width: 156px;
   }
 
+  .log-col-token-rate {
+    width: 156px;
+  }
+
   .log-col-note {
-    width: 260px;
+    width: 240px;
   }
 
   .log-col-action {
@@ -1053,17 +1108,12 @@
     max-height: min(52vh, 640px);
   }
 
-  .log-filters {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .log-filter-actions {
-    @apply justify-between;
-    grid-column: 1 / -1;
-  }
-
   .log-table {
-    min-width: 1180px;
+    min-width: 1480px;
+  }
+
+  .table-filter-popover {
+    min-width: 220px;
   }
 }
 
@@ -1115,11 +1165,11 @@
     justify-content: center;
   }
 
-  .log-filters {
-    grid-template-columns: 1fr;
+  .log-toolbar {
+    @apply justify-between;
   }
 
   .log-table {
-    min-width: 1080px;
+    min-width: 1380px;
   }
 }

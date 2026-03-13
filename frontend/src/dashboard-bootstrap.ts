@@ -13,7 +13,7 @@ export const dashboardBootstrap: DashboardBootstrap = bootstrapCandidate;
 
 export function getPageTitle(page: DashboardPage): string {
   if (page === "logs") {
-    return "Logs";
+    return "Recent Requests";
   }
 
   if (page === "chat") {
