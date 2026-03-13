@@ -108,7 +108,7 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
     },
     {
       key: "live-connections",
-      label: "Active Connections",
+      label: "Connections",
       value: `${activeConnections} - ${waitingConnections}`,
       note: "",
       title: "Chat completion request load. First value: requests currently active or already assigned to a backend slot. Second value: requests still queued and waiting for a free backend slot.",
