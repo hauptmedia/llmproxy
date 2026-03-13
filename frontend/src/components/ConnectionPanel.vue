@@ -1,0 +1,153 @@
+<script setup lang="ts">
+import type { PropType } from "vue";
+import { useDashboardStore } from "../composables/useDashboardStore";
+import { badgeClass, buildConnectionTransportBadges } from "../utils/dashboard-badges";
+import type { ActiveConnectionSnapshot } from "../types/dashboard";
+
+const props = defineProps({
+  panelId: {
+    type: String,
+    required: true,
+  },
+  title: {
+    type: String,
+    required: true,
+  },
+  emptyText: {
+    type: String,
+    required: true,
+  },
+  connections: {
+    type: Array as PropType<ActiveConnectionSnapshot[]>,
+    required: true,
+  },
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
+});
+
+const store = useDashboardStore();
+
+function formatClientIp(value?: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.startsWith("::ffff:")) {
+    return trimmed.slice(7);
+  }
+
+  return trimmed;
+}
+
+function connectionHeadline(connection: ActiveConnectionSnapshot): string {
+  const parts = [
+    formatClientIp(connection.clientIp) ? `IP ${formatClientIp(connection.clientIp)}` : undefined,
+    store.shortId(connection.id),
+    connection.model,
+    connection.backendName,
+  ].filter((value): value is string => Boolean(value));
+
+  return parts.join(" › ");
+}
+</script>
+
+<template>
+  <div :id="props.panelId" :class="props.embedded ? 'connection-section' : 'panel'">
+    <div :class="props.embedded ? 'connection-section-header' : 'panel-header'">
+      <div>
+        <component :is="props.embedded ? 'h3' : 'h2'" :class="props.embedded ? 'connection-section-title' : 'panel-title'">
+          {{ props.title }}
+        </component>
+      </div>
+    </div>
+    <div v-if="props.connections.length" class="request-list">
+      <article
+        v-for="connection in props.connections"
+        :key="connection.id"
+        class="request-card"
+      >
+        <div class="request-main">
+          <div class="request-card-body">
+            <div>
+              <div class="request-topline">
+                {{ connectionHeadline(connection) }}
+              </div>
+              <div class="request-title-row">
+                <span
+                  class="badge neutral"
+                  title="This live entry is a chat completion request."
+                >
+                  Chat Completion
+                </span>
+                <span
+                  v-for="(badge, index) in buildConnectionTransportBadges(connection)"
+                  :key="`${connection.id}-transport-${index}`"
+                  :class="badgeClass(badge)"
+                  :title="badge.title"
+                >
+                  {{ badge.text }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="request-actions">
+            <button
+              type="button"
+              class="icon-button danger"
+              :disabled="store.isRequestCancelling(connection.id)"
+              :aria-label="store.isRequestCancelling(connection.id) ? 'Ending the connection' : 'End this connection'"
+              :title="store.isRequestCancelling(connection.id) ? 'Ending the connection...' : 'End this connection after confirmation.'"
+              @click="store.cancelActiveRequest(connection.id)"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3.5v7"></path>
+                <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="icon-button"
+              :disabled="!connection.hasDetail"
+              :aria-label="connection.hasDetail ? 'Open connection details' : 'Connection details are not available yet'"
+              :title="connection.hasDetail ? 'Open the request inspector.' : 'Detail data is not available for this request yet.'"
+              @click="store.openRequestDetail(connection.id)"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
+                <circle cx="12" cy="12" r="2.8"></circle>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="request-meta">
+          <span
+            v-for="badge in store.connectionCardBadges(connection)"
+            :key="badge.text + badge.title"
+            :class="store.badgeClass(badge)"
+            :title="badge.title"
+          >
+            {{ badge.text }}
+          </span>
+        </div>
+        <div v-if="store.connectionMetricBadges(connection).length" class="request-metrics">
+          <span
+            v-for="badge in store.connectionMetricBadges(connection)"
+            :key="badge.text + badge.title"
+            :class="store.badgeClass(badge)"
+            :title="badge.title"
+          >
+            {{ badge.text }}
+          </span>
+        </div>
+      </article>
+    </div>
+    <div v-else class="empty">{{ props.emptyText }}</div>
+  </div>
+</template>

@@ -144,11 +144,11 @@ function recentWindowLabel(): string {
           <th>Backend</th>
           <th>Type</th>
           <th v-if="isConfigMode()" class="backend-number-cell">Max concurrency</th>
-          <th v-if="isRuntimeMode()">Status</th>
+          <th v-if="isRuntimeMode()">Connections</th>
           <th v-if="isConfigMode()">Effective models</th>
           <th v-if="isRuntimeMode()">Traffic</th>
           <th v-if="isRuntimeMode()">Latency</th>
-          <th v-if="isRuntimeMode()">Tokens</th>
+          <th v-if="isRuntimeMode()">Token throughput</th>
           <th v-if="isConfigMode()">Action</th>
         </tr>
       </thead>
@@ -180,7 +180,7 @@ function recentWindowLabel(): string {
               class="log-primary"
               title="Current backend slot usage. The first number is the active connections on this backend, and the second is the configured maximum concurrency."
             >
-              connections {{ backend.activeRequests }} / {{ backend.maxConcurrency }}
+              {{ backend.activeRequests }} / {{ backend.maxConcurrency }}
             </div>
             <div v-if="backendStatusError(backend)" class="table-sub">
               {{ backendStatusError(backend) }}

@@ -256,6 +256,18 @@
     @apply m-0 text-xl font-semibold text-stone-950;
   }
 
+  .connection-section + .connection-section {
+    @apply mt-5 border-t border-amber-900/10 pt-5;
+  }
+
+  .connection-section-header {
+    @apply mb-3;
+  }
+
+  .connection-section-title {
+    @apply m-0 text-base font-semibold text-stone-900;
+  }
+
   .hint {
     @apply mt-1.5 mb-0 leading-relaxed text-stone-600;
   }
@@ -356,6 +368,11 @@
   .card-value-segment-clickable .card-value-segment-button:focus-visible {
     outline: 2px solid rgba(180, 83, 9, 0.35);
     outline-offset: 3px;
+  }
+
+  .summary-card-requests .card-value-segment,
+  .summary-card-requests .card-value-segment-button {
+    @apply items-center text-center;
   }
 
   .card-value-segment-number {

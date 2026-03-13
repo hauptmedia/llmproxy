@@ -102,25 +102,25 @@ watch(
               </template>
             </div>
           </div>
-          <div class="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+          <div class="mt-1.5 flex flex-wrap items-center gap-2">
             <p class="hint m-0">{{ store.requestDetailSubtitle }}</p>
-            <button
-              v-if="store.canCancelRequest(store.state.requestDetail.requestId)"
-              class="icon-button danger compact"
-              type="button"
-              :disabled="store.isRequestCancelling(store.state.requestDetail.requestId)"
-              :aria-label="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection' : 'End this active connection'"
-              :title="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection...' : 'End this active connection after confirmation.'"
-              @click="store.cancelActiveRequest(store.state.requestDetail.requestId)"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 3.5v7"></path>
-                <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
-              </svg>
-            </button>
           </div>
         </div>
         <div class="request-actions">
+          <button
+            v-if="store.canCancelRequest(store.state.requestDetail.requestId)"
+            class="icon-button danger compact"
+            type="button"
+            :disabled="store.isRequestCancelling(store.state.requestDetail.requestId)"
+            :aria-label="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection' : 'End this active connection'"
+            :title="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection...' : 'End this active connection after confirmation.'"
+            @click="store.cancelActiveRequest(store.state.requestDetail.requestId)"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3.5v7"></path>
+              <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
+            </svg>
+          </button>
           <DialogCloseButton
             title="Close request details"
             aria-label="Close request details"
