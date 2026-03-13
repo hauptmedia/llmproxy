@@ -364,6 +364,7 @@
   }
 
   .chat-page-section {
+    height: calc(100dvh - 150px);
     min-height: calc(100dvh - 150px);
   }
 
@@ -1360,6 +1361,7 @@
     @apply flex flex-col gap-[18px];
     height: 100%;
     min-height: 0;
+    overflow: hidden;
   }
 
   .chat-toolbar {
@@ -1428,6 +1430,7 @@
   .conversation-surface-card {
     @apply min-h-0;
     flex: 1 1 auto;
+    overflow: hidden;
   }
 
   .conversation-surface-header {
@@ -1448,6 +1451,7 @@
 
   .conversation-surface-footer {
     @apply mt-4;
+    flex: 0 0 auto;
   }
 
   .chat-conversation-card {

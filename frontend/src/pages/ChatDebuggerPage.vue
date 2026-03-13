@@ -58,10 +58,6 @@ const chatConversationSignature = computed(() => [
 <template>
   <section class="page-section chat-page-section">
     <div class="panel chat-panel">
-      <div v-if="store.state.debug.error" class="config-notice warn">
-        {{ store.state.debug.error }}
-      </div>
-
       <div class="chat-thread">
         <div class="panel-header">
           <div class="chat-header-main">

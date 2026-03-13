@@ -147,7 +147,6 @@ const hasPendingRestartEdits = computed(() => pendingRestartFields.value.length 
         </section>
 
         <div class="backend-editor-actions">
-          <div v-if="state.error" class="inline-error">{{ state.error }}</div>
           <div class="toggle-row">
             <button class="button" type="button" :disabled="state.saving || state.loading" @click="submitDialog">
               {{ state.saving ? "Saving..." : "Save changes" }}
