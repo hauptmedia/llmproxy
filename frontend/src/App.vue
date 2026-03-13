@@ -11,10 +11,36 @@ import type { DashboardPage } from "./types/dashboard";
 const store = useDashboardStore();
 const route = useRoute();
 
-const pageLinks: Array<{ page: DashboardPage; label: string }> = [
-  { page: "overview", label: "Dashboard" },
-  { page: "logs", label: "Requests" },
-  { page: "chat", label: "Chat" },
+const pageLinks: Array<{ page: DashboardPage; label: string; icon: string[] }> = [
+  {
+    page: "overview",
+    label: "Dashboard",
+    icon: [
+      "M4 5.5h6v6H4z",
+      "M14 5.5h6v9h-6z",
+      "M4 15.5h6v4H4z",
+      "M14 17.5h6v2h-6z",
+    ],
+  },
+  {
+    page: "logs",
+    label: "Requests",
+    icon: [
+      "M6 5.5h12",
+      "M6 10.5h12",
+      "M6 15.5h12",
+      "M4 5.5h.01",
+      "M4 10.5h.01",
+      "M4 15.5h.01",
+    ],
+  },
+  {
+    page: "chat",
+    label: "Chat",
+    icon: [
+      "M5.5 7.5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H11l-3.5 3v-3H7.5a2 2 0 0 1-2-2z",
+    ],
+  },
 ];
 
 const currentPage = computed(() => {
@@ -69,7 +95,10 @@ watch(
                 class="page-link"
                 :class="{ active: currentPage === link.page }"
               >
-                {{ link.label }}
+                <svg class="page-link-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
+                  <path v-for="pathDef in link.icon" :key="pathDef" :d="pathDef"></path>
+                </svg>
+                <span>{{ link.label }}</span>
               </RouterLink>
             </nav>
           </div>

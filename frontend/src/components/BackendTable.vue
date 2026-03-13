@@ -201,7 +201,7 @@ function recentWindowLabel(): string {
           <th v-if="isRuntimeMode()">Traffic</th>
           <th v-if="isRuntimeMode()">Latency</th>
           <th v-if="isRuntimeMode()">Throughput</th>
-          <th v-if="isConfigMode()">Action</th>
+          <th v-if="isConfigMode()" class="backend-action-cell">Action</th>
         </tr>
       </thead>
       <tbody>
