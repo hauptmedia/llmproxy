@@ -78,7 +78,7 @@ function createInitialState(): DashboardState {
       },
     }),
     debug: reactive({
-      model: "",
+      model: "auto",
       systemPrompt: "",
       prompt: "Say hello briefly and mention the model you are using.",
       stream: true,
@@ -99,7 +99,7 @@ function createInitialState(): DashboardState {
         top_k: 40,
         min_p: 0.05,
         repeat_penalty: 1.1,
-        max_tokens: 4096,
+        max_tokens: 20000,
       },
     }),
   };

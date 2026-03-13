@@ -472,6 +472,8 @@ export function useDebugChat(state: DashboardState) {
       return;
     }
 
+    state.debug.stream = true;
+
     const prompt = state.debug.prompt.trim();
 
     if (!state.debug.model) {
@@ -504,7 +506,7 @@ export function useDebugChat(state: DashboardState) {
           : []),
         ...history,
       ],
-      stream: state.debug.stream,
+      stream: true,
       temperature: state.debug.params.temperature,
       top_p: state.debug.params.top_p,
       top_k: Math.round(state.debug.params.top_k),
@@ -598,6 +600,7 @@ export function useDebugChat(state: DashboardState) {
     state.debug.error = "";
     state.debug.backend = "";
     state.debug.lastRequestId = "";
+    state.debug.prompt = "Say hello briefly and mention the model you are using.";
     resetDebugMetrics();
   }
 
