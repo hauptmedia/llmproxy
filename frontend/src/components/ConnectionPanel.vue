@@ -46,26 +46,35 @@ function formatClientIp(value?: string): string | undefined {
   return trimmed;
 }
 
-function connectionIdentityBadges(connection: ActiveConnectionSnapshot): Array<{ text: string; title: string }> {
-  const badges: Array<{ text: string; title: string }> = [];
+function connectionIdentityBadges(connection: ActiveConnectionSnapshot): Array<{ text: string; title: string; className: string }> {
+  const badges: Array<{ text: string; title: string; className: string }> = [];
   const clientIp = formatClientIp(connection.clientIp);
+
+  badges.push({
+    text: store.shortId(connection.id),
+    title: `Request ID: ${connection.id}.`,
+    className: "badge identity-request",
+  });
+
+  badges.push({
+    text: "chat completion",
+    title: "Request type: chat completion.",
+    className: "badge identity-kind",
+  });
 
   if (clientIp) {
     badges.push({
-      text: `IP ${clientIp}`,
+      text: clientIp,
       title: `Client IP address: ${clientIp}.`,
+      className: "badge identity-ip",
     });
   }
-
-  badges.push({
-    text: `req ${store.shortId(connection.id)}`,
-    title: `Request ID: ${connection.id}.`,
-  });
 
   if (connection.model) {
     badges.push({
       text: `model ${connection.model}`,
       title: `Requested or selected model: ${connection.model}.`,
+      className: "badge identity-model",
     });
   }
 
@@ -73,6 +82,7 @@ function connectionIdentityBadges(connection: ActiveConnectionSnapshot): Array<{
     badges.push({
       text: `backend ${connection.backendName}`,
       title: `Currently assigned backend: ${connection.backendName}.`,
+      className: "badge identity-backend",
     });
   }
 
@@ -99,23 +109,17 @@ function connectionIdentityBadges(connection: ActiveConnectionSnapshot): Array<{
           <div class="request-card-body">
             <div class="request-title-row">
               <span
-                class="badge neutral"
-                title="This live entry is a chat completion request."
-              >
-                Chat Completion
-              </span>
-              <span
                 v-for="identityBadge in connectionIdentityBadges(connection)"
                 :key="`${connection.id}-${identityBadge.text}`"
-                class="badge neutral"
+                :class="identityBadge.className"
                 :title="identityBadge.title"
               >
                 {{ identityBadge.text }}
               </span>
               <span
-                v-for="(badge, index) in buildConnectionTransportBadges(connection)"
-                :key="`${connection.id}-transport-${index}`"
-                :class="badgeClass(badge)"
+                v-for="badge in store.connectionCardBadges(connection)"
+                :key="badge.text + badge.title"
+                :class="store.badgeClass(badge)"
                 :title="badge.title"
               >
                 {{ badge.text }}
@@ -153,9 +157,9 @@ function connectionIdentityBadges(connection: ActiveConnectionSnapshot): Array<{
         </div>
         <div class="request-meta">
           <span
-            v-for="badge in store.connectionCardBadges(connection)"
-            :key="badge.text + badge.title"
-            :class="store.badgeClass(badge)"
+            v-for="(badge, index) in buildConnectionTransportBadges(connection)"
+            :key="`${connection.id}-transport-${index}`"
+            :class="badgeClass(badge)"
             :title="badge.title"
           >
             {{ badge.text }}
