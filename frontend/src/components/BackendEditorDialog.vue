@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import DialogCloseButton from "./DialogCloseButton.vue";
 import type { BackendEditorState, EditableBackendConfig } from "../types/dashboard";
 
 const props = defineProps<{
@@ -10,6 +11,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (event: "close"): void;
   (event: "save"): void;
+  (event: "delete"): void;
 }>();
 
 const title = computed(() => props.state.mode === "create" ? "Add backend" : "Edit backend");
@@ -27,6 +29,10 @@ function closeDialog(): void {
 function submitDialog(): void {
   emit("save");
 }
+
+function deleteBackend(): void {
+  emit("delete");
+}
 </script>
 
 <template>
@@ -42,12 +48,7 @@ function submitDialog(): void {
             <h2 class="panel-title">{{ title }}</h2>
             <p class="hint">Changes are written to <span class="mono">llmproxy.config.json</span> and become active immediately.</p>
           </div>
-          <button class="icon-button compact" type="button" title="Close" aria-label="Close" :disabled="state.saving" @click="closeDialog">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M6 6L18 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
-              <path d="M18 6L6 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
-            </svg>
-          </button>
+          <DialogCloseButton compact :disabled="state.saving" @click="closeDialog" />
         </div>
 
         <div class="backend-editor-grid">
@@ -149,7 +150,16 @@ function submitDialog(): void {
         <div class="backend-editor-actions">
           <div v-if="state.error" class="inline-error">{{ state.error }}</div>
           <div class="toggle-row">
-            <button class="button" type="button" :disabled="state.saving" @click="submitDialog">
+            <button
+              v-if="state.mode === 'edit'"
+              class="button danger"
+              type="button"
+              :disabled="state.saving || state.deleting"
+              @click="deleteBackend"
+            >
+              {{ state.deleting ? "Deleting..." : "Delete backend" }}
+            </button>
+            <button class="button" type="button" :disabled="state.saving || state.deleting" @click="submitDialog">
               {{ state.saving ? "Saving..." : saveLabel }}
             </button>
           </div>

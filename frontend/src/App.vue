@@ -75,6 +75,7 @@ watch(
     <RequestDetailDialog />
     <ServerConfigEditorDialog
       :state="store.state.serverEditor"
+      :current-config="store.state.serverConfig"
       @close="store.closeServerEditor"
       @save="store.saveServerEditor"
     />

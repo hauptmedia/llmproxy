@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { ServerEditorState } from "../types/dashboard";
+import DialogCloseButton from "./DialogCloseButton.vue";
+import type { EditableServerConfig, ServerEditorState } from "../types/dashboard";
 
 const props = defineProps<{
   state: ServerEditorState;
+  currentConfig?: EditableServerConfig | null;
 }>();
 
 const emit = defineEmits<{
@@ -11,18 +13,11 @@ const emit = defineEmits<{
   (event: "save"): void;
 }>();
 
-const liveFields = new Set([
-  "requestTimeoutMs",
-  "queueTimeoutMs",
-  "healthCheckIntervalMs",
-  "recentRequestLimit",
-]);
-
-const restartFields = new Set([
-  "host",
-  "port",
-  "dashboardPath",
-]);
+const restartFieldLabels: Record<"host" | "port" | "dashboardPath", string> = {
+  host: "host",
+  port: "port",
+  dashboardPath: "dashboard path",
+};
 
 const noticeClass = computed(() => {
   if (props.state.noticeTone === "good") {
@@ -48,12 +43,46 @@ function submitDialog(): void {
   emit("save");
 }
 
-function isLiveField(field: string): boolean {
-  return liveFields.has(field);
+function normalizeStringValue(value: string | undefined): string {
+  return (value ?? "").trim();
 }
 
-function isRestartField(field: string): boolean {
-  return restartFields.has(field);
+const pendingRestartFields = computed(() => {
+  const current = props.currentConfig;
+  if (!current) {
+    return [];
+  }
+
+  const changed: Array<keyof typeof restartFieldLabels> = [];
+
+  if (normalizeStringValue(props.state.fields.host) !== normalizeStringValue(current.host)) {
+    changed.push("host");
+  }
+
+  if (normalizeStringValue(props.state.fields.port) !== String(current.port)) {
+    changed.push("port");
+  }
+
+  if (normalizeStringValue(props.state.fields.dashboardPath) !== normalizeStringValue(current.dashboardPath)) {
+    changed.push("dashboardPath");
+  }
+
+  return changed;
+});
+
+const pendingRestartMessage = computed(() => {
+  if (pendingRestartFields.value.length === 0) {
+    return "";
+  }
+
+  const labels = pendingRestartFields.value.map((field) => restartFieldLabels[field]).join(", ");
+  return `These edits change ${labels}. Save writes them to config, but llmproxy must be restarted before they take effect.`;
+});
+
+const hasPendingRestartEdits = computed(() => pendingRestartFields.value.length > 0);
+
+function liveFieldSummary(): string {
+  return "request timeout, queue timeout, health check interval, and recent request limit";
 }
 </script>
 
@@ -70,73 +99,50 @@ function isRestartField(field: string): boolean {
             <h2 class="panel-title">Edit llmproxy config</h2>
             <p class="hint">
               Changes are written to <span class="mono">llmproxy.config.json</span>.
-              Fields marked <span class="mono">Live</span> apply immediately. Fields marked <span class="mono">Restart</span> need an llmproxy restart.
+              Runtime settings like <span class="mono">{{ liveFieldSummary() }}</span> apply immediately where possible.
             </p>
           </div>
-          <button class="icon-button compact" type="button" title="Close" aria-label="Close" :disabled="state.saving" @click="closeDialog">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M6 6L18 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
-              <path d="M18 6L6 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
-            </svg>
-          </button>
+          <DialogCloseButton compact :disabled="state.saving" @click="closeDialog" />
         </div>
 
         <section class="request-detail-card">
           <div class="detail-card-viewport">
+            <div v-if="hasPendingRestartEdits" class="config-notice warn mb-4">
+              {{ pendingRestartMessage }}
+            </div>
             <div class="field-grid backend-form-grid">
               <label class="field">
-                <span class="field-label-row">
-                  <span class="field-label">Host</span>
-                  <span v-if="isRestartField('host')" class="badge warn" title="Changing the bind host requires restarting llmproxy.">Restart</span>
-                </span>
+                <span class="field-label">Host</span>
                 <input v-model="state.fields.host" type="text" autocomplete="off" spellcheck="false" placeholder="0.0.0.0" />
               </label>
 
               <label class="field">
-                <span class="field-label-row">
-                  <span class="field-label">Port</span>
-                  <span v-if="isRestartField('port')" class="badge warn" title="Changing the listen port requires restarting llmproxy.">Restart</span>
-                </span>
+                <span class="field-label">Port</span>
                 <input v-model="state.fields.port" type="number" min="1" step="1" inputmode="numeric" />
               </label>
 
               <label class="field field-span-2">
-                <span class="field-label-row">
-                  <span class="field-label">Dashboard path</span>
-                  <span v-if="isRestartField('dashboardPath')" class="badge warn" title="Changing the dashboard base path requires restarting llmproxy.">Restart</span>
-                </span>
+                <span class="field-label">Dashboard path</span>
                 <input v-model="state.fields.dashboardPath" type="text" autocomplete="off" spellcheck="false" placeholder="/dashboard" />
               </label>
 
               <label class="field">
-                <span class="field-label-row">
-                  <span class="field-label">Request timeout (ms)</span>
-                  <span v-if="isLiveField('requestTimeoutMs')" class="badge good" title="Applies immediately to newly started upstream requests.">Live</span>
-                </span>
+                <span class="field-label">Request timeout (ms)</span>
                 <input v-model="state.fields.requestTimeoutMs" type="number" min="1" step="1" inputmode="numeric" />
               </label>
 
               <label class="field">
-                <span class="field-label-row">
-                  <span class="field-label">Queue timeout (ms)</span>
-                  <span v-if="isLiveField('queueTimeoutMs')" class="badge good" title="Applies immediately to newly queued requests.">Live</span>
-                </span>
+                <span class="field-label">Queue timeout (ms)</span>
                 <input v-model="state.fields.queueTimeoutMs" type="number" min="1" step="1" inputmode="numeric" />
               </label>
 
               <label class="field">
-                <span class="field-label-row">
-                  <span class="field-label">Health check interval (ms)</span>
-                  <span v-if="isLiveField('healthCheckIntervalMs')" class="badge good" title="Applies immediately and refreshes the backend health timer without restarting llmproxy.">Live</span>
-                </span>
+                <span class="field-label">Health check interval (ms)</span>
                 <input v-model="state.fields.healthCheckIntervalMs" type="number" min="1" step="1" inputmode="numeric" />
               </label>
 
               <label class="field">
-                <span class="field-label-row">
-                  <span class="field-label">Recent request limit</span>
-                  <span v-if="isLiveField('recentRequestLimit')" class="badge good" title="Applies immediately and trims retained request history in memory right away.">Live</span>
-                </span>
+                <span class="field-label">Recent request limit</span>
                 <input v-model="state.fields.recentRequestLimit" type="number" min="1" step="1" inputmode="numeric" />
               </label>
             </div>

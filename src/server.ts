@@ -297,6 +297,11 @@ export class LlmProxyServer {
       return;
     }
 
+    if (method === "DELETE" && url.pathname.startsWith("/api/backends/")) {
+      await this.handleBackendDelete(response, url.pathname);
+      return;
+    }
+
     if (url.pathname.startsWith("/v1/")) {
       if (!isSupportedProxyRoute(method, url.pathname)) {
         sendJson(
@@ -544,6 +549,18 @@ export class LlmProxyServer {
       sendJson(response, 200, { ok: true, backend: result.backend });
     } catch (error) {
       sendJson(response, 400, proxyError(toErrorMessage(error)));
+    }
+  }
+
+  private async handleBackendDelete(response: ServerResponse, pathname: string): Promise<void> {
+    const backendId = decodeURIComponent(pathname.replace("/api/backends/", ""));
+
+    try {
+      const nextConfig = await this.configStore.deleteBackend(backendId);
+      this.loadBalancer.replaceConfig(nextConfig);
+      sendJson(response, 200, { ok: true, backendId });
+    } catch (error) {
+      sendJson(response, 404, proxyError(toErrorMessage(error)));
     }
   }
 

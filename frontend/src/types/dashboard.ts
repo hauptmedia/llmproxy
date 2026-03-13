@@ -188,6 +188,7 @@ export interface BackendEditorState {
   mode: "create" | "edit";
   originalId: string;
   saving: boolean;
+  deleting: boolean;
   loading: boolean;
   error: string;
   fields: BackendEditorFields;

@@ -78,6 +78,7 @@ function resetBackendEditor(editor: BackendEditorState): void {
   editor.mode = "create";
   editor.originalId = "";
   editor.saving = false;
+  editor.deleting = false;
   editor.loading = false;
   editor.error = "";
   editor.fields = createEmptyBackendFields();
@@ -252,6 +253,7 @@ export function useBackendControls(state: DashboardState) {
     state.backendEditor.mode = "create";
     state.backendEditor.originalId = "";
     state.backendEditor.saving = false;
+    state.backendEditor.deleting = false;
     state.backendEditor.error = "";
     state.backendEditor.fields = createEmptyBackendFields();
   }
@@ -273,6 +275,7 @@ export function useBackendControls(state: DashboardState) {
     state.backendEditor.mode = "edit";
     state.backendEditor.originalId = backendId;
     state.backendEditor.saving = false;
+    state.backendEditor.deleting = false;
     state.backendEditor.error = "";
     state.backendEditor.fields = toBackendFields(config);
   }
@@ -419,6 +422,42 @@ export function useBackendControls(state: DashboardState) {
     }
   }
 
+  async function deleteBackendEditor(): Promise<void> {
+    const { mode, originalId, fields } = state.backendEditor;
+    state.backendEditor.error = "";
+
+    if (mode !== "edit" || !originalId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Remove backend "${fields.name || originalId}" from llmproxy.config.json?\n\nThis takes effect immediately and new requests will no longer be routed to it.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    state.backendEditor.deleting = true;
+
+    try {
+      const response = await fetch(`/api/backends/${encodeURIComponent(originalId)}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorResponse(response));
+      }
+
+      await loadBackendConfigs();
+      closeBackendEditor();
+    } catch (error) {
+      state.backendEditor.error = error instanceof Error ? error.message : String(error);
+    } finally {
+      state.backendEditor.deleting = false;
+    }
+  }
+
   return {
     applySnapshot,
     ensureDebugModel,
@@ -430,5 +469,6 @@ export function useBackendControls(state: DashboardState) {
     closeServerEditor,
     saveServerEditor,
     saveBackendEditor,
+    deleteBackendEditor,
   };
 }

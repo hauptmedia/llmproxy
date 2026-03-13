@@ -48,7 +48,9 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
   const enabledCount = snapshot.backends.filter((backend) => backend.enabled).length;
   const healthyCount = snapshot.backends.filter((backend) => backend.enabled && backend.healthy).length;
   const recentSuccessCount = snapshot.recentRequests.filter((entry) => entry.outcome === "success").length;
-  const recentFailureCount = snapshot.recentRequests.filter((entry) => entry.outcome === "error").length;
+  const recentFailureCount = snapshot.recentRequests.filter((entry) => entry.outcome === "error" && Boolean(entry.backendId)).length;
+  const recentRejectedCount = snapshot.recentRequests.filter((entry) => entry.outcome !== "success" && !entry.backendId).length;
+  const recentCancelledCount = snapshot.recentRequests.filter((entry) => entry.outcome === "cancelled" && Boolean(entry.backendId)).length;
   const healthyTone =
     healthyCount === 0
       ? "bad"
@@ -114,9 +116,9 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
     {
       key: "requests",
       label: "Requests",
-      value: `${recentSuccessCount} / ${recentFailureCount}`,
+      value: `${recentSuccessCount} / ${recentFailureCount} / ${recentRejectedCount} / ${recentCancelledCount}`,
       note: "",
-      title: `Request outcome overview within the last ${snapshot.recentRequestLimit} retained log entries. First value: successfully completed requests. Second value: failed requests.`,
+      title: `Request outcome overview within the last ${snapshot.recentRequestLimit} retained log entries. Successful: completed requests. Failed: requests that had a backend assigned and then errored. Rejected: requests that never received a backend assignment, including no matching backend, no enabled backend, or queue timeout before assignment. Cancelled: requests that had a backend assigned but were cancelled before completion.`,
       tone: "neutral",
       segments: [
         {
@@ -129,7 +131,19 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
           text: String(recentFailureCount),
           label: "Failed",
           tone: "bad",
-          title: `Requests within the last ${snapshot.recentRequestLimit} retained log entries that failed while being proxied or returned an upstream/server error.`,
+          title: `Requests within the last ${snapshot.recentRequestLimit} retained log entries that already had a backend assigned and then failed while being proxied or due to an upstream/server error.`,
+        },
+        {
+          text: String(recentCancelledCount),
+          label: "Cancelled",
+          tone: "warn",
+          title: `Requests within the last ${snapshot.recentRequestLimit} retained log entries that already had a backend assigned but were cancelled before completion.`,
+        },
+        {
+          text: String(recentRejectedCount),
+          label: "Rejected",
+          tone: "warn",
+          title: `Requests within the last ${snapshot.recentRequestLimit} retained log entries that never received a backend assignment. This includes cases like no configured backend match, no enabled backend, or timing out while waiting in the queue before a backend slot was assigned.`,
         },
       ],
     },

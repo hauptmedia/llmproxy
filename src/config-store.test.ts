@@ -182,6 +182,17 @@ test("replaces a backend, keeps stored api keys unless cleared, and supports ren
   });
 });
 
+test("deletes a backend and persists the removal", async () => {
+  await withConfigStore(async (store, configPath) => {
+    const next = await store.deleteBackend("primary");
+
+    assert.equal(next.backends.length, 0);
+
+    const persisted = JSON.parse(await readFile(configPath, "utf8")) as ProxyConfig;
+    assert.deepEqual(persisted.backends, []);
+  });
+});
+
 test("updates server config and persists it", async () => {
   await withConfigStore(async (store, configPath) => {
     const next = await store.updateServerConfig({

@@ -114,6 +114,21 @@ export class ConfigStore {
     };
   }
 
+  public async deleteBackend(id: string): Promise<ProxyConfig> {
+    const current = await this.load();
+    const backendIndex = current.backends.findIndex((entry) => entry.id === id);
+
+    if (backendIndex < 0) {
+      throw new Error(`Backend "${id}" was not found in ${this.configPath}.`);
+    }
+
+    current.backends.splice(backendIndex, 1);
+
+    const next = normalizeConfig(current, this.configPath);
+    await this.writeConfig(next);
+    return next;
+  }
+
   private async writeConfig(config: ProxyConfig): Promise<void> {
     await fs.writeFile(this.configPath, `${JSON.stringify(serializeConfig(config), null, 2)}\n`, "utf8");
   }

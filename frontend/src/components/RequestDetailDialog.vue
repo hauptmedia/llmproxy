@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
 import CodeView from "./CodeView.vue";
+import DialogCloseButton from "./DialogCloseButton.vue";
 import MessageCard from "./MessageCard.vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
 
@@ -120,18 +121,11 @@ watch(
           </div>
         </div>
         <div class="request-actions">
-          <button
-            class="icon-button"
-            type="button"
+          <DialogCloseButton
             title="Close request details"
             aria-label="Close request details"
             @click="store.closeRequestDetail()"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
-              <path d="M6 6L18 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
-              <path d="M18 6L6 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
-            </svg>
-          </button>
+          />
         </div>
       </div>
 

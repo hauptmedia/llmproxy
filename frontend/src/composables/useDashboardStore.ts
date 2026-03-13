@@ -39,6 +39,7 @@ function createInitialState(): DashboardState {
       mode: "create",
       originalId: "",
       saving: false,
+      deleting: false,
       loading: false,
       error: "",
       fields: {
@@ -238,6 +239,7 @@ function createDashboardStoreInternal() {
     openEditBackend: backendControls.openEditBackend,
     closeBackendEditor: backendControls.closeBackendEditor,
     saveBackendEditor: backendControls.saveBackendEditor,
+    deleteBackendEditor: backendControls.deleteBackendEditor,
     openServerEditor: backendControls.openServerEditor,
     closeServerEditor: backendControls.closeServerEditor,
     saveServerEditor: backendControls.saveServerEditor,

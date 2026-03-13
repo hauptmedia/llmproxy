@@ -4,15 +4,20 @@ import ModelInfoDialog from "./ModelInfoDialog.vue";
 import {
   type BackendSnapshot,
   type ModelDetailView,
+  type RequestLogEntry,
 } from "../types/dashboard";
-import { formatDate, formatDuration } from "../utils/formatters";
+import { formatDate, formatDuration, formatTokenRate } from "../utils/formatters";
 import { buildModelSpecs } from "../utils/model-specs";
 
 const props = withDefaults(defineProps<{
   backends: BackendSnapshot[];
+  recentRequests?: RequestLogEntry[];
+  recentRequestLimit?: number;
   mode?: "runtime" | "config";
 }>(), {
   mode: "runtime",
+  recentRequests: () => [],
+  recentRequestLimit: 0,
 });
 
 const emit = defineEmits<{
@@ -74,6 +79,59 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
 function connectorLabel(connector: BackendSnapshot["connector"]): string {
   return connector === "ollama" ? "Ollama" : "OpenAI-compatible";
 }
+
+function recentBackendRequests(backend: BackendSnapshot): RequestLogEntry[] {
+  return props.recentRequests.filter((entry) => entry.backendId === backend.id);
+}
+
+function recentBackendRequestCount(backend: BackendSnapshot): number {
+  return recentBackendRequests(backend).length;
+}
+
+function recentBackendSuccessCount(backend: BackendSnapshot): number {
+  return recentBackendRequests(backend).filter((entry) => entry.outcome === "success").length;
+}
+
+function recentBackendFailureCount(backend: BackendSnapshot): number {
+  return recentBackendRequests(backend).filter((entry) => entry.outcome === "error").length;
+}
+
+function recentBackendCancelledCount(backend: BackendSnapshot): number {
+  return recentBackendRequests(backend).filter((entry) => entry.outcome === "cancelled").length;
+}
+
+function recentBackendAverageLatency(backend: BackendSnapshot): number | undefined {
+  const entries = recentBackendRequests(backend);
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  const total = entries.reduce((sum, entry) => sum + entry.latencyMs, 0);
+  return Math.round(total / entries.length);
+}
+
+function recentBackendLastLatency(backend: BackendSnapshot): number | undefined {
+  return recentBackendRequests(backend)[0]?.latencyMs;
+}
+
+function recentBackendAverageTokenRate(backend: BackendSnapshot): number | undefined {
+  const rates = recentBackendRequests(backend)
+    .map((entry) => entry.completionTokensPerSecond)
+    .filter((value): value is number => typeof value === "number" && !Number.isNaN(value));
+
+  if (rates.length === 0) {
+    return undefined;
+  }
+
+  const total = rates.reduce((sum, value) => sum + value, 0);
+  return total / rates.length;
+}
+
+function recentWindowLabel(): string {
+  return props.recentRequestLimit > 0
+    ? `within the last ${props.recentRequestLimit} retained requests`
+    : "within the current retained request window";
+}
 </script>
 
 <template>
@@ -88,6 +146,7 @@ function connectorLabel(connector: BackendSnapshot["connector"]): string {
           <th v-if="isConfigMode()">Effective models</th>
           <th v-if="isRuntimeMode()">Traffic</th>
           <th v-if="isRuntimeMode()">Latency</th>
+          <th v-if="isRuntimeMode()">Tokens</th>
           <th v-if="isConfigMode()">Action</th>
         </tr>
       </thead>
@@ -154,16 +213,24 @@ function connectorLabel(connector: BackendSnapshot["connector"]): string {
           </td>
           <td v-if="isRuntimeMode()">
             <div class="request-meta">
-              <span class="badge good" title="Successful requests served by this backend.">ok {{ backend.successfulRequests }}</span>
-              <span class="badge bad" title="Failed requests served by this backend.">fail {{ backend.failedRequests }}</span>
-              <span class="badge warn" title="Cancelled requests served by this backend.">cancel {{ backend.cancelledRequests }}</span>
+              <span class="badge good" :title="`Successful requests served by this backend ${recentWindowLabel()}.`">ok {{ recentBackendSuccessCount(backend) }}</span>
+              <span class="badge bad" :title="`Failed requests served by this backend ${recentWindowLabel()}.`">fail {{ recentBackendFailureCount(backend) }}</span>
+              <span class="badge warn" :title="`Cancelled requests served by this backend ${recentWindowLabel()}.`">cancel {{ recentBackendCancelledCount(backend) }}</span>
             </div>
-            <div class="table-sub">total {{ backend.totalRequests }}</div>
+            <div class="table-sub" :title="`Total retained requests for this backend ${recentWindowLabel()}.`">total {{ recentBackendRequestCount(backend) }}</div>
           </td>
           <td v-if="isRuntimeMode()">
             <div class="request-meta">
-              <span class="badge neutral" title="Rolling average latency observed for this backend.">avg {{ formatDuration(backend.avgLatencyMs) }}</span>
-              <span class="badge neutral" title="Most recent observed latency for this backend.">last {{ formatDuration(backend.lastLatencyMs) }}</span>
+              <span class="badge neutral" :title="`Average end-to-end latency for this backend ${recentWindowLabel()}.`">avg {{ formatDuration(recentBackendAverageLatency(backend)) }}</span>
+              <span class="badge neutral" :title="`Most recent retained request latency for this backend ${recentWindowLabel()}.`">last {{ formatDuration(recentBackendLastLatency(backend)) }}</span>
+            </div>
+          </td>
+          <td v-if="isRuntimeMode()">
+            <div
+              class="log-primary"
+              :title="`Average completion token rate for this backend ${recentWindowLabel()}. Only retained requests with measured token-rate metrics are included.`"
+            >
+              {{ formatTokenRate(recentBackendAverageTokenRate(backend)) || "n/a" }}
             </div>
           </td>
           <td v-if="isConfigMode()" class="backend-action-cell">

@@ -131,6 +131,7 @@ const serverConfigRows = computed(() => {
       :current-config="currentBackendConfig"
       @close="store.closeBackendEditor"
       @save="store.saveBackendEditor"
+      @delete="store.deleteBackendEditor"
     />
   </section>
 </template>

@@ -54,7 +54,7 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
       <article
         v-for="card in store.summaryCards"
         :key="card.key"
-        :class="['summary-card', card.tone ?? 'neutral']"
+        :class="['summary-card', `summary-card-${card.key}`, card.tone ?? 'neutral']"
         :title="card.title"
       >
         <div class="card-label">{{ card.label }}</div>
@@ -87,6 +87,8 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
       </div>
       <BackendTable
         :backends="store.state.snapshot.backends"
+        :recent-requests="store.state.snapshot.recentRequests"
+        :recent-request-limit="store.state.snapshot.recentRequestLimit"
         mode="runtime"
       />
     </div>
