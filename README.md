@@ -102,7 +102,7 @@ Dashboard changes to `enabled` and `maxConcurrency` are written back to your loc
 ## Notes
 
 - Requests are buffered so routing can take the requested `model` into account.
-- Clients may also send `model: "auto"` or `model: "*"`. In that case, `llmproxy` currently picks the first free backend that has a concrete discovered/configured model and forwards the request with that resolved model name upstream.
+- Clients may send `model: "auto"`, `model: "*"`, or omit `model` entirely. In those cases, `llmproxy` currently picks the first free backend that has a concrete discovered/configured model and forwards the request with that resolved model name upstream.
 - Chat completion requests always use upstream streaming so the proxy can collect live metrics such as `tok/s`, TTFB, and in-flight token counts.
 - If the client does not request streaming, the proxy buffers the upstream stream internally and returns a normal JSON response at the end.
 - `connector: "ollama"` keeps the external client contract OpenAI-compatible while translating upstream traffic to native Ollama endpoints such as `/api/chat` and `/api/tags`.

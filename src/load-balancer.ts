@@ -262,10 +262,6 @@ export class LoadBalancer extends EventEmitter {
   }
 
   private hasMatchingBackend(model?: string): boolean {
-    if (!model) {
-      return this.backends.some((backend) => backend.config.enabled);
-    }
-
     return this.backends.some((backend) => backend.config.enabled && this.resolveModelForBackend(backend, model) !== undefined);
   }
 
@@ -377,7 +373,7 @@ export class LoadBalancer extends EventEmitter {
       }
 
       const resolvedModel = this.resolveModelForBackend(backend, model);
-      if (model && resolvedModel === undefined) {
+      if (resolvedModel === undefined) {
         continue;
       }
 
@@ -399,18 +395,10 @@ export class LoadBalancer extends EventEmitter {
   }
 
   private backendSupportsModel(backend: BackendRuntime, model?: string): boolean {
-    if (!model) {
-      return true;
-    }
-
     return this.resolveModelForBackend(backend, model) !== undefined;
   }
 
   private resolveModelForBackend(backend: BackendRuntime, model?: string): string | undefined {
-    if (!model) {
-      return undefined;
-    }
-
     if (isAutoModelRequest(model)) {
       const automaticModel = pickAutomaticBackendModel(backend);
       if (!automaticModel) {
@@ -425,6 +413,10 @@ export class LoadBalancer extends EventEmitter {
       return configuredPatterns.some((pattern) => matchesPattern(pattern, automaticModel))
         ? automaticModel
         : undefined;
+    }
+
+    if (typeof model !== "string") {
+      return undefined;
     }
 
     const configuredPatterns = backend.config.models ?? [];
@@ -653,7 +645,7 @@ function matchesPattern(pattern: string, value: string): boolean {
 }
 
 function isAutoModelRequest(model?: string): boolean {
-  return model === "*" || model === "auto";
+  return typeof model !== "string" || model.trim() === "" || model === "*" || model === "auto";
 }
 
 function hasDiscoveredModels(backend: BackendRuntime): boolean {

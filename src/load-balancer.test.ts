@@ -335,6 +335,73 @@ test("auto selects the first free backend with a concrete model", async () => {
   await balancer.stop();
 });
 
+test("missing model selects the first free backend with a concrete model", async () => {
+  const config: ProxyConfig = {
+    server: {
+      ...TEST_CONFIG.server,
+      port: 4005,
+    },
+    backends: [
+      {
+        id: "missing-a",
+        name: "Missing A",
+        baseUrl: "http://127.0.0.1:9400",
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["*"],
+      },
+      {
+        id: "missing-b",
+        name: "Missing B",
+        baseUrl: "http://127.0.0.1:9401",
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["*"],
+      },
+    ],
+  };
+
+  const balancer = new LoadBalancer(config, {
+    fetcher: async (input) => {
+      const url = new URL(
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url,
+      );
+
+      if (url.port === "9400") {
+        return jsonResponse({ object: "list", data: [{ id: "missing-model-a" }] });
+      }
+
+      return jsonResponse({ object: "list", data: [{ id: "missing-model-b" }] });
+    },
+  });
+
+  await balancer.start();
+
+  const lease = await balancer.acquire({
+    id: "req-missing-model",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    stream: true,
+  });
+
+  assert.equal(lease.backend.id, "missing-a");
+  assert.equal(lease.selectedModel, "missing-model-a");
+
+  lease.release({
+    outcome: "success",
+    latencyMs: 20,
+    statusCode: 200,
+    queuedMs: lease.queueMs,
+  });
+
+  await balancer.stop();
+});
+
 test("captures discovered model metadata from /v1/models for backend snapshots", async () => {
   const config: ProxyConfig = {
     server: {
