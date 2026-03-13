@@ -81,9 +81,6 @@ const pendingRestartMessage = computed(() => {
 
 const hasPendingRestartEdits = computed(() => pendingRestartFields.value.length > 0);
 
-function liveFieldSummary(): string {
-  return "runtime settings";
-}
 </script>
 
 <template>
@@ -99,7 +96,7 @@ function liveFieldSummary(): string {
             <h2 class="panel-title">Edit llmproxy config</h2>
             <p class="hint">
               Changes are written to <span class="mono">llmproxy.config.json</span>.
-              Runtime settings like <span class="mono">{{ liveFieldSummary() }}</span> apply immediately where possible.
+              Runtime settings apply immediately where possible.
             </p>
           </div>
           <DialogCloseButton :disabled="state.saving" @click="closeDialog" />

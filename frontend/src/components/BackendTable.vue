@@ -25,6 +25,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   (event: "edit-backend", backendId: string): void;
+  (event: "delete-backend", backendId: string): void;
 }>();
 
 const selectedModelDetail = ref<ModelDetailView | null>(null);
@@ -71,6 +72,10 @@ function backendStatusError(backend: BackendSnapshot): string {
 
 function editBackend(backendId: string): void {
   emit("edit-backend", backendId);
+}
+
+function deleteBackend(backendId: string): void {
+  emit("delete-backend", backendId);
 }
 
 function openModelDetail(detail: ModelDetailView | undefined): void {
@@ -192,7 +197,7 @@ function recentWindowLabel(): string {
           <th v-if="isRuntimeMode()" class="backend-runtime-connections-cell">
             <span class="backend-runtime-connections-anchor backend-runtime-connections-heading">Connections</span>
           </th>
-          <th v-if="isConfigMode()">Effective models</th>
+          <th v-if="isConfigMode()" class="backend-models-cell">Effective models</th>
           <th v-if="isRuntimeMode()">Traffic</th>
           <th v-if="isRuntimeMode()">Latency</th>
           <th v-if="isRuntimeMode()">Throughput</th>
@@ -241,8 +246,8 @@ function recentWindowLabel(): string {
               </div>
             </div>
           </td>
-          <td v-if="isConfigMode()">
-            <div class="models">
+          <td v-if="isConfigMode()" class="backend-models-cell">
+            <div class="backend-models-content models">
               <template v-for="spec in modelSpecs(backend)" :key="spec.text + spec.className">
                 <button
                   v-if="spec.detail"
@@ -300,18 +305,35 @@ function recentWindowLabel(): string {
             </div>
           </td>
           <td v-if="isConfigMode()" class="backend-action-cell">
-            <button
-              class="icon-button compact"
-              type="button"
-              title="Edit backend configuration"
-              aria-label="Edit backend configuration"
-              @click="editBackend(backend.id)"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 20h9"></path>
-                <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
-              </svg>
-            </button>
+            <div class="backend-action-content">
+              <button
+                class="icon-button compact danger"
+                type="button"
+                title="Delete backend configuration"
+                aria-label="Delete backend configuration"
+                @click="deleteBackend(backend.id)"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 7h16"></path>
+                  <path d="M9 7V5.75C9 4.78 9.78 4 10.75 4h2.5C14.22 4 15 4.78 15 5.75V7"></path>
+                  <path d="M6 7l1 12a2 2 0 0 0 1.99 1.83h6.02A2 2 0 0 0 17 19l1-12"></path>
+                  <path d="M10 11v6"></path>
+                  <path d="M14 11v6"></path>
+                </svg>
+              </button>
+              <button
+                class="icon-button compact"
+                type="button"
+                title="Edit backend configuration"
+                aria-label="Edit backend configuration"
+                @click="editBackend(backend.id)"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+                </svg>
+              </button>
+            </div>
           </td>
         </tr>
       </tbody>

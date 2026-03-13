@@ -620,12 +620,28 @@
     @apply border-b-0;
   }
 
+  .backend-table-config th {
+    height: 56px;
+    vertical-align: middle;
+  }
+
   .backend-action-cell {
     @apply align-middle text-center;
   }
 
+  .backend-action-content {
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .backend-action-cell .icon-button {
     @apply inline-flex;
+  }
+
+  .backend-action-content .icon-button + .icon-button {
+    margin-left: 0.5rem;
   }
 
   .backend-number-cell {
@@ -642,6 +658,18 @@
     align-items: center;
     justify-content: center;
     text-align: center;
+  }
+
+  .backend-models-cell {
+    vertical-align: middle;
+  }
+
+  .backend-models-content {
+    min-height: 56px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: center;
   }
 
   .backend-type-cell {

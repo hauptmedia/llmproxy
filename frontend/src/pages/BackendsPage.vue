@@ -124,6 +124,7 @@ const serverConfigRows = computed(() => {
         :backends="store.state.snapshot.backends"
         mode="config"
         @edit-backend="store.openEditBackend"
+        @delete-backend="store.deleteBackendById"
       />
     </div>
     <BackendEditorDialog
@@ -131,7 +132,6 @@ const serverConfigRows = computed(() => {
       :current-config="currentBackendConfig"
       @close="store.closeBackendEditor"
       @save="store.saveBackendEditor"
-      @delete="store.deleteBackendEditor"
     />
   </section>
 </template>

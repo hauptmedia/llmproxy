@@ -430,18 +430,27 @@ export function useBackendControls(state: DashboardState) {
       return;
     }
 
+    await deleteBackendById(originalId, fields.name || originalId, true);
+  }
+
+  async function deleteBackendById(backendId: string, displayName?: string, fromEditor = false): Promise<void> {
+    state.backendEditor.error = "";
+    const backendLabel = displayName || state.backendConfigs[backendId]?.name || backendId;
+
     const confirmed = window.confirm(
-      `Remove backend "${fields.name || originalId}" from llmproxy.config.json?\n\nThis takes effect immediately and new requests will no longer be routed to it.`,
+      `Remove backend "${backendLabel}" from llmproxy.config.json?\n\nThis takes effect immediately and new requests will no longer be routed to it.`,
     );
 
     if (!confirmed) {
       return;
     }
 
-    state.backendEditor.deleting = true;
+    if (fromEditor) {
+      state.backendEditor.deleting = true;
+    }
 
     try {
-      const response = await fetch(`/api/backends/${encodeURIComponent(originalId)}`, {
+      const response = await fetch(`/api/backends/${encodeURIComponent(backendId)}`, {
         method: "DELETE",
       });
 
@@ -450,11 +459,15 @@ export function useBackendControls(state: DashboardState) {
       }
 
       await loadBackendConfigs();
-      closeBackendEditor();
+      if (state.backendEditor.open && state.backendEditor.originalId === backendId) {
+        closeBackendEditor();
+      }
     } catch (error) {
       state.backendEditor.error = error instanceof Error ? error.message : String(error);
     } finally {
-      state.backendEditor.deleting = false;
+      if (fromEditor) {
+        state.backendEditor.deleting = false;
+      }
     }
   }
 
@@ -470,5 +483,6 @@ export function useBackendControls(state: DashboardState) {
     saveServerEditor,
     saveBackendEditor,
     deleteBackendEditor,
+    deleteBackendById,
   };
 }

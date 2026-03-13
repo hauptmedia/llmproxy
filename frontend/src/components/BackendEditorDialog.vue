@@ -11,7 +11,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (event: "close"): void;
   (event: "save"): void;
-  (event: "delete"): void;
 }>();
 
 const title = computed(() => props.state.mode === "create" ? "Add backend" : "Edit backend");
@@ -30,9 +29,6 @@ function submitDialog(): void {
   emit("save");
 }
 
-function deleteBackend(): void {
-  emit("delete");
-}
 </script>
 
 <template>
@@ -150,15 +146,6 @@ function deleteBackend(): void {
         <div class="backend-editor-actions">
           <div v-if="state.error" class="inline-error">{{ state.error }}</div>
           <div class="toggle-row">
-            <button
-              v-if="state.mode === 'edit'"
-              class="button danger"
-              type="button"
-              :disabled="state.saving || state.deleting"
-              @click="deleteBackend"
-            >
-              {{ state.deleting ? "Deleting..." : "Delete backend" }}
-            </button>
             <button class="button" type="button" :disabled="state.saving || state.deleting" @click="submitDialog">
               {{ state.saving ? "Saving..." : saveLabel }}
             </button>

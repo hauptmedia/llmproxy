@@ -240,6 +240,7 @@ function createDashboardStoreInternal() {
     closeBackendEditor: backendControls.closeBackendEditor,
     saveBackendEditor: backendControls.saveBackendEditor,
     deleteBackendEditor: backendControls.deleteBackendEditor,
+    deleteBackendById: backendControls.deleteBackendById,
     openServerEditor: backendControls.openServerEditor,
     closeServerEditor: backendControls.closeServerEditor,
     saveServerEditor: backendControls.saveServerEditor,
