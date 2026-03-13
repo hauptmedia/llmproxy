@@ -1617,11 +1617,12 @@
   }
 
   .reasoning-panel[open] .reasoning-chevron {
-    transform: rotate(90deg);
+    transform: rotate(180deg);
   }
 
   .reasoning-chevron {
     @apply ml-auto transition duration-150;
+    transform: rotate(90deg);
   }
 
   .reasoning-content {

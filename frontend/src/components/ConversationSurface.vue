@@ -26,6 +26,7 @@ const conversationViewport = ref<HTMLElement | null>(null);
 const autoFollowConversation = ref(true);
 let conversationObserver: MutationObserver | null = null;
 let anchoredScrollTop: number | null = null;
+let lastObservedScrollTop = 0;
 
 function findFollowAnchorElement(): HTMLElement | null {
   const viewport = conversationViewport.value;
@@ -62,6 +63,7 @@ function scrollConversationToBottom(): void {
   }
 
   viewport.scrollTop = viewport.scrollHeight;
+  lastObservedScrollTop = viewport.scrollTop;
 }
 
 function computeAnchoredScrollTop(): number | null {
@@ -108,6 +110,7 @@ function scrollConversationToAnchorIfPossible(): boolean {
 
   if (anchorBottomAtBase <= viewport.clientHeight - 8) {
     viewport.scrollTop = baseScrollTop;
+    lastObservedScrollTop = viewport.scrollTop;
     return true;
   }
 
@@ -116,6 +119,7 @@ function scrollConversationToAnchorIfPossible(): boolean {
     anchorCard.offsetTop + anchorCard.offsetHeight - viewport.clientHeight + 8,
   );
   viewport.scrollTop = Math.min(followScrollTop, maxScrollTop);
+  lastObservedScrollTop = viewport.scrollTop;
   return true;
 }
 
@@ -137,7 +141,22 @@ function scheduleConversationScrollToBottom(): void {
 }
 
 function handleConversationScroll(): void {
-  autoFollowConversation.value = isConversationNearBottom();
+  const viewport = conversationViewport.value;
+  if (!viewport) {
+    return;
+  }
+
+  const nextScrollTop = viewport.scrollTop;
+  const movedUp = nextScrollTop < lastObservedScrollTop - 2;
+  const nearBottom = isConversationNearBottom();
+
+  if (nearBottom) {
+    autoFollowConversation.value = true;
+  } else if (movedUp) {
+    autoFollowConversation.value = false;
+  }
+
+  lastObservedScrollTop = nextScrollTop;
 }
 
 function bindConversationObserver(): void {
@@ -166,6 +185,7 @@ function bindConversationObserver(): void {
 
 onMounted(() => {
   bindConversationObserver();
+  lastObservedScrollTop = conversationViewport.value?.scrollTop ?? 0;
   scheduleConversationScrollToBottom();
 });
 
@@ -179,6 +199,7 @@ watch(
   () => {
     autoFollowConversation.value = true;
     anchoredScrollTop = null;
+    lastObservedScrollTop = conversationViewport.value?.scrollTop ?? 0;
     scheduleConversationScrollToBottom();
   },
   { flush: "post" },
@@ -212,6 +233,7 @@ watch(
   conversationViewport,
   () => {
     bindConversationObserver();
+    lastObservedScrollTop = conversationViewport.value?.scrollTop ?? 0;
     scheduleConversationScrollToBottom();
   },
   { flush: "post" },
