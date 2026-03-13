@@ -1166,12 +1166,20 @@
     text-align: center;
   }
 
+  .log-action-head-content,
+  .log-action-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+  }
+
   .log-action-cell {
     vertical-align: middle;
   }
 
   .log-action-cell .icon-button {
-    margin-inline: auto;
+    margin-inline: 0;
   }
 
   .log-cell-tight {

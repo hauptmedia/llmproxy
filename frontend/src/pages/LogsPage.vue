@@ -1199,7 +1199,9 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
               </th>
-              <th class="log-action-header" :title="columnTitles.action">Action</th>
+              <th class="log-action-header" :title="columnTitles.action">
+                <span class="log-action-head-content">Action</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -1249,19 +1251,21 @@ onBeforeUnmount(() => {
                 </div>
               </td>
               <td class="log-cell-tight log-action-cell">
-                <button
-                  type="button"
-                  class="icon-button compact"
-                  :disabled="!entry.hasDetail"
-                  :aria-label="entry.hasDetail ? 'Open request details' : 'No request details available'"
-                  :title="entry.hasDetail ? 'Open the stored request inspector.' : 'No stored detail is available for this request.'"
-                  @click="store.openRequestDetail(entry.id)"
-                >
-                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
-                    <circle cx="12" cy="12" r="2.8"></circle>
-                  </svg>
-                </button>
+                <div class="log-action-content">
+                  <button
+                    type="button"
+                    class="icon-button compact"
+                    :disabled="!entry.hasDetail"
+                    :aria-label="entry.hasDetail ? 'Open request details' : 'No request details available'"
+                    :title="entry.hasDetail ? 'Open the stored request inspector.' : 'No stored detail is available for this request.'"
+                    @click="store.openRequestDetail(entry.id)"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
+                      <circle cx="12" cy="12" r="2.8"></circle>
+                    </svg>
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
