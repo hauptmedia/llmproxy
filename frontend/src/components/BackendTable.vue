@@ -276,30 +276,49 @@ function recentWindowLabel(): string {
             <div class="table-sub" :title="`Total retained requests for this backend ${recentWindowLabel()}.`">total {{ recentBackendRequestCount(backend) }}</div>
           </td>
           <td v-if="isRuntimeMode()">
-            <div class="backend-runtime-metric-stack log-primary">
-              <div>
-                <span class="inline-metric neutral" :title="`Average end-to-end latency for this backend ${recentWindowLabel()}.`">avg {{ formatDuration(recentBackendAverageLatency(backend)) }}</span>
+            <div class="backend-runtime-metric-stack backend-runtime-stat-list log-primary">
+              <div class="backend-runtime-stat-row">
+                <span class="backend-runtime-stat-label neutral" :title="`Average end-to-end latency for this backend ${recentWindowLabel()}.`">
+                  avg
+                </span>
+                <span class="backend-runtime-stat-value neutral" :title="`Average end-to-end latency for this backend ${recentWindowLabel()}.`">
+                  {{ formatDuration(recentBackendAverageLatency(backend)) }}
+                </span>
               </div>
-              <div>
-                <span class="inline-metric neutral" :title="`Most recent retained request latency for this backend ${recentWindowLabel()}.`">last {{ formatDuration(recentBackendLastLatency(backend)) }}</span>
+              <div class="backend-runtime-stat-row">
+                <span class="backend-runtime-stat-label neutral" :title="`Most recent retained request latency for this backend ${recentWindowLabel()}.`">
+                  last
+                </span>
+                <span class="backend-runtime-stat-value neutral" :title="`Most recent retained request latency for this backend ${recentWindowLabel()}.`">
+                  {{ formatDuration(recentBackendLastLatency(backend)) }}
+                </span>
               </div>
             </div>
           </td>
           <td v-if="isRuntimeMode()">
-            <div class="backend-runtime-metric-stack log-primary">
-              <div>
-                <span class="inline-metric neutral" :title="`Current summed completion token rate across active connections on this backend. Only active connections with measured token-rate metrics are included.`">
-                  all {{ formatTokenRate(currentBackendTokenRate(backend)) || "n/a" }}
+            <div class="backend-runtime-metric-stack backend-runtime-stat-list log-primary">
+              <div class="backend-runtime-stat-row">
+                <span class="backend-runtime-stat-label neutral" :title="`Current summed completion token rate across active connections on this backend. Only active connections with measured token-rate metrics are included.`">
+                  all
+                </span>
+                <span class="backend-runtime-stat-value neutral" :title="`Current summed completion token rate across active connections on this backend. Only active connections with measured token-rate metrics are included.`">
+                  {{ formatTokenRate(currentBackendTokenRate(backend)) || "n/a" }}
                 </span>
               </div>
-              <div>
-                <span class="inline-metric neutral" :title="`Average completion token rate for this backend ${recentWindowLabel()}. Only retained requests with measured token-rate metrics are included.`">
-                  avg {{ formatTokenRate(recentBackendAverageTokenRate(backend)) || "n/a" }}
+              <div class="backend-runtime-stat-row">
+                <span class="backend-runtime-stat-label neutral" :title="`Average completion token rate for this backend ${recentWindowLabel()}. Only retained requests with measured token-rate metrics are included.`">
+                  avg
+                </span>
+                <span class="backend-runtime-stat-value neutral" :title="`Average completion token rate for this backend ${recentWindowLabel()}. Only retained requests with measured token-rate metrics are included.`">
+                  {{ formatTokenRate(recentBackendAverageTokenRate(backend)) || "n/a" }}
                 </span>
               </div>
-              <div>
-                <span class="inline-metric neutral" :title="`Most recent retained completion token rate for this backend ${recentWindowLabel()}.`">
-                  last {{ formatTokenRate(recentBackendLastTokenRate(backend)) || "n/a" }}
+              <div class="backend-runtime-stat-row">
+                <span class="backend-runtime-stat-label neutral" :title="`Most recent retained completion token rate for this backend ${recentWindowLabel()}.`">
+                  last
+                </span>
+                <span class="backend-runtime-stat-value neutral" :title="`Most recent retained completion token rate for this backend ${recentWindowLabel()}.`">
+                  {{ formatTokenRate(recentBackendLastTokenRate(backend)) || "n/a" }}
                 </span>
               </div>
             </div>

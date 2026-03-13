@@ -996,6 +996,35 @@
     @apply grid gap-1.5;
   }
 
+  .backend-runtime-stat-list {
+    @apply gap-1.5;
+  }
+
+  .backend-runtime-stat-row {
+    display: grid;
+    grid-template-columns: 2.75rem minmax(0, 1fr);
+    column-gap: 0.6rem;
+    align-items: baseline;
+  }
+
+  .backend-runtime-stat-label,
+  .backend-runtime-stat-value {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .backend-runtime-stat-label {
+    @apply text-left;
+  }
+
+  .backend-runtime-stat-value {
+    @apply text-right;
+  }
+
+  .backend-runtime-stat-label.neutral,
+  .backend-runtime-stat-value.neutral {
+    color: #1c1917;
+  }
+
   .inline-metric {
     @apply inline-flex items-center;
   }
