@@ -1,18 +1,67 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { nextTick, ref, watch } from "vue";
 import CodeView from "./CodeView.vue";
 import MessageCard from "./MessageCard.vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
 
 const store = useDashboardStore();
+const conversationViewport = ref<HTMLElement | null>(null);
 const showRawRequest = ref(false);
 const showRawResponse = ref(false);
+const autoFollowConversation = ref(true);
+
+function isConversationNearBottom(): boolean {
+  const viewport = conversationViewport.value;
+  if (!viewport) {
+    return true;
+  }
+
+  return viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 28;
+}
+
+function scrollConversationToBottom(): void {
+  const viewport = conversationViewport.value;
+  if (!viewport) {
+    return;
+  }
+
+  viewport.scrollTop = viewport.scrollHeight;
+}
+
+function scheduleConversationScrollToBottom(): void {
+  void nextTick(() => {
+    if (!autoFollowConversation.value) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      scrollConversationToBottom();
+    });
+  });
+}
+
+function handleConversationScroll(): void {
+  autoFollowConversation.value = isConversationNearBottom();
+}
 
 watch(
   () => [store.state.requestDetail.open, store.state.requestDetail.requestId],
   () => {
     showRawRequest.value = false;
     showRawResponse.value = false;
+    autoFollowConversation.value = true;
+    scheduleConversationScrollToBottom();
+  },
+);
+
+watch(
+  () => [store.state.requestDetail.open, store.requestMessages.length, store.requestResponseHtml],
+  ([open]) => {
+    if (!open) {
+      return;
+    }
+
+    scheduleConversationScrollToBottom();
   },
 );
 </script>
@@ -99,28 +148,8 @@ watch(
           </section>
 
           <section class="request-detail-section">
-            <h3>Conversation</h3>
-            <div v-if="store.requestMessages.length" class="transcript">
-              <MessageCard
-                v-for="(message, index) in store.requestMessages"
-                :key="index + ':' + (message.role || 'unknown')"
-                :message="message"
-                :index="Number(index)"
-              />
-            </div>
-            <div v-else class="empty">No OpenAI messages were stored for this request.</div>
-          </section>
-        </div>
-
-        <div class="request-detail-card">
-          <section class="request-detail-section">
             <h3>Provided Tools</h3>
             <div class="detail-stack" v-html="store.requestToolsHtml"></div>
-          </section>
-
-          <section class="request-detail-section">
-            <h3>Response</h3>
-            <div class="detail-stack" v-html="store.requestResponseHtml"></div>
           </section>
 
           <section class="request-detail-section">
@@ -158,6 +187,31 @@ watch(
               placeholder="No raw response payload was stored."
             />
           </section>
+        </div>
+
+        <div class="request-detail-card">
+          <div
+            ref="conversationViewport"
+            class="conversation-viewport"
+            @scroll="handleConversationScroll"
+          >
+            <section class="request-detail-section">
+              <h3>Conversation</h3>
+              <div v-if="store.requestMessages.length" class="transcript">
+                <MessageCard
+                  v-for="(message, index) in store.requestMessages"
+                  :key="index + ':' + (message.role || 'unknown')"
+                  :message="message"
+                  :index="Number(index)"
+                />
+              </div>
+              <div v-else class="empty">No OpenAI messages were stored for this request.</div>
+            </section>
+
+            <section class="request-detail-section">
+              <div class="detail-stack" v-html="store.requestResponseHtml"></div>
+            </section>
+          </div>
         </div>
       </div>
     </div>

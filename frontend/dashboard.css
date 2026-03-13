@@ -919,6 +919,12 @@
     min-width: 0;
   }
 
+  .conversation-viewport {
+    @apply grid gap-[18px] overflow-y-auto pr-1;
+    max-height: min(64vh, 820px);
+    scrollbar-gutter: stable;
+  }
+
   .request-detail-section + .request-detail-section {
     margin-top: 18px;
   }
@@ -936,6 +942,10 @@
   .debug-grid,
   .request-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .conversation-viewport {
+    max-height: min(52vh, 640px);
   }
 
   .log-filters {
