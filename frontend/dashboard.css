@@ -384,8 +384,8 @@
   }
 
   .chat-page-section {
-    height: calc(100dvh - 150px);
-    min-height: calc(100dvh - 150px);
+    height: calc(100dvh - 104px);
+    min-height: calc(100dvh - 104px);
   }
 
   .summary-grid {
@@ -1962,7 +1962,7 @@
   }
 }
 
-@media (max-width: 720px) {
+  @media (max-width: 720px) {
   .shell {
     width: min(100vw - 18px, 100%);
     margin: 0 auto 28px;
@@ -1985,9 +1985,14 @@
     grid-template-columns: 1fr;
   }
 
-  .request-main,
-  .panel-header,
-  .hero-bar {
+    .chat-page-section {
+      height: calc(100dvh - 84px);
+      min-height: calc(100dvh - 84px);
+    }
+
+    .request-main,
+    .panel-header,
+    .hero-bar {
     @apply flex-col items-stretch;
   }
 
