@@ -126,7 +126,7 @@ const columnTitles: Record<FilterKey | "action", string> = {
   time: "When llmproxy first saw this request. Live rows update in place until they finish and move into retained history.",
   outcome: "Current live state or final request result. Finished successful requests show their backend finish reason instead of a generic success label.",
   request: "Short request identifier plus the proxied API route that was called.",
-  model: "Model name requested by the client.",
+  model: "Model that llmproxy actually routed this request to.",
   backend: "Backend that currently handles or finally handled the request.",
   queue: "Time the request spent waiting for a free backend slot before execution began, or the current wait time while it is still queued.",
   latency: "Total end-to-end request duration so far for live rows, or final duration for retained history.",

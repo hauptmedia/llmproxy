@@ -332,6 +332,10 @@ test("auto selects the first free backend with a concrete model", async () => {
     queuedMs: secondLease.queueMs,
   });
 
+  const snapshot = balancer.getSnapshot();
+  assert.equal(snapshot.recentRequests[0]?.model, "auto-model-b");
+  assert.equal(snapshot.recentRequests[1]?.model, "auto-model-a");
+
   await balancer.stop();
 });
 

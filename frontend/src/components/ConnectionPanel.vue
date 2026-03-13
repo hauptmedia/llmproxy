@@ -72,7 +72,7 @@ function connectionIdentityBadges(connection: ActiveConnectionSnapshot): Array<{
 
   if (connection.model) {
     badges.push({
-      text: `model ${connection.model}`,
+      text: connection.model,
       title: `Requested or selected model: ${connection.model}.`,
       className: "badge identity-model",
     });
@@ -157,7 +157,7 @@ function connectionIdentityBadges(connection: ActiveConnectionSnapshot): Array<{
         </div>
         <div class="request-meta">
           <span
-            v-for="(badge, index) in buildConnectionTransportBadges(connection)"
+            v-for="(badge, index) in buildConnectionTransportBadges(connection, { invertDirections: true })"
             :key="`${connection.id}-transport-${index}`"
             :class="badgeClass(badge)"
             :title="badge.title"

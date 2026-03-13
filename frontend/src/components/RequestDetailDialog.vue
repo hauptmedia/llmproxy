@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import CodeView from "./CodeView.vue";
 import ConversationSurface from "./ConversationSurface.vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
@@ -9,6 +9,37 @@ import { useDashboardStore } from "../composables/useDashboardStore";
 const store = useDashboardStore();
 const showRawRequest = ref(false);
 const showRawResponse = ref(false);
+let previousDocumentOverflow = "";
+let previousBodyOverflow = "";
+let scrollLockApplied = false;
+
+function setBackgroundScrollLocked(locked: boolean): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const { documentElement, body } = document;
+  if (locked) {
+    if (!scrollLockApplied) {
+      previousDocumentOverflow = documentElement.style.overflow;
+      previousBodyOverflow = body.style.overflow;
+      scrollLockApplied = true;
+    }
+
+    documentElement.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return;
+  }
+
+  if (!scrollLockApplied) {
+    return;
+  }
+
+  documentElement.style.overflow = previousDocumentOverflow;
+  body.style.overflow = previousBodyOverflow;
+  scrollLockApplied = false;
+}
+
 const requestConversationSignature = computed(() => [
   store.state.requestDetail.open ? "open" : "closed",
   store.state.requestDetail.requestId,
@@ -23,6 +54,18 @@ watch(
     showRawResponse.value = false;
   },
 );
+
+watch(
+  () => store.state.requestDetail.open,
+  (open) => {
+    setBackgroundScrollLocked(open);
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  setBackgroundScrollLocked(false);
+});
 </script>
 
 <template>

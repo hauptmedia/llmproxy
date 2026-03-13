@@ -253,11 +253,17 @@ export function buildDebugMetaBadges(debug: DebugState, liveUsage: string): UiBa
   return bits;
 }
 
-export function buildConnectionTransportBadges(connection: ActiveConnectionSnapshot): UiBadge[] {
+export function buildConnectionTransportBadges(
+  connection: ActiveConnectionSnapshot,
+  options?: { invertDirections?: boolean },
+): UiBadge[] {
   const queueDurationMs =
     connection.phase === "queued" ? connection.elapsedMs : connection.queueMs;
   const showQueueDuration =
     connection.phase === "queued" || connection.queueMs > 0;
+  const invertDirections = Boolean(options?.invertDirections);
+  const downstreamArrow = invertDirections ? "\u2193" : "\u2191";
+  const upstreamArrow = invertDirections ? "\u2191" : "\u2193";
   const tokenRate = formatTokenRate(connection.completionTokensPerSecond);
   const liveCompletionTokens = typeof connection.completionTokens === "number"
     ? connection.completionTokens
@@ -278,7 +284,7 @@ export function buildConnectionTransportBadges(connection: ActiveConnectionSnaps
   const downstreamTokenRate = connection.clientStream && tokenRate ? tokenRate : "";
   const upstreamTokenRate = connection.upstreamStream && tokenRate ? tokenRate : "";
   const downstreamLabel = [
-    connection.clientStream ? "\u2191 stream" : "\u2191 json",
+    connection.clientStream ? `${downstreamArrow} stream` : `${downstreamArrow} json`,
     ...(showQueueDuration ? [formatDuration(queueDurationMs)] : []),
     formatDuration(connection.elapsedMs),
     ...(downstreamTokenRate ? (tokenCountLabel ? [tokenCountLabel] : []) : []),
@@ -328,7 +334,7 @@ export function buildConnectionTransportBadges(connection: ActiveConnectionSnaps
     ),
     badgeSpec(
       [
-        connection.upstreamStream ? "\u2193 stream" : "\u2193 json",
+        connection.upstreamStream ? `${upstreamArrow} stream` : `${upstreamArrow} json`,
         ...(timeToFirstToken ? [timeToFirstToken] : []),
         ...(generationDuration ? [generationDuration] : []),
         ...(upstreamTokenRate ? (tokenCountLabel ? [tokenCountLabel] : []) : []),

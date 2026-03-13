@@ -328,7 +328,7 @@ export class LoadBalancer extends EventEmitter {
           method: route.method,
           path: route.path,
           clientIp: route.clientIp,
-          model: route.model,
+          model: selectedModel ?? route.model,
           backendId: runtime.config.id,
           backendName: runtime.config.name,
           outcome: result.outcome,

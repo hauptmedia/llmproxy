@@ -131,8 +131,9 @@ function scheduleConversationScrollToBottom(): void {
 
     window.requestAnimationFrame(() => {
       if (props.followMode === "latest-turn-start" && props.followAnchorActive) {
-        scrollConversationToAnchorIfPossible();
-        return;
+        if (scrollConversationToAnchorIfPossible()) {
+          return;
+        }
       }
 
       scrollConversationToBottom();
