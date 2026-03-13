@@ -759,10 +759,15 @@ onBeforeUnmount(() => {
           </div>
           <button
             type="button"
-            class="button secondary small"
+            class="icon-button compact"
+            title="Reset all request filters"
+            aria-label="Reset all request filters"
             @click="resetFilters()"
           >
-            Reset Filters
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 11a8 8 0 1 1-2.34-5.66"></path>
+              <path d="M20 4v7h-7"></path>
+            </svg>
           </button>
         </div>
       </div>

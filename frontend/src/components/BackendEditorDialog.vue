@@ -149,7 +149,6 @@ function submitDialog(): void {
         <div class="backend-editor-actions">
           <div v-if="state.error" class="inline-error">{{ state.error }}</div>
           <div class="toggle-row">
-            <button class="button ghost" type="button" :disabled="state.saving" @click="closeDialog">Cancel</button>
             <button class="button" type="button" :disabled="state.saving" @click="submitDialog">
               {{ state.saving ? "Saving..." : saveLabel }}
             </button>

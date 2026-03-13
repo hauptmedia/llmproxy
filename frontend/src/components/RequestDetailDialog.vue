@@ -75,29 +75,31 @@ watch(
     <div class="request-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="request-detail-title">
       <div class="panel-header">
         <div>
-          <h2 id="request-detail-title" class="panel-title">{{ store.requestDetailTitle }}</h2>
-          <div
-            v-if="store.requestLiveTransportBadges.length || store.requestStateBadge"
-            class="request-meta mt-2"
-          >
-            <template v-if="store.requestLiveTransportBadges.length">
-              <span
-                v-for="badge in store.requestLiveTransportBadges"
-                :key="badge.text + (badge.title || '')"
-                :class="store.badgeClass(badge)"
-                :title="badge.title"
-              >
-                {{ badge.text }}
-              </span>
-            </template>
-            <template v-else-if="store.requestStateBadge">
-              <span
-                :class="store.badgeClass(store.requestStateBadge)"
-                :title="store.requestStateBadge.title"
-              >
-                {{ store.requestStateBadge.text }}
-              </span>
-            </template>
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 id="request-detail-title" class="panel-title">{{ store.requestDetailTitle }}</h2>
+            <div
+              v-if="store.requestLiveTransportBadges.length || store.requestStateBadge"
+              class="request-meta"
+            >
+              <template v-if="store.requestLiveTransportBadges.length">
+                <span
+                  v-for="badge in store.requestLiveTransportBadges"
+                  :key="badge.text + (badge.title || '')"
+                  :class="store.badgeClass(badge)"
+                  :title="badge.title"
+                >
+                  {{ badge.text }}
+                </span>
+              </template>
+              <template v-else-if="store.requestStateBadge">
+                <span
+                  :class="store.badgeClass(store.requestStateBadge)"
+                  :title="store.requestStateBadge.title"
+                >
+                  {{ store.requestStateBadge.text }}
+                </span>
+              </template>
+            </div>
           </div>
           <div class="mt-1.5 flex flex-wrap items-center justify-between gap-2">
             <p class="hint m-0">{{ store.requestDetailSubtitle }}</p>
@@ -125,10 +127,9 @@ watch(
             aria-label="Close request details"
             @click="store.closeRequestDetail()"
           >
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="9"></circle>
-              <path d="M9 9l6 6"></path>
-              <path d="M15 9l-6 6"></path>
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
+              <path d="M6 6L18 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
+              <path d="M18 6L6 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
             </svg>
           </button>
         </div>
