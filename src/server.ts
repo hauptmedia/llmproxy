@@ -864,6 +864,7 @@ export class LlmProxyServer {
         time: snapshot.startedAt,
         method: snapshot.method,
         path: snapshot.path,
+        clientIp: snapshot.clientIp,
         model: snapshot.model,
         backendId: snapshot.backendId,
         backendName: snapshot.backendName,

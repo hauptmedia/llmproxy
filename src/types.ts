@@ -106,6 +106,7 @@ export interface RequestLogEntry {
   time: string;
   method: string;
   path: string;
+  clientIp?: string;
   model?: string;
   backendId?: string;
   backendName?: string;
