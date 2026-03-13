@@ -92,7 +92,7 @@ interface ActiveConnectionRuntime {
 }
 
 interface DashboardRoute {
-  page: "overview" | "logs" | "chat" | "backends";
+  page: "overview" | "logs" | "chat" | "config";
 }
 
 export function isSupportedProxyRoute(method: string, pathname: string): boolean {
@@ -207,9 +207,9 @@ export class LlmProxyServer {
       return;
     }
 
-    if (method === "GET" && normalizeDashboardSubPath(url.pathname) === `${dashboardPath}/config`) {
+    if (method === "GET" && normalizeDashboardSubPath(url.pathname) === `${dashboardPath}/backends`) {
       response.statusCode = 302;
-      response.setHeader("location", `${dashboardPath}/backends`);
+      response.setHeader("location", `${dashboardPath}/config`);
       response.end();
       return;
     }
@@ -1333,8 +1333,8 @@ function matchDashboardRoute(pathname: string, dashboardPath: string): Dashboard
     return { page: "logs" };
   }
 
-  if (normalizedPathname === `${dashboardPath}/backends`) {
-    return { page: "backends" };
+  if (normalizedPathname === `${dashboardPath}/config`) {
+    return { page: "config" };
   }
 
   return undefined;

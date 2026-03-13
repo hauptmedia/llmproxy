@@ -1,7 +1,7 @@
 import { ProxySnapshot } from "./types";
 import { escapeHtml } from "./utils";
 
-export type DashboardPage = "overview" | "logs" | "chat" | "backends";
+export type DashboardPage = "overview" | "logs" | "chat" | "config";
 
 interface DashboardRenderOptions {
   dashboardPath: string;
@@ -153,7 +153,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
       ? "Requests"
       : options.page === "chat"
       ? "Chat"
-      : (options.page === "backends" ? "Config" : "Dashboard");
+      : (options.page === "config" ? "Config" : "Dashboard");
   const bootstrap: DashboardBootstrapPayload = {
     dashboardPath,
     page: options.page,

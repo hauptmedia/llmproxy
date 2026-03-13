@@ -83,11 +83,11 @@ function connectorLabel(connector: BackendSnapshot["connector"]): string {
         <tr>
           <th>Backend</th>
           <th>Type</th>
+          <th v-if="isConfigMode()">Max concurrency</th>
           <th v-if="isRuntimeMode()">Status</th>
           <th v-if="isConfigMode()">Effective models</th>
           <th v-if="isRuntimeMode()">Traffic</th>
           <th v-if="isRuntimeMode()">Latency</th>
-          <th v-if="isConfigMode()">Config</th>
           <th v-if="isConfigMode()">Action</th>
         </tr>
       </thead>
@@ -108,6 +108,11 @@ function connectorLabel(connector: BackendSnapshot["connector"]): string {
           </td>
           <td>
             <div class="log-primary">{{ connectorLabel(backend.connector) }}</div>
+          </td>
+          <td v-if="isConfigMode()">
+            <div class="log-primary" title="Configured maximum number of concurrent requests for this backend.">
+              {{ backend.maxConcurrency }}
+            </div>
           </td>
           <td v-if="isRuntimeMode()">
             <div class="request-meta">
@@ -161,17 +166,7 @@ function connectorLabel(connector: BackendSnapshot["connector"]): string {
               <span class="badge neutral" title="Most recent observed latency for this backend.">last {{ formatDuration(backend.lastLatencyMs) }}</span>
             </div>
           </td>
-          <td v-if="isConfigMode()">
-            <div class="request-meta">
-              <span class="badge neutral" title="Whether this backend is enabled in config.">
-                {{ backend.enabled ? "enabled" : "disabled" }}
-              </span>
-              <span class="badge neutral" title="Configured maximum number of concurrent requests for this backend.">
-                max {{ backend.maxConcurrency }}
-              </span>
-            </div>
-          </td>
-          <td v-if="isConfigMode()">
+          <td v-if="isConfigMode()" class="backend-action-cell">
             <button
               class="icon-button compact"
               type="button"

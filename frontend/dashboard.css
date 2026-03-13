@@ -517,6 +517,14 @@
     @apply border-b-0;
   }
 
+  .backend-action-cell {
+    @apply align-middle text-center;
+  }
+
+  .backend-action-cell .icon-button {
+    @apply inline-flex;
+  }
+
   .table-name {
     @apply flex items-center gap-2.5 font-semibold text-stone-950;
   }

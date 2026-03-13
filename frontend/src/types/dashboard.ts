@@ -1,4 +1,4 @@
-export type DashboardPage = "overview" | "logs" | "chat" | "backends";
+export type DashboardPage = "overview" | "logs" | "chat" | "config";
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 export interface EditableServerConfig {

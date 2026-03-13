@@ -52,7 +52,7 @@ test("renderDashboardHtml uses the Vite dev server when configured", () => {
   try {
     const html = renderDashboardHtml(snapshot, {
       dashboardPath: "/dashboard",
-      page: "backends",
+      page: "config",
     });
 
     assert.match(html, /<style data-dashboard-boot>/);

@@ -32,12 +32,12 @@ export function createDashboardRouter() {
         component: ChatDebuggerPage,
       },
       {
-        path: "/config",
-        redirect: { name: "backends" },
+        path: "/backends",
+        redirect: { name: "config" },
       },
       {
-        path: "/backends",
-        name: "backends",
+        path: "/config",
+        name: "config",
         component: BackendsPage,
       },
     ],

@@ -20,7 +20,7 @@ export function getPageTitle(page: DashboardPage): string {
     return "Chat";
   }
 
-  if (page === "backends") {
+  if (page === "config") {
     return "Config";
   }
 

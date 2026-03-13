@@ -62,7 +62,7 @@ const serverConfigRows = computed(() => {
     <div class="panel">
       <div class="panel-header">
         <div>
-          <h2 class="panel-title">llmproxy</h2>
+          <h2 class="panel-title">Config</h2>
         </div>
         <button
           class="icon-button compact"
@@ -102,7 +102,7 @@ const serverConfigRows = computed(() => {
     <div class="panel">
       <div class="panel-header">
         <div>
-          <h2 class="panel-title">Backend Config</h2>
+          <h2 class="panel-title">Backends</h2>
           <p v-if="store.state.backendEditor.error && !store.state.backendEditor.open" class="hint inline-error">
             {{ store.state.backendEditor.error }}
           </p>

@@ -38,7 +38,7 @@ After that:
 - Proxy API: `http://localhost:4100/v1/...`
 - Dashboard: `http://localhost:4100/dashboard`
 - Chat: `http://localhost:4100/dashboard/chat`
-- Config: `http://localhost:4100/dashboard/backends`
+- Config: `http://localhost:4100/dashboard/config`
 
 The backend serves the built Vue dashboard app directly on the `/dashboard` routes, so frontend and backend stay separated while deployment still stays simple.
 
@@ -60,7 +60,7 @@ You still open the dashboard through the backend URL:
 
 - Dashboard: `http://localhost:4100/dashboard`
 - Chat: `http://localhost:4100/dashboard/chat`
-- Config: `http://localhost:4100/dashboard/backends`
+- Config: `http://localhost:4100/dashboard/config`
 
 In dev mode, those routes load the dashboard code from the Vite dev server automatically, so UI changes show up immediately without rebuilding manually.
 

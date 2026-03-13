@@ -19,7 +19,7 @@ const pageLinks: Array<{ page: DashboardPage; label: string }> = [
 
 const currentPage = computed(() => {
   const routeName = route.name;
-  if (routeName === "chat" || routeName === "backends" || routeName === "overview" || routeName === "logs") {
+  if (routeName === "chat" || routeName === "config" || routeName === "overview" || routeName === "logs") {
     return routeName;
   }
 
@@ -49,7 +49,7 @@ watch(
       <header class="hero">
         <div class="hero-bar">
           <div class="hero-nav-group">
-            <RouterLink class="brand-link" :to="{ name: 'backends' }" aria-label="Open config" title="Open config">
+            <RouterLink class="brand-link" :to="{ name: 'config' }" aria-label="Open config" title="Open config">
               <BrandLogo compact title="Open config" />
             </RouterLink>
             <nav class="page-nav" aria-label="Dashboard pages">
