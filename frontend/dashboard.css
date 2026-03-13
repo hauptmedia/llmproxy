@@ -421,7 +421,7 @@
   }
 
   .model-chip-button:hover {
-    @apply -translate-y-0.5;
+    @apply brightness-95;
   }
 
   .model-chip-link {

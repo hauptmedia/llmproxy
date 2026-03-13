@@ -64,6 +64,18 @@ const serverConfigRows = computed(() => {
         <div>
           <h2 class="panel-title">llmproxy</h2>
         </div>
+        <button
+          class="icon-button compact"
+          type="button"
+          title="Edit llmproxy config"
+          aria-label="Edit llmproxy config"
+          @click="store.openServerEditor"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"></path>
+          </svg>
+        </button>
       </div>
       <div v-if="store.state.serverEditor.notice" :class="['mb-4', 'config-notice', store.state.serverEditor.noticeTone]">
         {{ store.state.serverEditor.notice }}
@@ -90,7 +102,7 @@ const serverConfigRows = computed(() => {
     <div class="panel">
       <div class="panel-header">
         <div>
-          <h2 class="panel-title">Backends</h2>
+          <h2 class="panel-title">Backend Config</h2>
           <p v-if="store.state.backendEditor.error && !store.state.backendEditor.open" class="hint inline-error">
             {{ store.state.backendEditor.error }}
           </p>
@@ -110,6 +122,7 @@ const serverConfigRows = computed(() => {
       </div>
       <BackendTable
         :backends="store.state.snapshot.backends"
+        mode="config"
         @edit-backend="store.openEditBackend"
       />
     </div>

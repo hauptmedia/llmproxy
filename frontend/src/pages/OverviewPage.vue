@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import BackendTable from "../components/BackendTable.vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import { badgeClass, buildConnectionTransportBadges } from "../utils/dashboard-badges";
 import type { ActiveConnectionSnapshot } from "../types/dashboard";
@@ -65,6 +66,18 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
     <div class="panel">
       <div class="panel-header">
         <div>
+          <h2 class="panel-title">Backend Runtime</h2>
+        </div>
+      </div>
+      <BackendTable
+        :backends="store.state.snapshot.backends"
+        mode="runtime"
+      />
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
           <h2 class="panel-title">Active Connections</h2>
         </div>
       </div>
@@ -101,19 +114,6 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
             <div class="request-actions">
               <button
                 type="button"
-                class="icon-button"
-                :disabled="!connection.hasDetail"
-                :aria-label="connection.hasDetail ? 'Open active connection details' : 'Active connection details are not available yet'"
-                :title="connection.hasDetail ? 'Open the active request inspector.' : 'Detail data is not available for this request yet.'"
-                @click="store.openRequestDetail(connection.id)"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
-                  <circle cx="12" cy="12" r="2.8"></circle>
-                </svg>
-              </button>
-              <button
-                type="button"
                 class="icon-button danger"
                 :disabled="store.isRequestCancelling(connection.id)"
                 :aria-label="store.isRequestCancelling(connection.id) ? 'Ending the active connection' : 'End this active connection'"
@@ -125,6 +125,19 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
                   <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
                 </svg>
               </button>
+              <button
+                type="button"
+                class="icon-button"
+                :disabled="!connection.hasDetail"
+                :aria-label="connection.hasDetail ? 'Open active connection details' : 'Active connection details are not available yet'"
+                :title="connection.hasDetail ? 'Open the active request inspector.' : 'Detail data is not available for this request yet.'"
+                @click="store.openRequestDetail(connection.id)"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
+                    <circle cx="12" cy="12" r="2.8"></circle>
+                  </svg>
+                </button>
             </div>
           </div>
           <div class="request-meta">

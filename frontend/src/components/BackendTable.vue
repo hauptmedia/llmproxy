@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import ConnectorBadge from "./ConnectorBadge.vue";
 import ModelInfoDialog from "./ModelInfoDialog.vue";
 import {
   type BackendSnapshot,
@@ -9,9 +8,12 @@ import {
 import { formatDate, formatDuration } from "../utils/formatters";
 import { buildModelSpecs } from "../utils/model-specs";
 
-defineProps<{
+const props = withDefaults(defineProps<{
   backends: BackendSnapshot[];
-}>();
+  mode?: "runtime" | "config";
+}>(), {
+  mode: "runtime",
+});
 
 const emit = defineEmits<{
   (event: "edit-backend", backendId: string): void;
@@ -21,6 +23,14 @@ const selectedModelDetail = ref<ModelDetailView | null>(null);
 
 function modelSpecs(backend: BackendSnapshot) {
   return buildModelSpecs(backend.configuredModels, backend.discoveredModels, backend.discoveredModelDetails);
+}
+
+function isRuntimeMode(): boolean {
+  return props.mode === "runtime";
+}
+
+function isConfigMode(): boolean {
+  return props.mode === "config";
 }
 
 function backendStateClass(backend: BackendSnapshot): "good" | "bad" | "disabled" {
@@ -60,6 +70,10 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
 
   selectedModelDetail.value = detail;
 }
+
+function connectorLabel(connector: BackendSnapshot["connector"]): string {
+  return connector === "ollama" ? "Ollama" : "OpenAI-compatible";
+}
 </script>
 
 <template>
@@ -68,11 +82,13 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
       <thead>
         <tr>
           <th>Backend</th>
-          <th>Status</th>
-          <th>Models</th>
-          <th>Traffic</th>
-          <th>Latency</th>
-          <th>Config</th>
+          <th>Type</th>
+          <th v-if="isRuntimeMode()">Status</th>
+          <th v-if="isConfigMode()">Effective models</th>
+          <th v-if="isRuntimeMode()">Traffic</th>
+          <th v-if="isRuntimeMode()">Latency</th>
+          <th v-if="isConfigMode()">Config</th>
+          <th v-if="isConfigMode()">Action</th>
         </tr>
       </thead>
       <tbody>
@@ -87,13 +103,18 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
               <span>{{ backend.name }}</span>
             </div>
             <div class="table-sub backend-identity">
-              <ConnectorBadge :connector="backend.connector" />
               <span class="backend-url">{{ backend.baseUrl }}</span>
             </div>
           </td>
           <td>
+            <div class="log-primary">{{ connectorLabel(backend.connector) }}</div>
+          </td>
+          <td v-if="isRuntimeMode()">
             <div class="request-meta">
-              <span class="badge neutral" title="Current backend slot usage. The first number is the active connections on this backend, and the second is the configured maximum concurrency.">
+              <span
+                class="badge neutral"
+                title="Current backend slot usage. The first number is the active connections on this backend, and the second is the configured maximum concurrency."
+              >
                 connections {{ backend.activeRequests }} / {{ backend.maxConcurrency }}
               </span>
             </div>
@@ -105,7 +126,7 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
               </template>
             </div>
           </td>
-          <td>
+          <td v-if="isConfigMode()">
             <div class="models">
               <template v-for="spec in modelSpecs(backend)" :key="spec.text + spec.className">
                 <button
@@ -126,7 +147,7 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
               </template>
             </div>
           </td>
-          <td>
+          <td v-if="isRuntimeMode()">
             <div class="request-meta">
               <span class="badge good" title="Successful requests served by this backend.">ok {{ backend.successfulRequests }}</span>
               <span class="badge bad" title="Failed requests served by this backend.">fail {{ backend.failedRequests }}</span>
@@ -134,13 +155,23 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
             </div>
             <div class="table-sub">total {{ backend.totalRequests }}</div>
           </td>
-          <td>
+          <td v-if="isRuntimeMode()">
             <div class="request-meta">
               <span class="badge neutral" title="Rolling average latency observed for this backend.">avg {{ formatDuration(backend.avgLatencyMs) }}</span>
               <span class="badge neutral" title="Most recent observed latency for this backend.">last {{ formatDuration(backend.lastLatencyMs) }}</span>
             </div>
           </td>
-          <td>
+          <td v-if="isConfigMode()">
+            <div class="request-meta">
+              <span class="badge neutral" title="Whether this backend is enabled in config.">
+                {{ backend.enabled ? "enabled" : "disabled" }}
+              </span>
+              <span class="badge neutral" title="Configured maximum number of concurrent requests for this backend.">
+                max {{ backend.maxConcurrency }}
+              </span>
+            </div>
+          </td>
+          <td v-if="isConfigMode()">
             <button
               class="icon-button compact"
               type="button"
