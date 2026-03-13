@@ -107,6 +107,7 @@ function openSummaryDrilldown(card: SummaryCard, segmentIndex: number): void {
     <div id="backend-runtime" class="panel">
       <BackendTable
         :backends="store.state.snapshot.backends"
+        :active-connections="store.state.snapshot.activeConnections"
         :recent-requests="store.state.snapshot.recentRequests"
         :recent-request-limit="store.state.snapshot.recentRequestLimit"
         mode="runtime"
@@ -114,12 +115,6 @@ function openSummaryDrilldown(card: SummaryCard, segmentIndex: number): void {
     </div>
 
     <div class="panel">
-      <div class="panel-header">
-        <div>
-          <h2 class="panel-title">Connections</h2>
-        </div>
-      </div>
-
       <ConnectionPanel
         panel-id="active-connections"
         title="Active"

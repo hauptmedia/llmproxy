@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import ModelInfoDialog from "./ModelInfoDialog.vue";
 import {
+  type ActiveConnectionSnapshot,
   type BackendSnapshot,
   type ModelDetailView,
   type RequestLogEntry,
@@ -11,11 +12,13 @@ import { buildModelSpecs } from "../utils/model-specs";
 
 const props = withDefaults(defineProps<{
   backends: BackendSnapshot[];
+  activeConnections?: ActiveConnectionSnapshot[];
   recentRequests?: RequestLogEntry[];
   recentRequestLimit?: number;
   mode?: "runtime" | "config";
 }>(), {
   mode: "runtime",
+  activeConnections: () => [],
   recentRequests: () => [],
   recentRequestLimit: 0,
 });
@@ -129,6 +132,31 @@ function recentBackendAverageTokenRate(backend: BackendSnapshot): number | undef
   return total / rates.length;
 }
 
+function recentBackendLastTokenRate(backend: BackendSnapshot): number | undefined {
+  return recentBackendRequests(backend).find((entry) => typeof entry.completionTokensPerSecond === "number")?.completionTokensPerSecond;
+}
+
+function activeBackendConnections(backend: BackendSnapshot): ActiveConnectionSnapshot[] {
+  return props.activeConnections.filter((connection) => connection.backendId === backend.id);
+}
+
+function currentBackendTokenRate(backend: BackendSnapshot): number | undefined {
+  const activeConnections = activeBackendConnections(backend);
+  if (activeConnections.length === 0) {
+    return 0;
+  }
+
+  const rates = activeConnections
+    .map((connection) => connection.completionTokensPerSecond)
+    .filter((value): value is number => typeof value === "number" && !Number.isNaN(value));
+
+  if (rates.length === 0) {
+    return undefined;
+  }
+
+  return rates.reduce((sum, value) => sum + value, 0);
+}
+
 function recentWindowLabel(): string {
   return props.recentRequestLimit > 0
     ? `within the last ${props.recentRequestLimit} retained requests`
@@ -138,17 +166,36 @@ function recentWindowLabel(): string {
 
 <template>
   <div class="table-wrap">
-    <table class="backend-table">
+    <table :class="['backend-table', isRuntimeMode() ? 'backend-table-runtime' : 'backend-table-config']">
+      <colgroup v-if="isRuntimeMode()">
+        <col class="backend-col-name">
+        <col class="backend-col-type">
+        <col class="backend-col-connections">
+        <col class="backend-col-traffic">
+        <col class="backend-col-latency">
+        <col class="backend-col-throughput">
+      </colgroup>
+      <colgroup v-else>
+        <col class="backend-col-name">
+        <col class="backend-col-type">
+        <col class="backend-col-max-concurrency">
+        <col class="backend-col-models">
+        <col class="backend-col-action">
+      </colgroup>
       <thead>
         <tr>
           <th>Backend</th>
-          <th>Type</th>
-          <th v-if="isConfigMode()" class="backend-number-cell">Max concurrency</th>
-          <th v-if="isRuntimeMode()">Connections</th>
+          <th class="backend-type-cell">Type</th>
+          <th v-if="isConfigMode()" class="backend-number-cell backend-max-concurrency-cell">
+            <span class="backend-max-concurrency-content">Max concurrency</span>
+          </th>
+          <th v-if="isRuntimeMode()" class="backend-runtime-connections-cell">
+            <span class="backend-runtime-connections-anchor backend-runtime-connections-heading">Connections</span>
+          </th>
           <th v-if="isConfigMode()">Effective models</th>
           <th v-if="isRuntimeMode()">Traffic</th>
           <th v-if="isRuntimeMode()">Latency</th>
-          <th v-if="isRuntimeMode()">Token throughput</th>
+          <th v-if="isRuntimeMode()">Throughput</th>
           <th v-if="isConfigMode()">Action</th>
         </tr>
       </thead>
@@ -167,23 +214,31 @@ function recentWindowLabel(): string {
               <span class="backend-url">{{ backend.baseUrl }}</span>
             </div>
           </td>
-          <td>
-            <div class="log-primary">{{ connectorLabel(backend.connector) }}</div>
-          </td>
-          <td v-if="isConfigMode()" class="backend-number-cell">
-            <div class="log-primary" title="Configured maximum number of concurrent requests for this backend.">
-              {{ backend.maxConcurrency }}
+          <td class="backend-type-cell">
+            <div class="backend-type-content">
+              <div class="log-primary">{{ connectorLabel(backend.connector) }}</div>
             </div>
           </td>
-          <td v-if="isRuntimeMode()">
-            <div
-              class="log-primary"
-              title="Current backend slot usage. The first number is the active connections on this backend, and the second is the configured maximum concurrency."
-            >
-              {{ backend.activeRequests }} / {{ backend.maxConcurrency }}
+          <td v-if="isConfigMode()" class="backend-number-cell backend-max-concurrency-cell">
+            <div class="backend-max-concurrency-content">
+              <div class="log-primary" title="Configured maximum number of concurrent requests for this backend.">
+                {{ backend.maxConcurrency }}
+              </div>
             </div>
-            <div v-if="backendStatusError(backend)" class="table-sub">
-              {{ backendStatusError(backend) }}
+          </td>
+          <td v-if="isRuntimeMode()" class="backend-runtime-connections-cell">
+            <div class="backend-runtime-connections-shell">
+              <div class="backend-runtime-connections-anchor backend-runtime-connections-content">
+                <div
+                  class="backend-runtime-connections-value"
+                  title="Current backend slot usage. The first number is the active connections on this backend, and the second is the configured maximum concurrency."
+                >
+                  {{ backend.activeRequests }} / {{ backend.maxConcurrency }}
+                </div>
+                <div v-if="backendStatusError(backend)" class="table-sub">
+                  {{ backendStatusError(backend) }}
+                </div>
+              </div>
             </div>
           </td>
           <td v-if="isConfigMode()">
@@ -216,17 +271,32 @@ function recentWindowLabel(): string {
             <div class="table-sub" :title="`Total retained requests for this backend ${recentWindowLabel()}.`">total {{ recentBackendRequestCount(backend) }}</div>
           </td>
           <td v-if="isRuntimeMode()">
-            <div class="inline-metric-row log-primary">
-              <span class="inline-metric neutral" :title="`Average end-to-end latency for this backend ${recentWindowLabel()}.`">avg {{ formatDuration(recentBackendAverageLatency(backend)) }}</span>
-              <span class="inline-metric neutral" :title="`Most recent retained request latency for this backend ${recentWindowLabel()}.`">last {{ formatDuration(recentBackendLastLatency(backend)) }}</span>
+            <div class="backend-runtime-metric-stack log-primary">
+              <div>
+                <span class="inline-metric neutral" :title="`Average end-to-end latency for this backend ${recentWindowLabel()}.`">avg {{ formatDuration(recentBackendAverageLatency(backend)) }}</span>
+              </div>
+              <div>
+                <span class="inline-metric neutral" :title="`Most recent retained request latency for this backend ${recentWindowLabel()}.`">last {{ formatDuration(recentBackendLastLatency(backend)) }}</span>
+              </div>
             </div>
           </td>
           <td v-if="isRuntimeMode()">
-            <div
-              class="log-primary"
-              :title="`Average completion token rate for this backend ${recentWindowLabel()}. Only retained requests with measured token-rate metrics are included.`"
-            >
-              {{ formatTokenRate(recentBackendAverageTokenRate(backend)) || "n/a" }}
+            <div class="backend-runtime-metric-stack log-primary">
+              <div>
+                <span class="inline-metric neutral" :title="`Current summed completion token rate across active connections on this backend. Only active connections with measured token-rate metrics are included.`">
+                  all {{ formatTokenRate(currentBackendTokenRate(backend)) || "n/a" }}
+                </span>
+              </div>
+              <div>
+                <span class="inline-metric neutral" :title="`Average completion token rate for this backend ${recentWindowLabel()}. Only retained requests with measured token-rate metrics are included.`">
+                  avg {{ formatTokenRate(recentBackendAverageTokenRate(backend)) || "n/a" }}
+                </span>
+              </div>
+              <div>
+                <span class="inline-metric neutral" :title="`Most recent retained completion token rate for this backend ${recentWindowLabel()}.`">
+                  last {{ formatTokenRate(recentBackendLastTokenRate(backend)) || "n/a" }}
+                </span>
+              </div>
             </div>
           </td>
           <td v-if="isConfigMode()" class="backend-action-cell">

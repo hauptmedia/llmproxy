@@ -138,7 +138,7 @@ const tableEntries = computed<RecentRequestRow[]>(() => {
 });
 
 const outcomeOptions = computed(() => {
-  const options = [{ value: "all", label: "All outcomes" }];
+  const options = [{ value: "all", label: "All" }];
   const liveOutcomes = Array.from(
     new Set(
       tableEntries.value
@@ -918,8 +918,11 @@ onBeforeUnmount(() => {
             @click="resetFilters()"
           >
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 11a8.5 8.5 0 1 0 2.5-5.99"></path>
-              <path d="M3 4.5v5h5"></path>
+              <path d="M4 7h10"></path>
+              <path d="M14 7l4.5 4.5"></path>
+              <path d="M10 11l6 6"></path>
+              <path d="M7.5 13.5l4 4"></path>
+              <path d="M5 16l3 3"></path>
             </svg>
           </button>
         </div>
@@ -1057,7 +1060,7 @@ onBeforeUnmount(() => {
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('queue') }" :title="sortTitle('queue')" @click="toggleSort('queue')">
-                      <span class="log-header-label" :title="columnTitles.queue">Queue</span>
+                      <span class="log-header-label" :title="columnTitles.queue">Queued</span>
                       <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('queue') }}</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('queue') }" title="Filter queue" @click.stop="toggleFilter('queue')">

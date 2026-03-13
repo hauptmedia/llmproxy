@@ -569,6 +569,44 @@
     @apply w-full border-collapse;
   }
 
+  .backend-table-runtime {
+    table-layout: fixed;
+  }
+
+  .backend-table-config td {
+    vertical-align: middle;
+  }
+
+  .backend-col-name {
+    width: 28%;
+  }
+
+  .backend-col-type {
+    width: 12%;
+  }
+
+  .backend-col-connections {
+    width: 12%;
+  }
+
+  .backend-col-traffic,
+  .backend-col-latency,
+  .backend-col-throughput {
+    width: 16%;
+  }
+
+  .backend-col-max-concurrency {
+    width: 12%;
+  }
+
+  .backend-col-models {
+    width: 40%;
+  }
+
+  .backend-col-action {
+    width: 8%;
+  }
+
   .backend-table th,
   .backend-table td {
     @apply border-b border-amber-900/10 px-3 py-3.5 text-left align-top;
@@ -592,6 +630,73 @@
 
   .backend-number-cell {
     @apply text-center align-middle;
+  }
+
+  .backend-max-concurrency-cell {
+    @apply text-center align-middle;
+  }
+
+  .backend-max-concurrency-content {
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .backend-type-cell {
+    @apply align-middle;
+    vertical-align: middle;
+    text-align: left;
+  }
+
+  .backend-type-content {
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .backend-runtime-connections-cell {
+    @apply align-middle text-center;
+    width: 132px;
+  }
+
+  .backend-runtime-connections-anchor {
+    width: 88px;
+    margin-inline: auto;
+  }
+
+  .backend-runtime-connections-shell {
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .backend-runtime-connections-heading,
+  .backend-runtime-connections-value {
+    display: block;
+    width: 100%;
+    text-align: center;
+  }
+
+  .backend-runtime-connections-content {
+    @apply flex flex-col items-center justify-center;
+    gap: 0.375rem;
+    min-height: 100%;
+  }
+
+  .backend-runtime-connections-content > * {
+    text-align: center;
+  }
+
+  .backend-runtime-connections-value {
+    font-size: 1.14rem;
+    font-weight: 400;
+    line-height: 1.15;
+    letter-spacing: 0.01em;
   }
 
   .table-name {
@@ -857,6 +962,10 @@
 
   .inline-metric-row {
     @apply flex flex-wrap items-center gap-x-3 gap-y-1;
+  }
+
+  .backend-runtime-metric-stack {
+    @apply grid gap-1.5;
   }
 
   .inline-metric {

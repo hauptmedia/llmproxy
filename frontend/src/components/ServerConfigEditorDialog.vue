@@ -82,7 +82,7 @@ const pendingRestartMessage = computed(() => {
 const hasPendingRestartEdits = computed(() => pendingRestartFields.value.length > 0);
 
 function liveFieldSummary(): string {
-  return "request timeout, queue timeout, health check interval, and recent request limit";
+  return "runtime settings";
 }
 </script>
 
@@ -102,7 +102,7 @@ function liveFieldSummary(): string {
               Runtime settings like <span class="mono">{{ liveFieldSummary() }}</span> apply immediately where possible.
             </p>
           </div>
-          <DialogCloseButton compact :disabled="state.saving" @click="closeDialog" />
+          <DialogCloseButton :disabled="state.saving" @click="closeDialog" />
         </div>
 
         <section class="request-detail-card">
