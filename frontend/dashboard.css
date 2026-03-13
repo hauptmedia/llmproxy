@@ -554,7 +554,7 @@
 
   .log-table {
     table-layout: auto;
-    min-width: 1560px;
+    min-width: 1280px;
   }
 
   .log-table-wrap {
@@ -566,6 +566,7 @@
   .log-table th,
   .log-table td {
     vertical-align: top;
+    padding: 10px 9px;
   }
 
   .log-header-filter {
@@ -573,7 +574,7 @@
   }
 
   .log-header-cell {
-    @apply flex items-center justify-between gap-2;
+    @apply flex items-center justify-between gap-1.5;
   }
 
   .log-header-label {
@@ -582,14 +583,14 @@
 
   .log-filter-trigger {
     @apply inline-flex items-center justify-center rounded-full border border-amber-900/10 bg-white/92 text-stone-500 transition duration-150;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     flex: 0 0 auto;
   }
 
   .log-filter-trigger svg {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     display: block;
   }
 
@@ -604,7 +605,7 @@
 
   .table-filter-popover {
     @apply absolute left-0 top-full z-20 mt-2 grid gap-2.5 border border-amber-900/10 bg-white/96 p-3 shadow-xl backdrop-blur-sm;
-    min-width: min(260px, calc(100vw - 64px));
+    min-width: min(220px, calc(100vw - 48px));
     border-radius: 1rem;
   }
 
@@ -629,44 +630,44 @@
   }
 
   .log-col-time {
-    width: 168px;
+    width: 136px;
   }
 
   .log-col-outcome {
-    width: 170px;
+    width: 144px;
   }
 
   .log-col-request {
-    width: 290px;
+    width: 232px;
   }
 
   .log-col-model {
-    width: 190px;
+    width: 148px;
   }
 
   .log-col-backend {
-    width: 190px;
+    width: 148px;
   }
 
   .log-col-queue,
   .log-col-latency {
-    width: 164px;
+    width: 112px;
   }
 
   .log-col-tokens {
-    width: 156px;
+    width: 102px;
   }
 
   .log-col-token-rate {
-    width: 156px;
+    width: 102px;
   }
 
   .log-col-note {
-    width: 240px;
+    width: 172px;
   }
 
   .log-col-action {
-    width: 74px;
+    width: 56px;
   }
 
   .log-cell-tight {
@@ -674,11 +675,16 @@
   }
 
   .log-primary {
-    @apply text-sm font-semibold text-stone-900;
+    @apply text-[13px] font-semibold leading-snug text-stone-900;
   }
 
   .log-secondary {
-    @apply mt-1 text-xs leading-relaxed text-stone-500 break-words;
+    @apply mt-0.5 text-[11px] leading-snug text-stone-500;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    overflow: hidden;
+    word-break: break-word;
   }
 
   .log-muted {
@@ -686,10 +692,10 @@
   }
 
   .log-note {
-    @apply text-sm leading-relaxed text-stone-600;
+    @apply text-[12px] leading-snug text-stone-600;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 1;
     overflow: hidden;
     word-break: break-word;
   }
@@ -1109,11 +1115,11 @@
   }
 
   .log-table {
-    min-width: 1480px;
+    min-width: 1200px;
   }
 
   .table-filter-popover {
-    min-width: 220px;
+    min-width: 200px;
   }
 }
 
@@ -1170,6 +1176,6 @@
   }
 
   .log-table {
-    min-width: 1380px;
+    min-width: 1100px;
   }
 }

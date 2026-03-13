@@ -51,6 +51,20 @@ const numericComparatorOptions = [
   { value: "lt", label: "<" },
 ];
 
+const columnTitles: Record<FilterKey | "action", string> = {
+  time: "When llmproxy recorded this request in the retained recent-request history.",
+  outcome: "Final request result. Successful requests show their backend finish reason instead of a generic success label.",
+  request: "Short request identifier plus the proxied API route that was called.",
+  model: "Model name requested by the client.",
+  backend: "Backend that ultimately handled the request.",
+  queue: "Time the request spent waiting for a free backend slot before execution began.",
+  latency: "Total end-to-end request duration from arrival at llmproxy until completion.",
+  tokens: "Generated completion tokens for this request. Falls back to other stored token totals when needed.",
+  rate: "Generation speed in tokens per second, when available from live or final metrics.",
+  note: "Error text or other noteworthy final detail recorded for this request.",
+  action: "Open the stored request debugger for this entry when detailed request data is available.",
+};
+
 const outcomeOptions = computed(() => {
   const options = [{ value: "all", label: "All outcomes" }];
   const finishReasons = Array.from(
@@ -485,7 +499,7 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label">Time</span>
+                    <span class="log-header-label" :title="columnTitles.time">Time</span>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('time') }" title="Filter time" @click.stop="toggleFilter('time')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -503,7 +517,7 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label">Outcome</span>
+                    <span class="log-header-label" :title="columnTitles.outcome">Outcome</span>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('outcome') }" title="Filter outcome" @click.stop="toggleFilter('outcome')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -523,7 +537,7 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label">Request</span>
+                    <span class="log-header-label" :title="columnTitles.request">Request</span>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('request') }" title="Filter request" @click.stop="toggleFilter('request')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -541,7 +555,7 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label">Model</span>
+                    <span class="log-header-label" :title="columnTitles.model">Model</span>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('model') }" title="Filter model" @click.stop="toggleFilter('model')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -561,7 +575,7 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label">Backend</span>
+                    <span class="log-header-label" :title="columnTitles.backend">Backend</span>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('backend') }" title="Filter backend" @click.stop="toggleFilter('backend')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -581,7 +595,7 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label">Queue</span>
+                    <span class="log-header-label" :title="columnTitles.queue">Queue</span>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('queue') }" title="Filter queue" @click.stop="toggleFilter('queue')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -604,7 +618,7 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label">Latency</span>
+                    <span class="log-header-label" :title="columnTitles.latency">Latency</span>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('latency') }" title="Filter latency" @click.stop="toggleFilter('latency')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -627,7 +641,7 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label">Tokens</span>
+                    <span class="log-header-label" :title="columnTitles.tokens">Tokens</span>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('tokens') }" title="Filter tokens" @click.stop="toggleFilter('tokens')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -650,7 +664,7 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label">tok/s</span>
+                    <span class="log-header-label" :title="columnTitles.rate">tok/s</span>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('rate') }" title="Filter token rate" @click.stop="toggleFilter('rate')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -673,7 +687,7 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label">Note</span>
+                    <span class="log-header-label" :title="columnTitles.note">Note</span>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('note') }" title="Filter note" @click.stop="toggleFilter('note')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -688,7 +702,7 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
               </th>
-              <th>Action</th>
+              <th :title="columnTitles.action">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -737,7 +751,7 @@ onBeforeUnmount(() => {
               <td class="log-cell-tight">
                 <button
                   type="button"
-                  class="icon-button"
+                  class="icon-button compact"
                   :disabled="!entry.hasDetail"
                   :aria-label="entry.hasDetail ? 'Open request details' : 'No request details available'"
                   :title="entry.hasDetail ? 'Open the stored request inspector.' : 'No stored detail is available for this request.'"
