@@ -5,7 +5,8 @@
     "dashboardPath": "/dashboard",
     "requestTimeoutMs": 600000,
     "queueTimeoutMs": 30000,
-    "healthCheckIntervalMs": 10000
+    "healthCheckIntervalMs": 10000,
+    "recentRequestLimit": 1000
   },
   "backends": [
     {

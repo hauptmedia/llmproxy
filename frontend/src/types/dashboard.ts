@@ -10,6 +10,7 @@ export interface DashboardBootstrap {
 export interface ProxySnapshot {
   startedAt: string;
   queueDepth: number;
+  recentRequestLimit: number;
   totals: {
     activeRequests: number;
     successfulRequests: number;

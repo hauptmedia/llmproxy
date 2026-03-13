@@ -771,6 +771,7 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
     },
     backends: [
       {
@@ -799,6 +800,7 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
     },
     backends: [
       {
@@ -968,6 +970,7 @@ test("ollama connector keeps the client surface OpenAI-compatible", async (t) =>
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
     },
     backends: [
       {
@@ -1099,6 +1102,7 @@ test("proxy preserves max_tokens and tool calls for non-streaming chat clients",
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
     },
     backends: [
       {
@@ -1307,6 +1311,7 @@ test("active connections expose live request details for chat history inspection
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
     },
     backends: [
       {
@@ -1433,6 +1438,7 @@ test("cancelled requests retain the partial streamed response in request history
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
     },
     backends: [
       {
@@ -1552,6 +1558,7 @@ test("dashboard can cancel a live connection and retain the partial response in 
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
     },
     backends: [
       {
@@ -1641,3 +1648,4 @@ test("dashboard can cancel a live connection and retain the partial response in 
   assert.equal(detailPayload.entry.outcome, "cancelled");
   assert.match(detailPayload.responseBody?.choices?.[0]?.message?.content ?? "", /Streaming/);
 });
+

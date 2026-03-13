@@ -46,8 +46,6 @@ interface LoadBalancerOptions {
   fetcher?: typeof fetch;
 }
 
-const MAX_RECENT_REQUESTS = 60;
-
 export class LoadBalancer extends EventEmitter {
   private readonly fetcher: typeof fetch;
   private readonly startedAt = new Date().toISOString();
@@ -78,6 +76,7 @@ export class LoadBalancer extends EventEmitter {
     return {
       startedAt: this.startedAt,
       queueDepth: this.queue.length,
+      recentRequestLimit: this.config.server.recentRequestLimit,
       totals: {
         activeRequests: backends.reduce((sum, backend) => sum + backend.activeRequests, 0),
         successfulRequests: backends.reduce((sum, backend) => sum + backend.successfulRequests, 0),
@@ -161,6 +160,7 @@ export class LoadBalancer extends EventEmitter {
     });
 
     this.emitSnapshot();
+    this.trimRecentRequests();
     void this.refreshHealth();
   }
 
@@ -335,7 +335,7 @@ export class LoadBalancer extends EventEmitter {
           metricsExact: result.metricsExact,
           hasDetail: route.requestBody !== undefined || result.responseBody !== undefined,
         });
-        this.recentRequests = this.recentRequests.slice(0, MAX_RECENT_REQUESTS);
+        this.trimRecentRequests();
         this.storeRecentRequestDetail(route.id, route.requestBody, result.responseBody);
 
         this.pumpQueue();
@@ -543,8 +543,19 @@ export class LoadBalancer extends EventEmitter {
       error,
       hasDetail: route.requestBody !== undefined,
     });
-    this.recentRequests = this.recentRequests.slice(0, MAX_RECENT_REQUESTS);
+    this.trimRecentRequests();
     this.storeRecentRequestDetail(route.id, route.requestBody, undefined);
+  }
+
+  private trimRecentRequests(): void {
+    this.recentRequests = this.recentRequests.slice(0, this.config.server.recentRequestLimit);
+
+    const activeIds = new Set(this.recentRequests.map((entry) => entry.id));
+    for (const id of Array.from(this.recentRequestDetails.keys())) {
+      if (!activeIds.has(id)) {
+        this.recentRequestDetails.delete(id);
+      }
+    }
   }
 
   private storeRecentRequestDetail(
@@ -561,12 +572,7 @@ export class LoadBalancer extends EventEmitter {
       this.recentRequestDetails.delete(requestId);
     }
 
-    const activeIds = new Set(this.recentRequests.map((entry) => entry.id));
-    for (const id of Array.from(this.recentRequestDetails.keys())) {
-      if (!activeIds.has(id)) {
-        this.recentRequestDetails.delete(id);
-      }
-    }
+    this.trimRecentRequests();
   }
 }
 

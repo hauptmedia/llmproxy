@@ -87,8 +87,9 @@ The example configuration includes:
 - one local `llama.cpp` backend at `http://127.0.0.1:8080`
 - `maxConcurrency: 1`, which is a sensible default for most local single-model setups
 
-Important backend fields:
+Important configuration fields:
 
+- `recentRequestLimit`: maximum number of recent request log entries to retain in memory and show in the dashboard, default `1000`
 - `baseUrl`: target URL of the OpenAI-compatible backend
 - `connector`: backend adapter to use, currently `openai` or `ollama`
 - `maxConcurrency`: concurrent requests allowed for that backend

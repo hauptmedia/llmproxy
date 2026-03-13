@@ -45,6 +45,8 @@ export function badgeClass(badge: UiBadge): string {
 export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
   const enabledCount = snapshot.backends.filter((backend) => backend.enabled).length;
   const healthyCount = snapshot.backends.filter((backend) => backend.enabled && backend.healthy).length;
+  const recentSuccessCount = snapshot.recentRequests.filter((entry) => entry.outcome === "success").length;
+  const recentFailureCount = snapshot.recentRequests.filter((entry) => entry.outcome === "error").length;
   const healthyTone =
     healthyCount === 0
       ? "bad"
@@ -90,17 +92,17 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
     {
       key: "successful-requests",
       label: "Successful Requests",
-      value: snapshot.totals.successfulRequests,
+      value: recentSuccessCount,
       note: "",
-      title: "Successfully completed requests observed since this llmproxy instance started.",
+      title: `Successfully completed requests within the last ${snapshot.recentRequestLimit} retained log entries.`,
       tone: "good",
     },
     {
       key: "failed-requests",
       label: "Failed Requests",
-      value: snapshot.totals.failedRequests,
+      value: recentFailureCount,
       note: "",
-      title: "Requests that failed while being proxied or returned an upstream/server error.",
+      title: `Requests within the last ${snapshot.recentRequestLimit} retained log entries that failed while being proxied or returned an upstream/server error.`,
       tone: "bad",
     },
     {

@@ -9,6 +9,7 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
   requestTimeoutMs: 10 * 60 * 1000,
   queueTimeoutMs: 30 * 1000,
   healthCheckIntervalMs: 10 * 1000,
+  recentRequestLimit: 1000,
 };
 
 export type BackendPatch = Partial<Pick<BackendConfig, "enabled" | "maxConcurrency">>;
@@ -100,6 +101,10 @@ function normalizeServerConfig(config?: Partial<ServerConfig>): ServerConfig {
       typeof config?.healthCheckIntervalMs === "number" && config.healthCheckIntervalMs > 0
         ? config.healthCheckIntervalMs
         : DEFAULT_SERVER_CONFIG.healthCheckIntervalMs,
+    recentRequestLimit:
+      typeof config?.recentRequestLimit === "number" && Number.isInteger(config.recentRequestLimit) && config.recentRequestLimit > 0
+        ? config.recentRequestLimit
+        : DEFAULT_SERVER_CONFIG.recentRequestLimit,
   };
 }
 

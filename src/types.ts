@@ -12,6 +12,7 @@ export interface ServerConfig {
   requestTimeoutMs: number;
   queueTimeoutMs: number;
   healthCheckIntervalMs: number;
+  recentRequestLimit: number;
 }
 
 export interface BackendConfig {
@@ -184,6 +185,7 @@ export interface KnownModel {
 export interface ProxySnapshot {
   startedAt: string;
   queueDepth: number;
+  recentRequestLimit: number;
   totals: {
     activeRequests: number;
     successfulRequests: number;

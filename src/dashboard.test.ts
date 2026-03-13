@@ -6,6 +6,7 @@ import { ProxySnapshot } from "./types";
 const snapshot: ProxySnapshot = {
   startedAt: new Date(0).toISOString(),
   queueDepth: 0,
+  recentRequestLimit: 1000,
   totals: {
     activeRequests: 0,
     successfulRequests: 0,

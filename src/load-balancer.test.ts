@@ -12,6 +12,7 @@ const TEST_CONFIG: ProxyConfig = {
     requestTimeoutMs: 5_000,
     queueTimeoutMs: 500,
     healthCheckIntervalMs: 10_000,
+    recentRequestLimit: 1000,
   },
   backends: [
     {
@@ -121,6 +122,7 @@ test("captures discovered model metadata from /v1/models for backend snapshots",
       requestTimeoutMs: 5_000,
       queueTimeoutMs: 500,
       healthCheckIntervalMs: 10_000,
+      recentRequestLimit: 1000,
     },
     backends: [
       {
@@ -265,3 +267,52 @@ test("releasing a lease after replaceConfig updates the current backend runtime"
   assert.equal(snapshot.backends[0]?.activeRequests, 0);
   assert.equal(snapshot.backends[0]?.successfulRequests, 2);
 });
+
+test("retains only the configured number of recent requests", async () => {
+  const balancer = new LoadBalancer({
+    ...TEST_CONFIG,
+    server: {
+      ...TEST_CONFIG.server,
+      recentRequestLimit: 2,
+    },
+  }, {
+    fetcher: async () =>
+      new Response(JSON.stringify({ object: "list", data: [] }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+  });
+
+  for (const requestId of ["req-limit-1", "req-limit-2", "req-limit-3"]) {
+    const lease = await balancer.acquire({
+      id: requestId,
+      receivedAt: Date.now(),
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "chat-local",
+      stream: true,
+      requestBody: {
+        model: "chat-local",
+      },
+    });
+
+    lease.release({
+      outcome: "success",
+      latencyMs: 50,
+      statusCode: 200,
+      queuedMs: lease.queueMs,
+      responseBody: {
+        id: requestId,
+      },
+    });
+  }
+
+  const snapshot = balancer.getSnapshot();
+  assert.equal(snapshot.recentRequestLimit, 2);
+  assert.deepEqual(snapshot.recentRequests.map((entry) => entry.id), ["req-limit-3", "req-limit-2"]);
+  assert.equal(balancer.getRequestLogDetail("req-limit-1"), undefined);
+  assert.equal(balancer.getRequestLogDetail("req-limit-2")?.entry.id, "req-limit-2");
+});
+
