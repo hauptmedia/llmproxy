@@ -46,15 +46,37 @@ function formatClientIp(value?: string): string | undefined {
   return trimmed;
 }
 
-function connectionHeadline(connection: ActiveConnectionSnapshot): string {
-  const parts = [
-    formatClientIp(connection.clientIp) ? `IP ${formatClientIp(connection.clientIp)}` : undefined,
-    store.shortId(connection.id),
-    connection.model,
-    connection.backendName,
-  ].filter((value): value is string => Boolean(value));
+function connectionIdentityBadges(connection: ActiveConnectionSnapshot): Array<{ text: string; title: string }> {
+  const badges: Array<{ text: string; title: string }> = [];
+  const clientIp = formatClientIp(connection.clientIp);
 
-  return parts.join(" › ");
+  if (clientIp) {
+    badges.push({
+      text: `IP ${clientIp}`,
+      title: `Client IP address: ${clientIp}.`,
+    });
+  }
+
+  badges.push({
+    text: `req ${store.shortId(connection.id)}`,
+    title: `Request ID: ${connection.id}.`,
+  });
+
+  if (connection.model) {
+    badges.push({
+      text: `model ${connection.model}`,
+      title: `Requested or selected model: ${connection.model}.`,
+    });
+  }
+
+  if (connection.backendName) {
+    badges.push({
+      text: `backend ${connection.backendName}`,
+      title: `Currently assigned backend: ${connection.backendName}.`,
+    });
+  }
+
+  return badges;
 }
 </script>
 
@@ -75,26 +97,29 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
       >
         <div class="request-main">
           <div class="request-card-body">
-            <div>
-              <div class="request-topline">
-                {{ connectionHeadline(connection) }}
-              </div>
-              <div class="request-title-row">
-                <span
-                  class="badge neutral"
-                  title="This live entry is a chat completion request."
-                >
-                  Chat Completion
-                </span>
-                <span
-                  v-for="(badge, index) in buildConnectionTransportBadges(connection)"
-                  :key="`${connection.id}-transport-${index}`"
-                  :class="badgeClass(badge)"
-                  :title="badge.title"
-                >
-                  {{ badge.text }}
-                </span>
-              </div>
+            <div class="request-title-row">
+              <span
+                class="badge neutral"
+                title="This live entry is a chat completion request."
+              >
+                Chat Completion
+              </span>
+              <span
+                v-for="identityBadge in connectionIdentityBadges(connection)"
+                :key="`${connection.id}-${identityBadge.text}`"
+                class="badge neutral"
+                :title="identityBadge.title"
+              >
+                {{ identityBadge.text }}
+              </span>
+              <span
+                v-for="(badge, index) in buildConnectionTransportBadges(connection)"
+                :key="`${connection.id}-transport-${index}`"
+                :class="badgeClass(badge)"
+                :title="badge.title"
+              >
+                {{ badge.text }}
+              </span>
             </div>
           </div>
           <div class="request-actions">
