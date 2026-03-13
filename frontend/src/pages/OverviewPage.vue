@@ -117,7 +117,7 @@ function openSummaryDrilldown(card: SummaryCard, segmentIndex: number): void {
     <div class="panel">
       <ConnectionPanel
         panel-id="active-connections"
-        title="Active"
+        title="Connections"
         empty-text="No active connections are running right now."
         :connections="activeConnections"
         embedded

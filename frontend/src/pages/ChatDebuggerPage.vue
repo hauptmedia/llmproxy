@@ -152,8 +152,12 @@ const chatConversationSignature = computed(() => [
             />
           </div>
 
-          <template v-if="hasTranscript" #footer>
-            <form class="chat-composer chat-composer-inline" @submit.prevent="store.sendDebugChat()">
+          <template #footer>
+            <form
+              v-if="hasTranscript && !store.state.debug.sending"
+              class="chat-composer chat-composer-inline"
+              @submit.prevent="store.sendDebugChat()"
+            >
               <label class="field-label" for="debug-follow-up">Follow-up message</label>
               <textarea
                 id="debug-follow-up"
@@ -168,61 +172,61 @@ const chatConversationSignature = computed(() => [
                 </button>
               </div>
             </form>
+
+            <div class="chat-toolbar">
+              <details class="chat-advanced-panel">
+                <summary class="chat-advanced-summary">Advanced parameters</summary>
+                <div class="chat-advanced-body">
+                  <p class="chat-advanced-note">Streaming is always enabled so llmproxy can show live metrics and keep the request debugger in sync.</p>
+                  <div class="param-grid">
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-temperature">Temperature</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.temperature" aria-label="Temperature help">i</span>
+                      </div>
+                      <input id="debug-temperature" v-model.number="store.state.debug.params.temperature" :title="advancedParamHelp.temperature" type="number" step="0.1" min="0" />
+                    </div>
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-top-p">Top P</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.top_p" aria-label="Top P help">i</span>
+                      </div>
+                      <input id="debug-top-p" v-model.number="store.state.debug.params.top_p" :title="advancedParamHelp.top_p" type="number" step="0.01" min="0" max="1" />
+                    </div>
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-top-k">Top K</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.top_k" aria-label="Top K help">i</span>
+                      </div>
+                      <input id="debug-top-k" v-model.number="store.state.debug.params.top_k" :title="advancedParamHelp.top_k" type="number" step="1" min="0" />
+                    </div>
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-min-p">Min P</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.min_p" aria-label="Min P help">i</span>
+                      </div>
+                      <input id="debug-min-p" v-model.number="store.state.debug.params.min_p" :title="advancedParamHelp.min_p" type="number" step="0.01" min="0" max="1" />
+                    </div>
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-repeat-penalty">Repeat Penalty</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.repeat_penalty" aria-label="Repeat Penalty help">i</span>
+                      </div>
+                      <input id="debug-repeat-penalty" v-model.number="store.state.debug.params.repeat_penalty" :title="advancedParamHelp.repeat_penalty" type="number" step="0.05" min="0" />
+                    </div>
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-max-tokens">Max Tokens</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.max_tokens" aria-label="Max Tokens help">i</span>
+                      </div>
+                      <input id="debug-max-tokens" v-model.number="store.state.debug.params.max_tokens" :title="advancedParamHelp.max_tokens" type="number" step="1" min="1" />
+                    </div>
+                  </div>
+                </div>
+              </details>
+            </div>
           </template>
         </ConversationSurface>
-      </div>
-
-      <div class="chat-toolbar">
-        <details class="chat-advanced-panel">
-          <summary class="chat-advanced-summary">Advanced parameters</summary>
-          <div class="chat-advanced-body">
-            <p class="chat-advanced-note">Streaming is always enabled so llmproxy can show live metrics and keep the request debugger in sync.</p>
-            <div class="param-grid">
-              <div class="field">
-                <div class="field-label-row">
-                  <label class="field-label" for="debug-temperature">Temperature</label>
-                  <span class="chat-param-help" :title="advancedParamHelp.temperature" aria-label="Temperature help">i</span>
-                </div>
-                <input id="debug-temperature" v-model.number="store.state.debug.params.temperature" :title="advancedParamHelp.temperature" type="number" step="0.1" min="0" />
-              </div>
-              <div class="field">
-                <div class="field-label-row">
-                  <label class="field-label" for="debug-top-p">Top P</label>
-                  <span class="chat-param-help" :title="advancedParamHelp.top_p" aria-label="Top P help">i</span>
-                </div>
-                <input id="debug-top-p" v-model.number="store.state.debug.params.top_p" :title="advancedParamHelp.top_p" type="number" step="0.01" min="0" max="1" />
-              </div>
-              <div class="field">
-                <div class="field-label-row">
-                  <label class="field-label" for="debug-top-k">Top K</label>
-                  <span class="chat-param-help" :title="advancedParamHelp.top_k" aria-label="Top K help">i</span>
-                </div>
-                <input id="debug-top-k" v-model.number="store.state.debug.params.top_k" :title="advancedParamHelp.top_k" type="number" step="1" min="0" />
-              </div>
-              <div class="field">
-                <div class="field-label-row">
-                  <label class="field-label" for="debug-min-p">Min P</label>
-                  <span class="chat-param-help" :title="advancedParamHelp.min_p" aria-label="Min P help">i</span>
-                </div>
-                <input id="debug-min-p" v-model.number="store.state.debug.params.min_p" :title="advancedParamHelp.min_p" type="number" step="0.01" min="0" max="1" />
-              </div>
-              <div class="field">
-                <div class="field-label-row">
-                  <label class="field-label" for="debug-repeat-penalty">Repeat Penalty</label>
-                  <span class="chat-param-help" :title="advancedParamHelp.repeat_penalty" aria-label="Repeat Penalty help">i</span>
-                </div>
-                <input id="debug-repeat-penalty" v-model.number="store.state.debug.params.repeat_penalty" :title="advancedParamHelp.repeat_penalty" type="number" step="0.05" min="0" />
-              </div>
-              <div class="field">
-                <div class="field-label-row">
-                  <label class="field-label" for="debug-max-tokens">Max Tokens</label>
-                  <span class="chat-param-help" :title="advancedParamHelp.max_tokens" aria-label="Max Tokens help">i</span>
-                </div>
-                <input id="debug-max-tokens" v-model.number="store.state.debug.params.max_tokens" :title="advancedParamHelp.max_tokens" type="number" step="1" min="1" />
-              </div>
-            </div>
-          </div>
-        </details>
       </div>
     </div>
   </section>

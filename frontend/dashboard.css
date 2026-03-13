@@ -427,6 +427,12 @@
     color: #0f766e;
   }
 
+  .summary-card-healthy-backends,
+  .summary-card-live-connections {
+    background: rgba(255, 255, 255, 0.92) !important;
+    background-image: none !important;
+  }
+
   .card-label {
     @apply text-xs font-medium uppercase tracking-[0.06em] text-stone-500;
   }
