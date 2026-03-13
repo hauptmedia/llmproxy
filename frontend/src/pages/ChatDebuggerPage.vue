@@ -58,13 +58,16 @@ const chatConversationSignature = computed(() => [
 
 <template>
   <section class="page-section chat-page-section">
-    <div class="panel chat-panel">
+    <div class="chat-panel">
       <div class="chat-thread">
-        <div class="panel-header">
-          <div class="chat-header-main">
-            <h2 class="panel-title">Conversation</h2>
-          </div>
-          <div class="debug-actions">
+        <ConversationSurface
+          title="Conversation"
+          card-class="chat-conversation-card"
+          viewport-class="chat-conversation-viewport"
+          :reset-key="hasTranscript ? 'ready' : 'initial'"
+          :scroll-signature="chatConversationSignature"
+        >
+          <template #headerActions>
             <button
               v-if="store.state.debug.lastRequestId"
               class="icon-button compact"
@@ -94,15 +97,8 @@ const chatConversationSignature = computed(() => [
                 <path d="M14 11v4.5"></path>
               </svg>
             </button>
-          </div>
-        </div>
+          </template>
 
-        <ConversationSurface
-          card-class="chat-conversation-card"
-          viewport-class="chat-conversation-viewport"
-          :reset-key="hasTranscript ? 'ready' : 'initial'"
-          :scroll-signature="chatConversationSignature"
-        >
             <div class="transcript chat-transcript">
               <div v-if="!hasTranscript" class="turn system chat-editor-turn">
                 <textarea
@@ -177,15 +173,18 @@ const chatConversationSignature = computed(() => [
                 </div>
               </div>
               <div class="chat-composer-actions">
-                <div class="field chat-composer-model-field">
-                  <select id="debug-model" v-model="store.state.debug.model" class="chat-composer-model-select">
-                    <option value="auto">auto</option>
-                    <option v-for="model in store.state.models" :key="model.id" :value="model.id">
-                      {{ model.id }}
-                    </option>
-                  </select>
-                </div>
-                <div class="chat-composer-primary-actions">
+                <div class="chat-composer-settings">
+                  <div class="field chat-composer-model-field">
+                    <div class="chat-composer-model-inline-control">
+                      <label class="field-label chat-composer-model-label" for="debug-model">Model</label>
+                      <select id="debug-model" v-model="store.state.debug.model" class="chat-composer-model-select">
+                        <option value="auto">auto</option>
+                        <option v-for="model in store.state.models" :key="model.id" :value="model.id">
+                          {{ model.id }}
+                        </option>
+                      </select>
+                    </div>
+                  </div>
                   <button
                     class="icon-button compact"
                     type="button"
@@ -194,17 +193,19 @@ const chatConversationSignature = computed(() => [
                     @click="showAdvancedParameters = !showAdvancedParameters"
                   >
                     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                      <circle cx="12" cy="12" r="3.2"></circle>
-                      <path d="M12 2.75v2.1"></path>
-                      <path d="M12 19.15v2.1"></path>
-                      <path d="m4.93 4.93 1.48 1.48"></path>
-                      <path d="m17.59 17.59 1.48 1.48"></path>
-                      <path d="M2.75 12h2.1"></path>
-                      <path d="M19.15 12h2.1"></path>
-                      <path d="m4.93 19.07 1.48-1.48"></path>
-                      <path d="m17.59 6.41 1.48-1.48"></path>
+                      <path d="M4 7h10"></path>
+                      <path d="M18 7h2"></path>
+                      <path d="M14 7a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
+                      <path d="M4 12h4"></path>
+                      <path d="M12 12h8"></path>
+                      <path d="M8 12a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
+                      <path d="M4 17h10"></path>
+                      <path d="M18 17h2"></path>
+                      <path d="M14 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
                     </svg>
                   </button>
+                </div>
+                <div class="chat-composer-primary-actions">
                   <button class="button" type="submit" :disabled="store.state.debug.sending">
                     {{ store.state.debug.sending ? "Sending..." : "Send first message" }}
                   </button>
@@ -228,7 +229,6 @@ const chatConversationSignature = computed(() => [
               class="chat-composer chat-composer-inline"
               @submit.prevent="store.sendDebugChat()"
             >
-              <label class="field-label" for="debug-follow-up">Follow-up message</label>
               <textarea
                 id="debug-follow-up"
                 v-model="store.state.debug.prompt"
@@ -285,15 +285,18 @@ const chatConversationSignature = computed(() => [
                 </div>
               </div>
               <div class="chat-composer-actions">
-                <div class="field chat-composer-model-field">
-                  <select v-model="store.state.debug.model" class="chat-composer-model-select">
-                    <option value="auto">auto</option>
-                    <option v-for="model in store.state.models" :key="model.id" :value="model.id">
-                      {{ model.id }}
-                    </option>
-                  </select>
-                </div>
-                <div class="chat-composer-primary-actions">
+                <div class="chat-composer-settings">
+                  <div class="field chat-composer-model-field">
+                    <div class="chat-composer-model-inline-control">
+                      <label class="field-label chat-composer-model-label" for="debug-follow-up-model">Model</label>
+                      <select id="debug-follow-up-model" v-model="store.state.debug.model" class="chat-composer-model-select">
+                        <option value="auto">auto</option>
+                        <option v-for="model in store.state.models" :key="model.id" :value="model.id">
+                          {{ model.id }}
+                        </option>
+                      </select>
+                    </div>
+                  </div>
                   <button
                     class="icon-button compact"
                     type="button"
@@ -302,17 +305,19 @@ const chatConversationSignature = computed(() => [
                     @click="showAdvancedParameters = !showAdvancedParameters"
                   >
                     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                      <circle cx="12" cy="12" r="3.2"></circle>
-                      <path d="M12 2.75v2.1"></path>
-                      <path d="M12 19.15v2.1"></path>
-                      <path d="m4.93 4.93 1.48 1.48"></path>
-                      <path d="m17.59 17.59 1.48 1.48"></path>
-                      <path d="M2.75 12h2.1"></path>
-                      <path d="M19.15 12h2.1"></path>
-                      <path d="m4.93 19.07 1.48-1.48"></path>
-                      <path d="m17.59 6.41 1.48-1.48"></path>
+                      <path d="M4 7h10"></path>
+                      <path d="M18 7h2"></path>
+                      <path d="M14 7a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
+                      <path d="M4 12h4"></path>
+                      <path d="M12 12h8"></path>
+                      <path d="M8 12a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
+                      <path d="M4 17h10"></path>
+                      <path d="M18 17h2"></path>
+                      <path d="M14 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
                     </svg>
                   </button>
+                </div>
+                <div class="chat-composer-primary-actions">
                   <button class="button" type="submit" :disabled="store.state.debug.sending">
                     {{ store.state.debug.sending ? "Sending..." : "Send follow-up" }}
                   </button>

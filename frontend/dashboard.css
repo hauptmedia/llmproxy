@@ -1136,6 +1136,19 @@
     width: 56px;
   }
 
+  .log-action-header,
+  .log-action-cell {
+    text-align: center;
+  }
+
+  .log-action-cell {
+    vertical-align: middle;
+  }
+
+  .log-action-cell .icon-button {
+    margin-inline: auto;
+  }
+
   .log-cell-tight {
     white-space: nowrap;
   }
@@ -1476,14 +1489,29 @@
     @apply mt-3 flex flex-wrap items-center justify-between gap-2.5;
   }
 
+  .chat-composer-settings {
+    @apply flex flex-wrap items-center gap-2.5;
+    min-width: 0;
+  }
+
   .chat-composer-model-field {
     @apply mb-0;
-    width: min(280px, 100%);
+    width: min(320px, 100%);
     min-width: 0;
+  }
+
+  .chat-composer-model-inline-control {
+    @apply flex items-center gap-3;
+    min-width: 0;
+  }
+
+  .chat-composer-model-label {
+    @apply mb-0 shrink-0;
   }
 
   .chat-composer-model-select {
     @apply w-full rounded-2xl border border-amber-900/12 bg-white/92 px-3 py-2.5 text-sm text-stone-950 shadow-sm outline-none transition;
+    flex: 1 1 auto;
   }
 
   .chat-composer-model-select:focus {

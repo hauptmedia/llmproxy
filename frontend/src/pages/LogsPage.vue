@@ -1199,7 +1199,7 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
               </th>
-              <th :title="columnTitles.action">Action</th>
+              <th class="log-action-header" :title="columnTitles.action">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -1248,7 +1248,7 @@ onBeforeUnmount(() => {
                   {{ noteSummary(entry) || "-" }}
                 </div>
               </td>
-              <td class="log-cell-tight">
+              <td class="log-cell-tight log-action-cell">
                 <button
                   type="button"
                   class="icon-button compact"
