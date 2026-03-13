@@ -218,6 +218,13 @@ export interface ServerEditorState {
   fields: ServerEditorFields;
 }
 
+export interface ToastItem {
+  id: number;
+  title: string;
+  message: string;
+  tone: "good" | "warn" | "bad" | "neutral";
+}
+
 export interface DebugParams {
   temperature: number;
   top_p: number;
@@ -283,6 +290,7 @@ export interface DashboardState {
   backendEditor: BackendEditorState;
   serverEditor: ServerEditorState;
   debug: DebugState;
+  toasts: ToastItem[];
 }
 
 export interface SummaryCard {

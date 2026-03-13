@@ -78,6 +78,31 @@ watch(
     </div>
 
     <RouterView />
+    <div v-if="store.state.toasts.length" class="toast-stack" aria-live="polite" aria-atomic="true">
+      <div
+        v-for="toast in store.state.toasts"
+        :key="toast.id"
+        class="toast-card"
+        :class="toast.tone"
+      >
+        <div class="toast-body">
+          <div v-if="toast.title" class="toast-title">{{ toast.title }}</div>
+          <div class="toast-message">{{ toast.message }}</div>
+        </div>
+        <button
+          class="toast-dismiss"
+          type="button"
+          aria-label="Dismiss notification"
+          title="Dismiss notification"
+          @click="store.dismissToast(toast.id)"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+            <path d="M6 6 18 18"></path>
+            <path d="M18 6 6 18"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
     <RequestDetailDialog />
     <ServerConfigEditorDialog
       :state="store.state.serverEditor"

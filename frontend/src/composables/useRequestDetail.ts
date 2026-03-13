@@ -11,7 +11,10 @@ import { isClientRecord } from "../utils/guards";
 import { readErrorResponse } from "../utils/http";
 import { renderResponseChoicesHtml, renderToolsHtml } from "../utils/message-rendering";
 
-export function useRequestDetail(state: DashboardState) {
+export function useRequestDetail(
+  state: DashboardState,
+  onErrorToast: (title: string, message: string) => void,
+) {
   let detailRefreshTimer: number | undefined;
 
   function formatClientIp(value?: string): string {
@@ -60,8 +63,10 @@ export function useRequestDetail(state: DashboardState) {
         return;
       }
 
+      const message = error instanceof Error ? error.message : String(error);
       state.requestDetail.loading = false;
-      state.requestDetail.error = error instanceof Error ? error.message : String(error);
+      state.requestDetail.error = message;
+      onErrorToast("Request details", message);
     }
   }
 

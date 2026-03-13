@@ -203,7 +203,10 @@ function joinFieldLabels(fields: string[]): string {
   return fields.map(formatServerFieldLabel).join(", ");
 }
 
-export function useBackendControls(state: DashboardState) {
+export function useBackendControls(
+  state: DashboardState,
+  onErrorToast: (title: string, message: string) => void,
+) {
   async function loadBackendConfigs(): Promise<void> {
     state.backendEditor.error = "";
     state.backendEditor.loading = true;
@@ -221,7 +224,9 @@ export function useBackendControls(state: DashboardState) {
       state.serverConfig = isBackendListResponse(payload) && payload.server ? payload.server : null;
       state.backendConfigs = normalizeBackendRecord(backends);
     } catch (error) {
-      state.backendEditor.error = error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
+      state.backendEditor.error = message;
+      onErrorToast("Config", message);
     } finally {
       state.backendEditor.loading = false;
     }
@@ -268,6 +273,7 @@ export function useBackendControls(state: DashboardState) {
     const config = state.backendConfigs[backendId];
     if (!config) {
       state.backendEditor.error = `Backend "${backendId}" could not be loaded from config.`;
+      onErrorToast("Backends", state.backendEditor.error);
       return;
     }
 
@@ -295,6 +301,7 @@ export function useBackendControls(state: DashboardState) {
 
     if (!state.serverConfig) {
       state.serverEditor.error = "llmproxy config could not be loaded from disk.";
+      onErrorToast("Config", state.serverEditor.error);
       return;
     }
 
@@ -367,7 +374,9 @@ export function useBackendControls(state: DashboardState) {
 
       closeServerEditorState(state);
     } catch (error) {
-      state.serverEditor.error = error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
+      state.serverEditor.error = message;
+      onErrorToast("Config", message);
     } finally {
       state.serverEditor.saving = false;
     }
@@ -416,7 +425,9 @@ export function useBackendControls(state: DashboardState) {
       await loadBackendConfigs();
       closeBackendEditor();
     } catch (error) {
-      state.backendEditor.error = error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
+      state.backendEditor.error = message;
+      onErrorToast("Backends", message);
     } finally {
       state.backendEditor.saving = false;
     }
@@ -463,7 +474,9 @@ export function useBackendControls(state: DashboardState) {
         closeBackendEditor();
       }
     } catch (error) {
-      state.backendEditor.error = error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
+      state.backendEditor.error = message;
+      onErrorToast("Backends", message);
     } finally {
       if (fromEditor) {
         state.backendEditor.deleting = false;

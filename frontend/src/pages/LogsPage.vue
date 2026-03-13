@@ -917,13 +917,9 @@ onBeforeUnmount(() => {
             aria-label="Reset all request filters"
             @click="resetFilters()"
           >
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14.5 4.5l5 5"></path>
-              <path d="M12.5 6.5l5 5"></path>
-              <path d="M5 14.5l5-5 5 5"></path>
-              <path d="M7 16.5l6 3.5"></path>
-              <path d="M6 18.5h9"></path>
-              <path d="M8.5 12.5l3 3"></path>
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+              <path d="M6 6 18 18"></path>
+              <path d="M18 6 6 18"></path>
             </svg>
           </button>
         </div>

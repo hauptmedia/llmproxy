@@ -102,16 +102,67 @@ function createInitialState(): DashboardState {
         max_tokens: 20000,
       },
     }),
+    toasts: reactive([] as DashboardState["toasts"]),
   };
 }
 
 function createDashboardStoreInternal() {
   const state = shallowReactive(createInitialState()) as DashboardState;
   const pendingCancels = reactive<Record<string, boolean>>({});
+  const toastTimers = new Map<number, number>();
+  let nextToastId = 1;
+  let lastToastKey = "";
+  let lastToastAt = 0;
 
-  const backendControls = useBackendControls(state);
-  const requestDetail = useRequestDetail(state);
-  const debugChat = useDebugChat(state);
+  function dismissToast(toastId: number): void {
+    const index = state.toasts.findIndex((toast) => toast.id === toastId);
+    if (index >= 0) {
+      state.toasts.splice(index, 1);
+    }
+
+    const timer = toastTimers.get(toastId);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      toastTimers.delete(toastId);
+    }
+  }
+
+  function showToast(
+    title: string,
+    message: string,
+    tone: "good" | "warn" | "bad" | "neutral" = "bad",
+    timeoutMs = 5500,
+  ): void {
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage) {
+      return;
+    }
+
+    const now = Date.now();
+    const toastKey = `${tone}|${title.trim()}|${trimmedMessage}`;
+    if (toastKey === lastToastKey && now - lastToastAt < 4000) {
+      return;
+    }
+    lastToastKey = toastKey;
+    lastToastAt = now;
+
+    const toastId = nextToastId;
+    nextToastId += 1;
+    state.toasts.push({
+      id: toastId,
+      title: title.trim(),
+      message: trimmedMessage,
+      tone,
+    });
+    const timer = window.setTimeout(() => {
+      dismissToast(toastId);
+    }, timeoutMs);
+    toastTimers.set(toastId, timer);
+  }
+
+  const backendControls = useBackendControls(state, showToast);
+  const requestDetail = useRequestDetail(state, showToast);
+  const debugChat = useDebugChat(state, showToast);
 
   const applySnapshot = (snapshot: typeof state.snapshot): void => {
     backendControls.applySnapshot(snapshot);
@@ -135,7 +186,7 @@ function createDashboardStoreInternal() {
     requestDetail.scheduleOpenDetailRefresh();
   };
 
-  const liveFeed = useLiveFeed(state, applySnapshot);
+  const liveFeed = useLiveFeed(state, applySnapshot, showToast);
   const summaryCards = computed(() => buildSummaryCards(state.snapshot));
 
   function handleKeyDown(event: KeyboardEvent): void {
@@ -168,6 +219,10 @@ function createDashboardStoreInternal() {
     debugChat.stopDebugMetricsTicker();
     requestDetail.stopRequestDetailRefresh();
     window.removeEventListener("keydown", handleKeyDown);
+    for (const timer of toastTimers.values()) {
+      window.clearTimeout(timer);
+    }
+    toastTimers.clear();
   }
 
   function isRequestCancelling(requestId: string): boolean {
@@ -211,7 +266,7 @@ function createDashboardStoreInternal() {
       if (state.requestDetail.requestId === requestId) {
         state.requestDetail.error = message;
       }
-      window.alert(`Could not end the active connection.\n\n${message}`);
+      showToast("Active connection", `Could not end the active connection: ${message}`);
     }
   }
 
@@ -257,6 +312,7 @@ function createDashboardStoreInternal() {
     shortId,
     recentRequestBadges: buildRecentRequestBadges,
     recentRequestMetrics: buildRecentRequestMetrics,
+    dismissToast,
     start,
     stop,
   });

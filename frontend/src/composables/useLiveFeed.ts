@@ -3,8 +3,10 @@ import type { DashboardState, ProxySnapshot } from "../types/dashboard";
 export function useLiveFeed(
   state: DashboardState,
   onSnapshot: (snapshot: ProxySnapshot) => void,
+  onErrorToast: (title: string, message: string) => void,
 ) {
   let eventSource: EventSource | null = null;
+  let lastErrorToastAt = 0;
 
   function connectLiveFeed(): void {
     if (eventSource) {
@@ -29,8 +31,13 @@ export function useLiveFeed(
     };
 
     eventSource.onerror = () => {
+      const shouldToast = Date.now() - lastErrorToastAt > 10000;
       state.connectionStatus = "connecting";
       state.connectionText = "Reconnecting live feed";
+      if (shouldToast) {
+        lastErrorToastAt = Date.now();
+        onErrorToast("Live feed", "The live dashboard feed disconnected. Reconnecting...");
+      }
     };
   }
 

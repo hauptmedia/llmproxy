@@ -1,3 +1,4 @@
+import { toRaw } from "vue";
 import type { DashboardState, DebugMetrics, DebugTranscriptEntry } from "../types/dashboard";
 import { formatTokenRate, prettyJson } from "../utils/formatters";
 import { isClientRecord } from "../utils/guards";
@@ -28,6 +29,26 @@ function estimateTokenCount(value: unknown): number {
   }
 
   return Math.max(1, value.trim().split(/\s+/).filter(Boolean).length);
+}
+
+function readReasoningText(value: unknown): string {
+  if (!isClientRecord(value)) {
+    return "";
+  }
+
+  if (typeof value.reasoning_content === "string") {
+    return value.reasoning_content;
+  }
+
+  if (typeof value.reasoning === "string") {
+    return value.reasoning;
+  }
+
+  if (typeof value.thinking === "string") {
+    return value.thinking;
+  }
+
+  return "";
 }
 
 function readPayloadCounts(payload: Record<string, any>) {
@@ -63,8 +84,42 @@ function createClientDebugRequestId(): string {
   return `dbg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function useDebugChat(state: DashboardState) {
+export function useDebugChat(
+  state: DashboardState,
+  onErrorToast: (title: string, message: string) => void,
+) {
   let metricsTicker: number | undefined;
+
+  function cloneDebugToolCall(value: unknown): unknown {
+    if (!isClientRecord(value)) {
+      return value;
+    }
+
+    return {
+      ...value,
+      ...(isClientRecord(value.function) ? { function: { ...value.function } } : {}),
+    };
+  }
+
+  function replaceTranscriptEntry(entry: DebugTranscriptEntry): DebugTranscriptEntry {
+    const entryRaw = toRaw(entry);
+    const index = state.debug.transcript.findIndex((candidate) => toRaw(candidate) === entryRaw);
+    if (index === -1) {
+      return entry;
+    }
+
+    const nextEntry: DebugTranscriptEntry = {
+      ...entry,
+      ...(isClientRecord(entry.function_call) ? { function_call: { ...entry.function_call } } : {}),
+      ...(isClientRecord(entry.audio) ? { audio: { ...entry.audio } } : {}),
+      ...(Array.isArray(entry.tool_calls)
+        ? { tool_calls: entry.tool_calls.map((toolCall) => cloneDebugToolCall(toolCall)) as DebugTranscriptEntry["tool_calls"] }
+        : {}),
+    };
+
+    state.debug.transcript.splice(index, 1, nextEntry);
+    return state.debug.transcript[index] as DebugTranscriptEntry;
+  }
 
   function resetDebugMetrics(): void {
     state.debug.metrics = createEmptyDebugMetrics();
@@ -99,7 +154,7 @@ export function useDebugChat(state: DashboardState) {
     const now = Date.now();
 
     const addedContentTokens = estimateTokenCount(delta?.content);
-    const addedReasoningTokens = estimateTokenCount(delta?.reasoning_content);
+    const addedReasoningTokens = estimateTokenCount(readReasoningText(delta));
     const addedCompletionTokens = addedContentTokens + addedReasoningTokens;
 
     if (addedCompletionTokens > 0) {
@@ -320,7 +375,7 @@ export function useDebugChat(state: DashboardState) {
     return Array.isArray(message.tool_calls) && message.tool_calls.length > 0;
   }
 
-  function applyNonStreamingResponse(payload: Record<string, any>, assistantTurn: DebugTranscriptEntry): void {
+  function applyNonStreamingResponse(payload: Record<string, any>, assistantTurn: DebugTranscriptEntry): DebugTranscriptEntry {
     const choice = Array.isArray(payload?.choices) ? payload.choices[0] : undefined;
     const message = choice?.message;
 
@@ -332,7 +387,7 @@ export function useDebugChat(state: DashboardState) {
       message && Object.prototype.hasOwnProperty.call(message, "content")
         ? (message.content ?? null)
         : "";
-    assistantTurn.reasoning_content = typeof message?.reasoning_content === "string" ? message.reasoning_content : "";
+    assistantTurn.reasoning_content = readReasoningText(message);
     assistantTurn.refusal = typeof message?.refusal === "string" ? message.refusal : "";
     assistantTurn.function_call = isClientRecord(message?.function_call) ? message.function_call : undefined;
     assistantTurn.tool_calls = Array.isArray(message?.tool_calls) ? message.tool_calls : undefined;
@@ -343,9 +398,10 @@ export function useDebugChat(state: DashboardState) {
     applyUsageMetrics(payload?.usage, payload?.timings, choice?.finish_reason);
     state.debug.usage = formatUsage(payload?.usage, payload?.timings, choice?.finish_reason);
     state.debug.rawResponse = prettyJson(payload);
+    return replaceTranscriptEntry(assistantTurn);
   }
 
-  function applyStreamingPayload(payload: Record<string, any>, assistantTurn: DebugTranscriptEntry): void {
+  function applyStreamingPayload(payload: Record<string, any>, assistantTurn: DebugTranscriptEntry): DebugTranscriptEntry {
     const choice = Array.isArray(payload?.choices) ? payload.choices[0] : undefined;
     const delta = choice?.delta ?? choice?.message ?? {};
 
@@ -357,8 +413,9 @@ export function useDebugChat(state: DashboardState) {
       assistantTurn.content = String(assistantTurn.content ?? "") + delta.content;
     }
 
-    if (typeof delta?.reasoning_content === "string") {
-      assistantTurn.reasoning_content = String(assistantTurn.reasoning_content ?? "") + delta.reasoning_content;
+    const reasoningDelta = readReasoningText(delta);
+    if (reasoningDelta) {
+      assistantTurn.reasoning_content = String(assistantTurn.reasoning_content ?? "") + reasoningDelta;
     }
 
     if (typeof delta?.refusal === "string") {
@@ -376,30 +433,33 @@ export function useDebugChat(state: DashboardState) {
     noteStreamingTokenActivity(delta);
     applyUsageMetrics(payload?.usage, payload?.timings, choice?.finish_reason);
     state.debug.usage = formatUsage(payload?.usage, payload?.timings, choice?.finish_reason);
+    return replaceTranscriptEntry(assistantTurn);
   }
 
-  function processStreamBlock(block: string, rawEvents: string[], assistantTurn: DebugTranscriptEntry): void {
+  function processStreamBlock(block: string, rawEvents: string[], assistantTurn: DebugTranscriptEntry): DebugTranscriptEntry {
     const dataLines = block
       .split(/\r?\n/)
       .filter((line) => line.startsWith("data:"))
       .map((line) => line.slice(5).trimStart());
 
     if (dataLines.length === 0) {
-      return;
+      return assistantTurn;
     }
 
     const payloadText = dataLines.join("\n");
     if (!payloadText || payloadText === "[DONE]") {
-      return;
+      return assistantTurn;
     }
 
     rawEvents.push(payloadText);
 
     try {
-      applyStreamingPayload(JSON.parse(payloadText), assistantTurn);
+      const nextAssistantTurn = applyStreamingPayload(JSON.parse(payloadText), assistantTurn);
       state.debug.rawResponse = rawEvents.join("\n\n");
+      return nextAssistantTurn;
     } catch {
       state.debug.rawResponse = rawEvents.join("\n\n");
+      return assistantTurn;
     }
   }
 
@@ -408,8 +468,9 @@ export function useDebugChat(state: DashboardState) {
     rawEvents: string[],
     assistantTurn: DebugTranscriptEntry,
     flush: boolean,
-  ): string {
+  ): { buffer: string; assistantTurn: DebugTranscriptEntry } {
     let working = buffer;
+    let currentAssistantTurn = assistantTurn;
 
     while (true) {
       const windowsBreak = working.indexOf("\r\n\r\n");
@@ -431,18 +492,24 @@ export function useDebugChat(state: DashboardState) {
 
       const block = working.slice(0, breakIndex);
       working = working.slice(breakIndex + breakLength);
-      processStreamBlock(block, rawEvents, assistantTurn);
+      currentAssistantTurn = processStreamBlock(block, rawEvents, currentAssistantTurn);
     }
 
     if (flush && working.trim()) {
-      processStreamBlock(working, rawEvents, assistantTurn);
-      return "";
+      currentAssistantTurn = processStreamBlock(working, rawEvents, currentAssistantTurn);
+      return {
+        buffer: "",
+        assistantTurn: currentAssistantTurn,
+      };
     }
 
-    return working;
+    return {
+      buffer: working,
+      assistantTurn: currentAssistantTurn,
+    };
   }
 
-  async function consumeStreamingResponse(response: Response, assistantTurn: DebugTranscriptEntry): Promise<void> {
+  async function consumeStreamingResponse(response: Response, assistantTurn: DebugTranscriptEntry): Promise<DebugTranscriptEntry> {
     if (!response.body) {
       throw new Error("Streaming response had no body.");
     }
@@ -451,6 +518,7 @@ export function useDebugChat(state: DashboardState) {
     const decoder = new TextDecoder();
     const rawEvents: string[] = [];
     let buffer = "";
+    let currentAssistantTurn = assistantTurn;
 
     while (true) {
       const next = await reader.read();
@@ -459,12 +527,15 @@ export function useDebugChat(state: DashboardState) {
       }
 
       buffer += decoder.decode(next.value, { stream: true });
-      buffer = processStreamBuffer(buffer, rawEvents, assistantTurn, false);
+      const update = processStreamBuffer(buffer, rawEvents, currentAssistantTurn, false);
+      buffer = update.buffer;
+      currentAssistantTurn = update.assistantTurn;
     }
 
     buffer += decoder.decode();
-    processStreamBuffer(buffer, rawEvents, assistantTurn, true);
+    currentAssistantTurn = processStreamBuffer(buffer, rawEvents, currentAssistantTurn, true).assistantTurn;
     state.debug.rawResponse = rawEvents.join("\n\n");
+    return currentAssistantTurn;
   }
 
   async function sendDebugChat(): Promise<void> {
@@ -475,25 +546,36 @@ export function useDebugChat(state: DashboardState) {
     state.debug.stream = true;
 
     const prompt = state.debug.prompt.trim();
+    const lastTranscriptEntry = state.debug.transcript[state.debug.transcript.length - 1];
+    const regenerateAssistantReply =
+      prompt.length === 0 &&
+      state.debug.transcript.length > 0 &&
+      isClientRecord(lastTranscriptEntry) &&
+      lastTranscriptEntry.role === "assistant";
+    const transcriptForReplay = regenerateAssistantReply
+      ? state.debug.transcript.slice(0, -1)
+      : state.debug.transcript;
 
     if (!state.debug.model) {
       state.debug.error = "Please select a model first.";
       return;
     }
 
-    if (!prompt) {
+    if (!prompt && !regenerateAssistantReply) {
       state.debug.error = "Please enter a user message.";
       return;
     }
 
-    const history = state.debug.transcript
+    const history = transcriptForReplay
       .map((entry) => buildDebugHistoryMessage(entry))
       .filter((entry): entry is Record<string, any> => hasReplayableDebugMessage(entry));
 
-    history.push({
-      role: "user",
-      content: prompt,
-    });
+    if (prompt) {
+      history.push({
+        role: "user",
+        content: prompt,
+      });
+    }
 
     const payload = {
       model: state.debug.model,
@@ -515,11 +597,13 @@ export function useDebugChat(state: DashboardState) {
       max_tokens: Math.max(1, Math.round(state.debug.params.max_tokens)),
     };
 
-    const userTurn: DebugTranscriptEntry = {
-      role: "user",
-      content: prompt,
-    };
-    const assistantTurn: DebugTranscriptEntry = {
+    const userTurn: DebugTranscriptEntry | null = prompt
+      ? {
+          role: "user",
+          content: prompt,
+        }
+      : null;
+    let assistantTurn: DebugTranscriptEntry = {
       role: "assistant",
       content: "",
       reasoning_content: "",
@@ -527,8 +611,21 @@ export function useDebugChat(state: DashboardState) {
       finish_reason: "",
     };
     const requestId = createClientDebugRequestId();
+    const removedAssistantTurn = regenerateAssistantReply && isClientRecord(lastTranscriptEntry)
+      ? { ...(lastTranscriptEntry as Record<string, any>) } as DebugTranscriptEntry
+      : null;
 
-    state.debug.transcript.push(userTurn, assistantTurn);
+    if (regenerateAssistantReply) {
+      state.debug.transcript.pop();
+    }
+
+    if (userTurn) {
+      state.debug.transcript.push(userTurn);
+    }
+
+    state.debug.transcript.push(assistantTurn);
+    // Continue streaming against the reactive transcript entry so the UI updates live.
+    assistantTurn = state.debug.transcript[state.debug.transcript.length - 1] as DebugTranscriptEntry;
     state.debug.error = "";
     state.debug.backend = "";
     state.debug.status = "";
@@ -564,12 +661,14 @@ export function useDebugChat(state: DashboardState) {
       }
 
       if (payload.stream) {
-        await consumeStreamingResponse(response, assistantTurn);
+        assistantTurn = await consumeStreamingResponse(response, assistantTurn);
       } else {
-        applyNonStreamingResponse(await response.json(), assistantTurn);
+        assistantTurn = applyNonStreamingResponse(await response.json(), assistantTurn);
       }
     } catch (error) {
-      state.debug.error = error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
+      state.debug.error = message;
+      onErrorToast("Chat request", message);
 
       if (
         !hasVisibleMessageContent(assistantTurn.content) &&
@@ -579,6 +678,10 @@ export function useDebugChat(state: DashboardState) {
         !(Array.isArray(assistantTurn.tool_calls) && assistantTurn.tool_calls.length > 0)
       ) {
         state.debug.transcript.pop();
+
+        if (removedAssistantTurn) {
+          state.debug.transcript.push(removedAssistantTurn);
+        }
       }
     } finally {
       state.debug.sending = false;
