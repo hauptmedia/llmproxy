@@ -49,19 +49,19 @@ watch(
       <header class="hero">
         <div class="hero-bar">
           <div class="hero-nav-group">
-            <div class="brand-status-shell">
-              <RouterLink class="brand-link" :to="{ name: 'config' }" aria-label="Open llmproxy config" title="Open llmproxy config">
-                <BrandLogo compact title="Open llmproxy config" />
-              </RouterLink>
-              <span
-                :class="['brand-connection-indicator', store.state.connectionStatus]"
-                :title="store.state.connectionText"
-                aria-hidden="true"
-              >
-                <span class="connection-dot"></span>
-              </span>
-            </div>
             <nav class="page-nav" aria-label="Dashboard pages">
+              <div class="brand-status-shell">
+                <RouterLink class="brand-link page-nav-brand" :to="{ name: 'config' }" aria-label="Open llmproxy config" title="Open llmproxy config">
+                  <BrandLogo compact title="Open llmproxy config" />
+                </RouterLink>
+                <span
+                  :class="['brand-connection-indicator', store.state.connectionStatus]"
+                  :title="store.state.connectionText"
+                  aria-hidden="true"
+                >
+                  <span class="connection-dot"></span>
+                </span>
+              </div>
               <RouterLink
                 v-for="link in pageLinks"
                 :key="link.page"
