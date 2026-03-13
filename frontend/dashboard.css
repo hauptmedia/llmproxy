@@ -515,6 +515,38 @@
     @apply mt-1.5 text-sm leading-relaxed text-stone-600 break-words;
   }
 
+  .backend-identity {
+    @apply flex flex-wrap items-center gap-2.5;
+  }
+
+  .backend-url {
+    @apply break-all;
+  }
+
+  .connector-badge {
+    @apply gap-2 font-medium;
+    padding-left: 0.7rem;
+    padding-right: 0.85rem;
+  }
+
+  .connector-badge-icon {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+  }
+
+  .connector-badge-openai {
+    color: #0f766e;
+    border-color: rgba(15, 118, 110, 0.18);
+    background: rgba(236, 254, 255, 0.92);
+  }
+
+  .connector-badge-ollama {
+    color: #9a3412;
+    border-color: rgba(154, 52, 18, 0.18);
+    background: rgba(255, 237, 213, 0.94);
+  }
+
   .inline-toggle,
   .inline-number {
     @apply mr-2.5 mb-2 inline-flex items-center gap-2 text-stone-600;

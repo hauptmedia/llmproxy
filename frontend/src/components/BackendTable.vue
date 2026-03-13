@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import ConnectorBadge from "./ConnectorBadge.vue";
 import ModelInfoDialog from "./ModelInfoDialog.vue";
 import {
   type BackendDraft,
@@ -87,18 +88,15 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
               ></span>
               <span>{{ backend.name }}</span>
             </div>
-            <div class="table-sub">
-              <span class="badge neutral" :title="`Backend connector: ${backend.connector}`">{{ backend.connector }}</span>
-              {{ backend.baseUrl }}
+            <div class="table-sub backend-identity">
+              <ConnectorBadge :connector="backend.connector" />
+              <span class="backend-url">{{ backend.baseUrl }}</span>
             </div>
           </td>
           <td>
             <div class="request-meta">
-              <span class="badge neutral" title="Active requests currently occupying backend slots.">
-                active {{ backend.activeRequests }} / {{ backend.maxConcurrency }}
-              </span>
-              <span class="badge neutral" title="Routing slots still free on this backend.">
-                free {{ backend.availableSlots }}
+              <span class="badge neutral" title="Current backend slot usage. The first number is the active connections on this backend, and the second is the configured maximum concurrency.">
+                connections {{ backend.activeRequests }} / {{ backend.maxConcurrency }}
               </span>
             </div>
             <div class="table-sub">
