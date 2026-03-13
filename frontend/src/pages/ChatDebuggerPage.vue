@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import CodeView from "../components/CodeView.vue";
 import MessageCard from "../components/MessageCard.vue";
 import type { DebugTranscriptEntry } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
@@ -22,27 +21,17 @@ function shouldCollapseDebugReasoning(entry: DebugTranscriptEntry, index: number
 <template>
   <section class="page-section">
     <div class="panel">
-      <div class="panel-header">
-        <div>
-          <h2 class="panel-title">Chat</h2>
-          <p class="hint">Send OpenAI-compatible chat requests through llmproxy and inspect transcript, metrics, and raw payloads.</p>
-        </div>
-      </div>
-
       <div class="debug-grid">
         <div class="debug-card">
           <form class="field-grid" @submit.prevent="store.sendDebugChat()">
             <div class="field">
               <label class="field-label" for="debug-model">Model</label>
-              <div class="toggle-row">
-                <select id="debug-model" v-model="store.state.debug.model">
-                  <option value="">Select a model</option>
-                  <option v-for="model in store.state.models" :key="model.id" :value="model.id">
-                    {{ model.id }}
-                  </option>
-                </select>
-                <button class="button secondary small" type="button" @click="store.refreshModels()">Refresh Models</button>
-              </div>
+              <select id="debug-model" v-model="store.state.debug.model">
+                <option value="">Select a model</option>
+                <option v-for="model in store.state.models" :key="model.id" :value="model.id">
+                  {{ model.id }}
+                </option>
+              </select>
             </div>
 
             <div class="field">
@@ -113,21 +102,22 @@ function shouldCollapseDebugReasoning(entry: DebugTranscriptEntry, index: number
 
         <div class="debug-card">
           <div class="panel-header">
-            <div>
-              <h2 class="panel-title">Transcript</h2>
-              <p class="hint">The chat debugger uses the same message component as the request inspector, so message rendering stays consistent.</p>
+            <div class="flex items-center gap-2">
+              <h2 class="panel-title">Conversation</h2>
+              <button
+                class="icon-button"
+                type="button"
+                :disabled="!store.state.debug.lastRequestId"
+                :aria-label="store.state.debug.lastRequestId ? 'Open the last debug request in the request debugger' : 'No debug request is available yet'"
+                :title="store.state.debug.lastRequestId ? 'Open the last debug request in the request debugger.' : 'No debug request is available yet.'"
+                @click="store.openLastDebugRequest()"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
+                  <circle cx="12" cy="12" r="2.8"></circle>
+                </svg>
+              </button>
             </div>
-          </div>
-
-          <div v-if="store.debugMetaBadges.length" class="debug-meta">
-            <span
-              v-for="badge in store.debugMetaBadges"
-              :key="badge.text + badge.title"
-              :class="store.badgeClass(badge)"
-              :title="badge.title"
-            >
-              {{ badge.text }}
-            </span>
           </div>
 
           <div class="transcript">
@@ -149,28 +139,9 @@ function shouldCollapseDebugReasoning(entry: DebugTranscriptEntry, index: number
               v-if="!store.state.debug.systemPrompt.trim() && store.state.debug.transcript.length === 0"
               class="empty"
             >
-              No debug conversation yet. Send a request to populate the transcript.
+              No conversation yet. Send a message to begin the conversation.
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-header">
-        <div>
-          <h2 class="panel-title">Raw Payloads</h2>
-          <p class="hint">Pretty-formatted request and response payloads for the current debug session.</p>
-        </div>
-      </div>
-      <div class="raw-grid">
-        <div class="debug-card raw-box">
-          <h3>Request</h3>
-          <CodeView :value="store.state.debug.rawRequest" placeholder="No request has been sent yet." />
-        </div>
-        <div class="debug-card raw-box">
-          <h3>Response</h3>
-          <CodeView :value="store.state.debug.rawResponse" placeholder="No response has been received yet." />
         </div>
       </div>
     </div>

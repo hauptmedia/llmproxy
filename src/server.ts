@@ -6,6 +6,12 @@ import { extname, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { ConfigStore, BackendPatch } from "./config-store";
+import {
+  buildBackendRequestPlan,
+  convertOllamaChunkToOpenAiChunk,
+  isOllamaNdjson,
+  splitJsonLines,
+} from "./backend-connectors";
 import { renderDashboardHtml } from "./dashboard";
 import { LoadBalancer } from "./load-balancer";
 import {
@@ -415,8 +421,12 @@ export class LlmProxyServer {
     const receivedAt = Date.now();
     const body = await readRequestBody(request);
     const parsedBody = tryParseJsonBuffer(body, request.headers["content-type"]);
+    const requestedRouteId = readRequestedProxyRequestId(request.headers["x-llmproxy-request-id"]);
+    const routeId = requestedRouteId && !this.activeConnections.has(requestedRouteId) && !this.loadBalancer.getRequestLogDetail(requestedRouteId)
+      ? requestedRouteId
+      : randomUUID();
     const route: ProxyRouteRequest = {
-      id: randomUUID(),
+      id: routeId,
       receivedAt,
       method,
       path: `${url.pathname}${url.search}`,
@@ -428,8 +438,6 @@ export class LlmProxyServer {
     };
     const streamingKind = detectStreamingKind(method, url.pathname, parsedBody);
     const upstreamStream = streamingKind ? true : route.stream;
-    const upstreamBody = this.buildUpstreamBody(method, body, parsedBody, Boolean(streamingKind));
-
     const abortController = new AbortController();
     let clientDisconnected = false;
     const abortRequest = (
@@ -449,6 +457,7 @@ export class LlmProxyServer {
     };
 
     this.trackActiveConnection(route, streamingKind ?? "other", upstreamStream);
+    response.setHeader("x-llmproxy-request-id", route.id);
     const activeConnection = this.activeConnections.get(route.id);
     if (activeConnection) {
       activeConnection.cancel = cancelActiveRequest;
@@ -479,21 +488,77 @@ export class LlmProxyServer {
         backendName: lease.backend.name,
         queueMs: lease.queueMs,
       }, true);
+      const requestPlan = buildBackendRequestPlan(
+        lease.backend,
+        method,
+        url.pathname,
+        url.search,
+        body,
+        parsedBody,
+        Boolean(streamingKind),
+      );
       const timeoutMs = lease.backend.timeoutMs ?? this.loadBalancer.getServerConfig().requestTimeoutMs;
       timeout = setTimeout(() => {
         abortRequest(`Upstream timeout after ${timeoutMs}ms.`, "timeout");
       }, timeoutMs);
 
-      const upstreamResponse = await fetch(joinUrl(lease.backend.baseUrl, `${url.pathname}${url.search}`), {
+      const upstreamResponse = await fetch(joinUrl(lease.backend.baseUrl, requestPlan.pathAndSearch), {
         method,
         headers: this.buildUpstreamHeaders(request.headers, lease, route.clientIp),
-        body: upstreamBody ? new Uint8Array(upstreamBody) : undefined,
+        body: requestPlan.body ? new Uint8Array(requestPlan.body) : undefined,
         signal: abortController.signal,
       });
 
       this.updateActiveConnection(route.id, { statusCode: upstreamResponse.status }, true);
 
-      if (streamingKind && upstreamResponse.ok && isEventStream(upstreamResponse.headers) && upstreamResponse.body) {
+      if (requestPlan.responseMode === "ollama-ndjson" && !upstreamResponse.ok) {
+        const errorMessage = await this.readOllamaErrorMessage(upstreamResponse);
+        this.updateActiveConnection(route.id, { error: errorMessage }, true);
+        sendJson(response, upstreamResponse.status, proxyError(errorMessage, "upstream_error"));
+        lease.release({
+          outcome: "error",
+          latencyMs: Date.now() - route.receivedAt,
+          statusCode: upstreamResponse.status,
+          queuedMs: lease.queueMs,
+          error: errorMessage,
+          ...this.buildReleaseMetrics(route.id),
+        });
+        return;
+      }
+
+      if (
+        requestPlan.responseMode === "ollama-ndjson" &&
+        streamingKind &&
+        upstreamResponse.ok &&
+        isOllamaNdjson(upstreamResponse.headers) &&
+        upstreamResponse.body
+      ) {
+        const synthesizedResponse = await this.handleOllamaStreamingProxy({
+          requestId: route.id,
+          clientStream: route.stream,
+          backendId: lease.backend.id,
+          upstreamResponse,
+          response,
+        });
+
+        lease.release({
+          outcome: "success",
+          latencyMs: Date.now() - route.receivedAt,
+          statusCode: upstreamResponse.status,
+          queuedMs: lease.queueMs,
+          responseBody: synthesizedResponse as JsonValue | undefined,
+          ...this.buildReleaseMetrics(route.id),
+        });
+        return;
+      }
+
+      if (
+        requestPlan.responseMode === "openai-sse" &&
+        streamingKind &&
+        upstreamResponse.ok &&
+        isEventStream(upstreamResponse.headers) &&
+        upstreamResponse.body
+      ) {
         const synthesizedResponse = await this.handleStreamingProxy({
           requestId: route.id,
           kind: streamingKind,
@@ -824,6 +889,56 @@ export class LlmProxyServer {
     return synthesizedResponse;
   }
 
+  private async handleOllamaStreamingProxy(options: {
+    requestId: string;
+    clientStream: boolean;
+    backendId: string;
+    upstreamResponse: Response;
+    response: ServerResponse;
+  }): Promise<Record<string, unknown>> {
+    const { requestId, clientStream, backendId, upstreamResponse, response } = options;
+    const accumulator = new StreamingAccumulator("chat.completions");
+    const reader = upstreamResponse.body?.getReader();
+
+    if (!reader) {
+      throw new Error("Ollama streaming response had no body.");
+    }
+
+    if (clientStream) {
+      this.writeStreamingResponseHeaders(response, upstreamResponse.status, backendId);
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const next = await reader.read();
+      if (next.done) {
+        break;
+      }
+
+      buffer += decoder.decode(next.value, { stream: true });
+      buffer = this.consumeOllamaStreamingBuffer(requestId, buffer, accumulator, clientStream, response, false);
+    }
+
+    buffer += decoder.decode();
+    this.consumeOllamaStreamingBuffer(requestId, buffer, accumulator, clientStream, response, true);
+
+    if (!accumulator.hasPayload) {
+      throw new Error("Ollama stream produced no JSON payload.");
+    }
+
+    const synthesizedResponse = accumulator.buildResponse();
+
+    if (clientStream) {
+      response.end("data: [DONE]\n\n");
+      return synthesizedResponse;
+    }
+
+    this.sendSynthesizedJson(response, upstreamResponse.status, synthesizedResponse, backendId);
+    return synthesizedResponse;
+  }
+
   private consumeStreamingBuffer(
     requestId: string,
     buffer: string,
@@ -845,6 +960,41 @@ export class LlmProxyServer {
       } catch {
         continue;
       }
+    }
+
+    return split.remainder;
+  }
+
+  private consumeOllamaStreamingBuffer(
+    requestId: string,
+    buffer: string,
+    accumulator: StreamingAccumulator,
+    clientStream: boolean,
+    response: ServerResponse,
+    flush: boolean,
+  ): string {
+    const split = splitJsonLines(buffer, flush);
+
+    for (const line of split.lines) {
+      let payload: Record<string, unknown>;
+
+      try {
+        payload = JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+
+      const chunk = convertOllamaChunkToOpenAiChunk(payload, requestId);
+      if (!chunk) {
+        continue;
+      }
+
+      if (clientStream) {
+        response.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      }
+
+      const update = accumulator.applyPayload(chunk);
+      this.applyStreamingUpdate(requestId, update, accumulator.buildResponse());
     }
 
     return split.remainder;
@@ -908,6 +1058,15 @@ export class LlmProxyServer {
     response.end(JSON.stringify(payload));
   }
 
+  private writeStreamingResponseHeaders(response: ServerResponse, statusCode: number, backendId: string): void {
+    response.statusCode = statusCode;
+    response.setHeader("content-type", "text/event-stream; charset=utf-8");
+    response.setHeader("cache-control", "no-cache, no-transform");
+    response.setHeader("connection", "keep-alive");
+    response.setHeader("x-accel-buffering", "no");
+    response.setHeader("x-llmproxy-backend", backendId);
+  }
+
   private buildUpstreamHeaders(
     incomingHeaders: IncomingHttpHeaders,
     lease: BackendLease,
@@ -947,6 +1106,19 @@ export class LlmProxyServer {
     }
 
     return headers;
+  }
+
+  private async readOllamaErrorMessage(response: Response): Promise<string> {
+    try {
+      const body = await response.json() as { error?: unknown };
+      if (typeof body.error === "string" && body.error.length > 0) {
+        return body.error;
+      }
+    } catch {
+      // ignore parse failure and fall back to generic error
+    }
+
+    return `Ollama backend returned HTTP ${response.status}.`;
   }
 
   private scheduleSnapshotBroadcast(): void {
@@ -1155,4 +1327,18 @@ function extractApiRequestId(pathname: string, suffix = ""): string | undefined 
   }
 
   return decodeURIComponent(rawRequestId);
+}
+
+function readRequestedProxyRequestId(headerValue: string | string[] | undefined): string | undefined {
+  const candidate = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  if (typeof candidate !== "string") {
+    return undefined;
+  }
+
+  const trimmed = candidate.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return /^[A-Za-z0-9._:-]{1,128}$/.test(trimmed) ? trimmed : undefined;
 }

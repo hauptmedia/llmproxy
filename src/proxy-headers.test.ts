@@ -7,6 +7,7 @@ test("shouldForwardUpstreamHeader blocks browser metadata and expect headers", (
   assert.equal(shouldForwardUpstreamHeader("origin"), false);
   assert.equal(shouldForwardUpstreamHeader("referer"), false);
   assert.equal(shouldForwardUpstreamHeader("priority"), false);
+  assert.equal(shouldForwardUpstreamHeader("x-llmproxy-request-id"), false);
   assert.equal(shouldForwardUpstreamHeader("sec-fetch-mode"), false);
   assert.equal(shouldForwardUpstreamHeader("sec-ch-ua"), false);
 });

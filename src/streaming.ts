@@ -230,9 +230,13 @@ export class StreamingAccumulator {
         }
       }
 
-      if (typeof source.reasoning_content === "string") {
-        state.reasoningContent += source.reasoning_content;
-        if (source.reasoning_content.length > 0) {
+      const reasoningDelta =
+        typeof source.reasoning_content === "string"
+          ? source.reasoning_content
+          : (typeof source.reasoning === "string" ? source.reasoning : undefined);
+      if (typeof reasoningDelta === "string") {
+        state.reasoningContent += reasoningDelta;
+        if (reasoningDelta.length > 0) {
           counts.addedCompletionTokens += 1;
           counts.addedReasoningTokens += 1;
           this.reasoningTokens += 1;

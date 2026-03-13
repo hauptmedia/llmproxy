@@ -44,6 +44,7 @@ function createInitialState(): DashboardState {
       status: "",
       usage: "",
       error: "",
+      lastRequestId: "",
       rawRequest: "",
       rawResponse: "",
       transcript: [],
@@ -54,7 +55,7 @@ function createInitialState(): DashboardState {
         top_k: 40,
         min_p: 0.05,
         repeat_penalty: 1.1,
-        max_tokens: 512,
+        max_tokens: 4096,
       },
     }),
   };
@@ -110,7 +111,6 @@ function createDashboardStoreInternal() {
     backendControls.syncBackendDrafts(state.snapshot.backends);
     backendControls.ensureDebugModel();
     liveFeed.connectLiveFeed();
-    void backendControls.refreshModels();
     window.addEventListener("keydown", handleKeyDown);
   }
 
@@ -182,7 +182,6 @@ function createDashboardStoreInternal() {
     requestParamRows: requestDetail.requestParamRows,
     requestToolsHtml: requestDetail.requestToolsHtml,
     requestResponseHtml: requestDetail.requestResponseHtml,
-    debugMetaBadges: debugChat.debugMetaBadges,
     badgeClass,
     connectionCardBadges: buildConnectionCardBadges,
     connectionMetricBadges: buildConnectionMetricBadges,
@@ -191,11 +190,17 @@ function createDashboardStoreInternal() {
     canCancelRequest,
     cancelActiveRequest,
     isRequestCancelling,
-    refreshModels: backendControls.refreshModels,
     saveBackend: backendControls.saveBackend,
     sendDebugChat: debugChat.sendDebugChat,
     stopDebugChat: debugChat.stopDebugChat,
     clearDebugChat: debugChat.clearDebugChat,
+    openLastDebugRequest: () => {
+      if (!state.debug.lastRequestId) {
+        return;
+      }
+
+      void requestDetail.openRequestDetail(state.debug.lastRequestId);
+    },
     shortId,
     recentRequestBadges: buildRecentRequestBadges,
     recentRequestMetrics: buildRecentRequestMetrics,

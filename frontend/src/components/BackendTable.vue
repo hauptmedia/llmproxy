@@ -87,7 +87,10 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
               ></span>
               <span>{{ backend.name }}</span>
             </div>
-            <div class="table-sub">{{ backend.baseUrl }}</div>
+            <div class="table-sub">
+              <span class="badge neutral" :title="`Backend connector: ${backend.connector}`">{{ backend.connector }}</span>
+              {{ backend.baseUrl }}
+            </div>
           </td>
           <td>
             <div class="request-meta">

@@ -3,6 +3,7 @@ const BLOCKED_EXACT_HEADERS = new Set([
   "origin",
   "priority",
   "referer",
+  "x-llmproxy-request-id",
 ]);
 
 export function shouldForwardUpstreamHeader(headerName: string): boolean {

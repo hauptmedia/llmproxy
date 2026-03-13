@@ -1,7 +1,5 @@
-import { computed } from "vue";
 import type { DashboardState, DebugMetrics, DebugTranscriptEntry } from "../types/dashboard";
-import { buildDebugMetaBadges } from "../utils/dashboard-badges";
-import { formatDuration, formatTokenRate, prettyJson } from "../utils/formatters";
+import { formatTokenRate, prettyJson } from "../utils/formatters";
 import { isClientRecord } from "../utils/guards";
 import { readErrorResponse } from "../utils/http";
 import { hasVisibleMessageContent } from "../utils/message-rendering";
@@ -55,6 +53,14 @@ function readPayloadCounts(payload: Record<string, any>) {
 
 export function createInitialDebugMetrics(): DebugMetrics {
   return createEmptyDebugMetrics();
+}
+
+function createClientDebugRequestId(): string {
+  if (typeof window !== "undefined" && typeof window.crypto?.randomUUID === "function") {
+    return `dbg_${window.crypto.randomUUID()}`;
+  }
+
+  return `dbg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function useDebugChat(state: DashboardState) {
@@ -176,33 +182,6 @@ export function useDebugChat(state: DashboardState) {
     }
 
     const rate = formatTokenRate(counts.completionPerSecond);
-    if (rate) {
-      parts.push(rate);
-    }
-
-    return parts.join(" | ");
-  }
-
-  function formatLiveUsage(): string {
-    const metrics = state.debug.metrics;
-    const parts: string[] = [];
-
-    if (metrics.completionTokens > 0) {
-      parts.push(`${metrics.completionTokens} live tok`);
-    }
-
-    if (metrics.reasoningTokens > 0) {
-      parts.push(`${metrics.reasoningTokens} reasoning`);
-    }
-
-    const elapsedFromTokens = metrics.firstTokenAt
-      ? formatDuration(Date.now() - metrics.firstTokenAt)
-      : "";
-    if (elapsedFromTokens && elapsedFromTokens !== "n/a") {
-      parts.push(`elapsed ${elapsedFromTokens}`);
-    }
-
-    const rate = formatTokenRate(metrics.completionPerSecond);
     if (rate) {
       parts.push(rate);
     }
@@ -545,6 +524,7 @@ export function useDebugChat(state: DashboardState) {
       backend: "",
       finish_reason: "",
     };
+    const requestId = createClientDebugRequestId();
 
     state.debug.transcript.push(userTurn, assistantTurn);
     state.debug.error = "";
@@ -553,6 +533,7 @@ export function useDebugChat(state: DashboardState) {
     state.debug.usage = "";
     resetDebugMetrics();
     state.debug.metrics.startedAt = Date.now();
+    state.debug.lastRequestId = requestId;
     state.debug.rawRequest = prettyJson(payload);
     state.debug.rawResponse = "";
     state.debug.prompt = "";
@@ -565,12 +546,14 @@ export function useDebugChat(state: DashboardState) {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          "x-llmproxy-request-id": requestId,
         },
         body: JSON.stringify(payload),
         signal: state.debug.abortController.signal,
       });
 
       state.debug.backend = response.headers.get("x-llmproxy-backend") || "";
+      state.debug.lastRequestId = response.headers.get("x-llmproxy-request-id") || requestId;
       state.debug.status = `HTTP ${response.status}`;
       assistantTurn.backend = state.debug.backend;
 
@@ -614,14 +597,12 @@ export function useDebugChat(state: DashboardState) {
     state.debug.usage = "";
     state.debug.error = "";
     state.debug.backend = "";
+    state.debug.lastRequestId = "";
     resetDebugMetrics();
   }
 
-  const debugMetaBadges = computed(() => buildDebugMetaBadges(state.debug, formatLiveUsage()));
-
   return {
     clearDebugChat,
-    debugMetaBadges,
     sendDebugChat,
     stopDebugChat,
     stopDebugMetricsTicker,

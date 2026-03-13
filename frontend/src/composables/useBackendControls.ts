@@ -44,49 +44,15 @@ export function useBackendControls(state: DashboardState) {
     }
   }
 
-  function mergeModels(models: KnownModel[]): void {
-    const merged = new Map<string, KnownModel>();
-
-    for (const model of state.models) {
-      merged.set(model.id, model);
-    }
-
-    for (const model of models) {
-      if (!merged.has(model.id)) {
-        merged.set(model.id, model);
-      }
-    }
-
-    state.models = Array.from(merged.values()).sort((left, right) => left.id.localeCompare(right.id));
+  function syncModels(models: KnownModel[]): void {
+    state.models = [...models].sort((left, right) => left.id.localeCompare(right.id));
     ensureDebugModel();
   }
 
   function applySnapshot(snapshot: ProxySnapshot): void {
     state.snapshot = snapshot;
     syncBackendDrafts(snapshot.backends);
-    mergeModels(collectSnapshotModels(snapshot));
-  }
-
-  async function refreshModels(): Promise<void> {
-    try {
-      const response = await fetch("/v1/models", { method: "GET" });
-      if (!response.ok) {
-        throw new Error(await readErrorResponse(response));
-      }
-
-      const payload = await response.json();
-      const models = Array.isArray(payload?.data)
-        ? payload.data
-          .filter((entry: any) => typeof entry?.id === "string")
-          .map((entry: any) => ({
-            id: entry.id,
-            ownedBy: typeof entry.owned_by === "string" ? entry.owned_by : "backend",
-          }))
-        : [];
-      mergeModels(models);
-    } catch {
-      mergeModels(collectSnapshotModels(state.snapshot));
-    }
+    syncModels(collectSnapshotModels(snapshot));
   }
 
   async function saveBackend(backendId: string): Promise<void> {
@@ -123,7 +89,6 @@ export function useBackendControls(state: DashboardState) {
   return {
     applySnapshot,
     ensureDebugModel,
-    refreshModels,
     saveBackend,
     syncBackendDrafts,
   };

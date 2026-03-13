@@ -12,6 +12,7 @@ import {
   RequestLogDetail,
   RequestLogEntry,
 } from "./types";
+import { getBackendConnector, getDefaultHealthPaths } from "./backend-connectors";
 import { joinUrl, toErrorMessage } from "./utils";
 import { resolveBackendHeaders } from "./config-store";
 
@@ -454,7 +455,7 @@ export class LoadBalancer extends EventEmitter {
       return;
     }
 
-    const healthPaths = backend.config.healthPath ? [backend.config.healthPath] : ["/health", "/v1/models"];
+    const healthPaths = getDefaultHealthPaths(backend.config);
     let lastError = "Health check failed.";
     let discoveredModelDetails = backend.discoveredModelDetails;
 
@@ -475,9 +476,7 @@ export class LoadBalancer extends EventEmitter {
           continue;
         }
 
-        if (healthPath === "/v1/models") {
-          discoveredModelDetails = await tryExtractModels(response, discoveredModelDetails);
-        }
+        discoveredModelDetails = await tryExtractModels(response, discoveredModelDetails);
 
         backend.healthy = true;
         backend.lastError = undefined;
@@ -500,6 +499,7 @@ export class LoadBalancer extends EventEmitter {
       id: backend.config.id,
       name: backend.config.name,
       baseUrl: backend.config.baseUrl,
+      connector: getBackendConnector(backend.config),
       enabled: backend.config.enabled,
       healthy: backend.healthy,
       maxConcurrency: backend.config.maxConcurrency,

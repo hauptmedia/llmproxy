@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { BackendConfig, ProxyConfig, ServerConfig } from "./types";
+import { BackendConfig, BackendConnector, ProxyConfig, ServerConfig } from "./types";
 
 const DEFAULT_SERVER_CONFIG: ServerConfig = {
   host: "0.0.0.0",
@@ -120,6 +120,7 @@ function normalizeBackendConfig(config: Partial<BackendConfig>): BackendConfig {
     id: config.id.trim(),
     name: config.name.trim(),
     baseUrl: config.baseUrl.trim().replace(/\/+$/, ""),
+    connector: normalizeConnector(config.connector),
     enabled: config.enabled !== false,
     maxConcurrency:
       typeof config.maxConcurrency === "number" && Number.isInteger(config.maxConcurrency) && config.maxConcurrency > 0
@@ -142,4 +143,8 @@ function normalizeBackendConfig(config: Partial<BackendConfig>): BackendConfig {
     apiKeyEnv: typeof config.apiKeyEnv === "string" && config.apiKeyEnv.trim().length > 0 ? config.apiKeyEnv : undefined,
     timeoutMs: typeof config.timeoutMs === "number" && config.timeoutMs > 0 ? config.timeoutMs : undefined,
   };
+}
+
+function normalizeConnector(value: unknown): BackendConnector {
+  return value === "ollama" ? "ollama" : "openai";
 }

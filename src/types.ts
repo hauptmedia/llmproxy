@@ -1,6 +1,7 @@
 export type RequestOutcome = "success" | "error" | "cancelled" | "queued_timeout";
 export type ActiveConnectionPhase = "queued" | "connected" | "streaming";
 export type ActiveConnectionKind = "chat.completions" | "completions" | "other";
+export type BackendConnector = "openai" | "ollama";
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
@@ -17,6 +18,7 @@ export interface BackendConfig {
   id: string;
   name: string;
   baseUrl: string;
+  connector?: BackendConnector;
   enabled: boolean;
   maxConcurrency: number;
   healthPath?: string;
@@ -78,6 +80,7 @@ export interface BackendRuntimeSnapshot {
   id: string;
   name: string;
   baseUrl: string;
+  connector: BackendConnector;
   enabled: boolean;
   healthy: boolean;
   maxConcurrency: number;

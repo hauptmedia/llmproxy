@@ -189,6 +189,109 @@ async function startMockOpenAiBackend(
   return server;
 }
 
+async function startMockOllamaBackend(
+  port: number,
+  receivedPayloads: Array<Record<string, unknown>>,
+  streamModes: boolean[],
+): Promise<Server> {
+  const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    const method = request.method?.toUpperCase() ?? "GET";
+
+    if (method === "GET" && url.pathname === "/api/tags") {
+      response.writeHead(200, {
+        "content-type": "application/json; charset=utf-8",
+      });
+      response.end(JSON.stringify({
+        models: [
+          {
+            name: "mock-ollama-model",
+            model: "mock-ollama-model",
+            modified_at: "2026-03-13T11:00:00Z",
+            size: 123456,
+            details: {
+              format: "gguf",
+              family: "qwen",
+            },
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/chat") {
+      const body = await readRequestBody(request);
+      const payload = JSON.parse(body.toString("utf8")) as Record<string, unknown>;
+      receivedPayloads.push(payload);
+      streamModes.push(payload.stream === true);
+
+      response.writeHead(200, {
+        "content-type": "application/x-ndjson",
+      });
+
+      const chunks = [
+        {
+          model: payload.model ?? "mock-ollama-model",
+          created_at: "2026-03-13T11:00:00.000Z",
+          message: {
+            role: "assistant",
+            content: "",
+            thinking: "Native reasoning.",
+          },
+          done: false,
+        },
+        {
+          model: payload.model ?? "mock-ollama-model",
+          created_at: "2026-03-13T11:00:00.100Z",
+          message: {
+            role: "assistant",
+            content: "Native hello.",
+          },
+          done: false,
+        },
+        {
+          model: payload.model ?? "mock-ollama-model",
+          created_at: "2026-03-13T11:00:00.200Z",
+          message: {
+            role: "assistant",
+            content: "",
+          },
+          done: true,
+          done_reason: "stop",
+          prompt_eval_count: 7,
+          prompt_eval_duration: 14_000_000,
+          eval_count: 3,
+          eval_duration: 30_000_000,
+        },
+      ];
+
+      for (const chunk of chunks) {
+        response.write(`${JSON.stringify(chunk)}\n`);
+      }
+
+      response.end();
+      return;
+    }
+
+    response.writeHead(404, {
+      "content-type": "application/json; charset=utf-8",
+    });
+    response.end(JSON.stringify({
+      error: `Unhandled mock Ollama route ${method} ${url.pathname}`,
+    }));
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+
+  return server;
+}
+
 async function startMockToolCallBackend(
   port: number,
   receivedPayloads: Array<Record<string, unknown>>,
@@ -753,6 +856,7 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
   });
   assert.equal(nonStreamingResponse.status, 200);
   assert.equal(nonStreamingResponse.headers.get("x-llmproxy-backend"), "inner-router");
+  assert.ok(nonStreamingResponse.headers.get("x-llmproxy-request-id"));
   const nonStreamingPayload = await nonStreamingResponse.json() as {
     object: string;
     choices: Array<{
@@ -823,6 +927,138 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
   assert.equal(typeof historyPayload.recentRequests[0]?.timeToFirstTokenMs, "number");
 
   assert.deepEqual(streamModes, [true, true]);
+});
+
+test("ollama connector keeps the client surface OpenAI-compatible", async (t) => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-ollama-connector-"));
+  const receivedPayloads: Array<Record<string, unknown>> = [];
+  const streamModes: boolean[] = [];
+  const cleanup: Array<() => Promise<void>> = [];
+
+  t.after(async () => {
+    for (const entry of cleanup.reverse()) {
+      await entry();
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  const ollamaPort = await getFreePort();
+  const proxyPort = await getFreePort();
+
+  const ollamaServer = await startMockOllamaBackend(ollamaPort, receivedPayloads, streamModes);
+  cleanup.push(async () => {
+    await new Promise<void>((resolve, reject) => {
+      ollamaServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  });
+
+  const config: ProxyConfig = {
+    server: {
+      host: "127.0.0.1",
+      port: proxyPort,
+      dashboardPath: "/dashboard",
+      requestTimeoutMs: 15_000,
+      queueTimeoutMs: 2_000,
+      healthCheckIntervalMs: 60_000,
+    },
+    backends: [
+      {
+        id: "ollama-native",
+        name: "ollama native",
+        baseUrl: `http://127.0.0.1:${ollamaPort}`,
+        connector: "ollama",
+        enabled: true,
+        maxConcurrency: 1,
+      },
+    ],
+  };
+
+  const router = await startRouter(config, path.join(tempDir, "ollama-router.config.json"));
+  cleanup.push(async () => {
+    await router.server.stop();
+    await router.loadBalancer.stop();
+  });
+
+  const baseUrl = `http://127.0.0.1:${proxyPort}`;
+  const statePayload = await waitForOuterState(baseUrl, "mock-ollama-model");
+  assert.equal(statePayload.backends[0]?.healthy, true);
+  assert.deepEqual(statePayload.backends[0]?.discoveredModels, ["mock-ollama-model"]);
+
+  const modelsResponse = await fetch(`${baseUrl}/v1/models`);
+  assert.equal(modelsResponse.status, 200);
+  const modelsPayload = await modelsResponse.json() as {
+    object: string;
+    data: Array<{ id: string }>;
+  };
+  assert.equal(modelsPayload.object, "list");
+  assert.deepEqual(modelsPayload.data.map((entry) => entry.id), ["mock-ollama-model"]);
+
+  const chatResponse = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "mock-ollama-model",
+      stream: false,
+      max_tokens: 42,
+      messages: [
+        {
+          role: "user",
+          content: "Say hello natively.",
+        },
+      ],
+    }),
+  });
+  assert.equal(chatResponse.status, 200);
+  assert.equal(chatResponse.headers.get("x-llmproxy-backend"), "ollama-native");
+  assert.ok(chatResponse.headers.get("x-llmproxy-request-id"));
+  const chatPayload = await chatResponse.json() as {
+    object: string;
+    choices: Array<{
+      finish_reason: string | null;
+      message: {
+        role: string;
+        content: string;
+        reasoning_content?: string;
+      };
+    }>;
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+    };
+  };
+  assert.equal(chatPayload.object, "chat.completion");
+  assert.equal(chatPayload.choices[0]?.message.role, "assistant");
+  assert.equal(chatPayload.choices[0]?.message.content, "Native hello.");
+  assert.equal(chatPayload.choices[0]?.message.reasoning_content, "Native reasoning.");
+  assert.equal(chatPayload.choices[0]?.finish_reason, "stop");
+  assert.deepEqual(chatPayload.usage, {
+    prompt_tokens: 7,
+    completion_tokens: 3,
+    total_tokens: 10,
+  });
+
+  assert.deepEqual(streamModes, [true]);
+  assert.equal(receivedPayloads[0]?.stream, true);
+  assert.deepEqual(receivedPayloads[0]?.messages, [
+    {
+      role: "user",
+      content: "Say hello natively.",
+    },
+  ]);
+  assert.deepEqual(receivedPayloads[0]?.options, {
+    num_predict: 42,
+  });
 });
 
 test("proxy preserves max_tokens and tool calls for non-streaming chat clients", async (t) => {
@@ -1093,11 +1329,13 @@ test("active connections expose live request details for chat history inspection
 
   const baseUrl = `http://127.0.0.1:${routerPort}`;
   await waitForHealthyBackend(baseUrl, "mock-live-upstream");
+  const requestedRequestId = "chat-debug-live-request";
 
   const liveResponsePromise = fetch(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      "x-llmproxy-request-id": requestedRequestId,
     },
     body: JSON.stringify({
       model: "mock-live-model",
@@ -1116,6 +1354,7 @@ test("active connections expose live request details for chat history inspection
   });
 
   const activeConnection = await waitForActiveConnection(baseUrl);
+  assert.equal(activeConnection.id, requestedRequestId);
   assert.equal(activeConnection.path, "/v1/chat/completions");
   assert.equal(activeConnection.hasDetail, true);
 
@@ -1151,6 +1390,7 @@ test("active connections expose live request details for chat history inspection
 
   const liveResponse = await liveResponsePromise;
   assert.equal(liveResponse.status, 200);
+  assert.equal(liveResponse.headers.get("x-llmproxy-request-id"), requestedRequestId);
   const liveBody = await liveResponse.text();
   assert.match(liveBody, /Streaming /);
   assert.match(liveBody, /response\./);

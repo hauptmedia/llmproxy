@@ -26,6 +26,7 @@ export interface BackendSnapshot {
   id: string;
   name: string;
   baseUrl: string;
+  connector: "openai" | "ollama";
   enabled: boolean;
   healthy: boolean;
   maxConcurrency: number;
@@ -183,6 +184,7 @@ export interface DebugState {
   status: string;
   usage: string;
   error: string;
+  lastRequestId: string;
   rawRequest: string;
   rawResponse: string;
   transcript: DebugTranscriptEntry[];

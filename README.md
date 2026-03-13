@@ -2,20 +2,21 @@
 
 ![llmproxy logo](frontend/src/assets/llmproxy-logo.svg)
 
-A small TypeScript proxy with an OpenAI-compatible chat completions interface, health checks, queueing, and a live dashboard for local `llama.cpp` instances or other OpenAI-compatible backends.
+A small TypeScript proxy with an OpenAI-compatible chat completions interface, health checks, queueing, and a live dashboard for local `llama.cpp`, Ollama, or other compatible backends.
 
 Prerequisite: Node.js 18+ should be available on your system `PATH` or configured as the project interpreter in WebStorm.
 
 ## Features
 
 - OpenAI-compatible forwarding for `POST /v1/chat/completions`
+- Backend connector abstraction with built-in `openai` and `ollama` connectors
 - Load balancing across multiple backends with configurable `maxConcurrency`
 - Queueing when local backends are fully utilized
 - Vue-based single page dashboard served by the backend under `/dashboard`, refactored into Vue single-file components and built with Vite plus Tailwind CSS
 - Overview page with health status and live active connections, plus dedicated subpages for chat debugging and backend management
 - Built-in chat debugger with model selection, live token metrics, sampler parameters, and raw request/response views
 - Aggregated `/v1/models`
-- Health checks for OpenAI-compatible backends via `/v1/models`
+- Connector-aware health checks and model discovery for OpenAI-compatible backends and native Ollama backends
 
 ## Supported Routes
 
@@ -89,9 +90,10 @@ The example configuration includes:
 Important backend fields:
 
 - `baseUrl`: target URL of the OpenAI-compatible backend
+- `connector`: backend adapter to use, currently `openai` or `ollama`
 - `maxConcurrency`: concurrent requests allowed for that backend
 - `models`: optional model list or patterns such as `["llama-*"]` or `["*"]`
-- `healthPath`: optional backend health endpoint, for OpenAI-compatible backends usually `/v1/models`
+- `healthPath`: optional backend health endpoint, for `openai` usually `/v1/models`, for `ollama` usually `/api/tags`
 - `apiKey` or `apiKeyEnv`: optional upstream authentication
 
 Dashboard changes to `enabled` and `maxConcurrency` are written back to your local `llmproxy.config.json`.
@@ -101,6 +103,7 @@ Dashboard changes to `enabled` and `maxConcurrency` are written back to your loc
 - Requests are buffered so routing can take the requested `model` into account.
 - Chat completion requests always use upstream streaming so the proxy can collect live metrics such as `tok/s`, TTFB, and in-flight token counts.
 - If the client does not request streaming, the proxy buffers the upstream stream internally and returns a normal JSON response at the end.
+- `connector: "ollama"` keeps the external client contract OpenAI-compatible while translating upstream traffic to native Ollama endpoints such as `/api/chat` and `/api/tags`.
 - The proxy is intentionally limited to the completion routes listed above; other `/v1/*` routes return `501`.
 - The `Active Connections` dashboard section shows live `chat.completions` requests in real time, including queue state, streaming mode, token counts, and `tok/s`.
-- The `Chat` page lets you send debug requests to `/v1/chat/completions` and inspect transcript, parameters, routing, and raw responses.
+- The `Chat` page lets you send debug requests to `/v1/chat/completions`, inspect the conversation, and jump straight into the stored request debugger for the last request.
