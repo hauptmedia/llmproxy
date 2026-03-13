@@ -13,6 +13,14 @@ export function createDashboardRouter() {
         return savedPosition;
       }
 
+      if (_to.hash) {
+        return {
+          el: _to.hash,
+          top: 16,
+          behavior: "smooth",
+        };
+      }
+
       return { left: 0, top: 0 };
     },
     routes: [

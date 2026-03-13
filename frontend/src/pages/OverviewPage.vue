@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useRouter } from "vue-router";
 import BackendTable from "../components/BackendTable.vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import { badgeClass, buildConnectionTransportBadges } from "../utils/dashboard-badges";
-import type { ActiveConnectionSnapshot } from "../types/dashboard";
+import type { ActiveConnectionSnapshot, SummaryCard } from "../types/dashboard";
 
 const store = useDashboardStore();
+const router = useRouter();
 
 const chatCompletionConnections = computed(() => (
   store.state.snapshot.activeConnections.filter((connection) => connection.kind === "chat.completions")
@@ -46,6 +48,30 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
 
   return parts.join(" › ");
 }
+function openSummaryDrilldown(card: SummaryCard, segmentIndex: number): void {
+  const segment = card.segments?.[segmentIndex];
+  if (!segment?.drilldown) {
+    return;
+  }
+
+  const targetHash = segment.drilldown.hash ?? "";
+  const currentRoute = router.currentRoute.value;
+  if (currentRoute.name === segment.drilldown.page && currentRoute.hash === targetHash) {
+    if (targetHash) {
+      const targetElement = document.querySelector(targetHash);
+      if (targetElement instanceof HTMLElement) {
+        targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+    return;
+  }
+
+  void router.push({
+    name: segment.drilldown.page,
+    hash: targetHash,
+    query: segment.drilldown.query,
+  });
+}
 </script>
 
 <template>
@@ -66,11 +92,37 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
               aria-hidden="true"
             ></span>
             <span
-              :class="['card-value-segment', segment.tone ? `tone-${segment.tone}` : '']"
-              :title="segment.title || card.title"
+              :class="[
+                'card-value-segment',
+                segment.tone ? `tone-${segment.tone}` : '',
+                segment.drilldown ? 'card-value-segment-clickable' : '',
+              ]"
             >
-              <span class="card-value-segment-number">{{ segment.text }}</span>
-              <span v-if="segment.label" class="card-value-segment-label">{{ segment.label }}</span>
+              <button
+                v-if="segment.drilldown"
+                type="button"
+                class="card-value-segment-button"
+                :title="segment.title || card.title"
+                @click="openSummaryDrilldown(card, index)"
+              >
+                <span class="card-value-segment-number">{{ segment.text }}</span>
+                <span v-if="segment.label" class="card-value-segment-label">{{ segment.label }}</span>
+              </button>
+              <template v-else>
+                <span
+                  class="card-value-segment-number"
+                  :title="segment.title || card.title"
+                >
+                  {{ segment.text }}
+                </span>
+                <span
+                  v-if="segment.label"
+                  class="card-value-segment-label"
+                  :title="segment.title || card.title"
+                >
+                  {{ segment.label }}
+                </span>
+              </template>
             </span>
           </template>
         </div>
@@ -79,12 +131,7 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
       </article>
     </div>
 
-    <div class="panel">
-      <div class="panel-header">
-        <div>
-          <h2 class="panel-title">Backend Runtime</h2>
-        </div>
-      </div>
+    <div id="backend-runtime" class="panel">
       <BackendTable
         :backends="store.state.snapshot.backends"
         :recent-requests="store.state.snapshot.recentRequests"
@@ -93,7 +140,7 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
       />
     </div>
 
-    <div class="panel">
+    <div id="active-connections" class="panel">
       <div class="panel-header">
         <div>
           <h2 class="panel-title">Active Connections</h2>
@@ -183,7 +230,7 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
       <div v-else class="empty">No active connections are running right now.</div>
     </div>
 
-    <div class="panel">
+    <div id="queued-connections" class="panel">
       <div class="panel-header">
         <div>
           <h2 class="panel-title">Queue</h2>

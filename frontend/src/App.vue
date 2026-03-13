@@ -49,9 +49,18 @@ watch(
       <header class="hero">
         <div class="hero-bar">
           <div class="hero-nav-group">
-            <RouterLink class="brand-link" :to="{ name: 'config' }" aria-label="Open config" title="Open config">
-              <BrandLogo compact title="Open config" />
-            </RouterLink>
+            <div class="brand-status-shell">
+              <RouterLink class="brand-link" :to="{ name: 'config' }" aria-label="Open config" title="Open config">
+                <BrandLogo compact title="Open config" />
+              </RouterLink>
+              <span
+                :class="['brand-connection-indicator', store.state.connectionStatus]"
+                :title="store.state.connectionText"
+                aria-hidden="true"
+              >
+                <span class="connection-dot"></span>
+              </span>
+            </div>
             <nav class="page-nav" aria-label="Dashboard pages">
               <RouterLink
                 v-for="link in pageLinks"
@@ -63,9 +72,6 @@ watch(
                 {{ link.label }}
               </RouterLink>
             </nav>
-          </div>
-          <div :class="['meta', store.state.connectionStatus]" :title="store.state.connectionText">
-            <span class="connection-dot" aria-hidden="true"></span>
           </div>
         </div>
       </header>

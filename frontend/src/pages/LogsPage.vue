@@ -1,11 +1,14 @@
 ﻿<script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import type { ActiveConnectionSnapshot, RequestLogEntry } from "../types/dashboard";
 import { describeFinishReason } from "../utils/dashboard-badges";
 import { formatDate, formatDuration, formatTokenRate } from "../utils/formatters";
 
 const store = useDashboardStore();
+const route = useRoute();
+const router = useRouter();
 type FilterKey =
   | "time"
   | "outcome"
@@ -71,6 +74,19 @@ const filters = reactive({
   note: "",
 });
 
+const supportedOutcomeFilters = new Set([
+  "all",
+  "queued",
+  "connected",
+  "streaming",
+  "success",
+  "completed",
+  "error",
+  "cancelled",
+  "rejected",
+  "queued_timeout",
+]);
+
 const numericComparatorOptions = [
   { value: "any", label: "Any" },
   { value: "gt", label: ">" },
@@ -134,6 +150,8 @@ const outcomeOptions = computed(() => {
     options.push({ value: "streaming", label: "Streaming" });
   }
 
+  options.push({ value: "success", label: "Successful" });
+
   const finishReasons = Array.from(
     new Set(
       tableEntries.value
@@ -156,6 +174,7 @@ const outcomeOptions = computed(() => {
   options.push(
     { value: "error", label: "Failed" },
     { value: "cancelled", label: "Cancelled" },
+    { value: "rejected", label: "Rejected" },
     { value: "queued_timeout", label: "Queue timeout" },
   );
 
@@ -198,7 +217,7 @@ const filteredEntries = computed(() => {
       return false;
     }
 
-    if (filters.outcome !== "all" && logOutcomeKey(entry) !== filters.outcome) {
+    if (!matchesOutcomeFilter(entry, filters.outcome)) {
       return false;
     }
 
@@ -480,6 +499,24 @@ function clearFilter(filterKey: FilterKey): void {
   }
 }
 
+function normalizeOutcomeFilterValue(value: unknown): string {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  if (typeof rawValue !== "string") {
+    return "all";
+  }
+
+  const normalized = rawValue.trim();
+  if (!normalized) {
+    return "all";
+  }
+
+  if (supportedOutcomeFilters.has(normalized) || normalized.startsWith("finish:")) {
+    return normalized;
+  }
+
+  return "all";
+}
+
 function matchesText(query: string, values: Array<string | undefined>): boolean {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) {
@@ -684,6 +721,50 @@ function finishOutcomeKey(finishReason: string): string {
   return `finish:${finishReason}`;
 }
 
+function isRejectedOutcome(entry: RecentRequestRow): boolean {
+  return entry.outcome !== "success" && !entry.backendId;
+}
+
+function matchesOutcomeFilter(entry: RecentRequestRow, filterValue: string): boolean {
+  if (filterValue === "all") {
+    return true;
+  }
+
+  if (filterValue === "queued" || filterValue === "connected" || filterValue === "streaming") {
+    return entry.outcome === filterValue;
+  }
+
+  if (filterValue === "success") {
+    return entry.outcome === "success";
+  }
+
+  if (filterValue === "completed") {
+    return entry.outcome === "success" && !entry.finishReason;
+  }
+
+  if (filterValue === "error") {
+    return entry.outcome === "error" && Boolean(entry.backendId);
+  }
+
+  if (filterValue === "cancelled") {
+    return entry.outcome === "cancelled" && Boolean(entry.backendId);
+  }
+
+  if (filterValue === "rejected") {
+    return isRejectedOutcome(entry);
+  }
+
+  if (filterValue === "queued_timeout") {
+    return entry.outcome === "queued_timeout";
+  }
+
+  if (filterValue.startsWith("finish:")) {
+    return entry.outcome === "success" && finishOutcomeKey(entry.finishReason ?? "") === filterValue;
+  }
+
+  return logOutcomeKey(entry) === filterValue;
+}
+
 function logOutcomeKey(entry: RecentRequestRow): string {
   if (entry.outcome === "queued" || entry.outcome === "connected" || entry.outcome === "streaming") {
     return entry.outcome;
@@ -736,6 +817,36 @@ function handleDocumentPointerDown(event: PointerEvent): void {
     openFilterKey.value = "";
   }
 }
+
+watch(
+  () => route.query.outcome,
+  (queryValue) => {
+    const normalized = normalizeOutcomeFilterValue(queryValue);
+    if (filters.outcome !== normalized) {
+      filters.outcome = normalized;
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => filters.outcome,
+  (value) => {
+    const normalizedRouteOutcome = normalizeOutcomeFilterValue(route.query.outcome);
+    if (value === normalizedRouteOutcome) {
+      return;
+    }
+
+    const nextQuery = { ...route.query };
+    if (value === "all") {
+      delete nextQuery.outcome;
+    } else {
+      nextQuery.outcome = value;
+    }
+
+    void router.replace({ query: nextQuery });
+  },
+);
 
 onMounted(() => {
   document.addEventListener("pointerdown", handleDocumentPointerDown);

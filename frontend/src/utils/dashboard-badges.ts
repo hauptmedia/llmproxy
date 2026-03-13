@@ -70,6 +70,13 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
 
   return [
     {
+      key: "uptime",
+      label: "Uptime",
+      value: formatDuration(uptimeMs),
+      note: "",
+      title: `How long the current llmproxy process has been running. Started: ${formatDate(snapshot.startedAt)}.`,
+    },
+    {
       key: "healthy-backends",
       label: "Backends",
       value: `${healthyCount} / ${enabledCount}`,
@@ -82,12 +89,20 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
           label: "Healthy",
           tone: healthyTone,
           title: "Enabled backends that passed their most recent health check.",
+          drilldown: {
+            page: "overview",
+            hash: "#backend-runtime",
+          },
         },
         {
           text: String(enabledCount),
           label: "Total",
           tone: "neutral",
           title: "Total number of enabled backends currently configured in llmproxy.",
+          drilldown: {
+            page: "overview",
+            hash: "#backend-runtime",
+          },
         },
       ],
     },
@@ -104,18 +119,26 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
           label: "Active",
           tone: "info",
           title: "Requests currently active or already assigned to a backend slot.",
+          drilldown: {
+            page: "overview",
+            hash: "#active-connections",
+          },
         },
         {
           text: String(waitingConnections),
           label: "Queued",
           tone: "warn",
           title: "Requests still queued because no backend slot is available yet.",
+          drilldown: {
+            page: "overview",
+            hash: "#queued-connections",
+          },
         },
       ],
     },
     {
       key: "requests",
-      label: "Requests",
+      label: `Requests (last ${snapshot.recentRequestLimit})`,
       value: `${recentSuccessCount} / ${recentFailureCount} / ${recentRejectedCount} / ${recentCancelledCount}`,
       note: "",
       title: `Request outcome overview within the last ${snapshot.recentRequestLimit} retained log entries. Successful: completed requests. Failed: requests that had a backend assigned and then errored. Rejected: requests that never received a backend assignment, including no matching backend, no enabled backend, or queue timeout before assignment. Cancelled: requests that had a backend assigned but were cancelled before completion.`,
@@ -126,33 +149,50 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
           label: "Successful",
           tone: "good",
           title: `Successfully completed requests within the last ${snapshot.recentRequestLimit} retained log entries.`,
+          drilldown: {
+            page: "logs",
+            query: {
+              outcome: "success",
+            },
+          },
         },
         {
           text: String(recentFailureCount),
           label: "Failed",
           tone: "bad",
           title: `Requests within the last ${snapshot.recentRequestLimit} retained log entries that already had a backend assigned and then failed while being proxied or due to an upstream/server error.`,
+          drilldown: {
+            page: "logs",
+            query: {
+              outcome: "error",
+            },
+          },
         },
         {
           text: String(recentCancelledCount),
           label: "Cancelled",
           tone: "warn",
           title: `Requests within the last ${snapshot.recentRequestLimit} retained log entries that already had a backend assigned but were cancelled before completion.`,
+          drilldown: {
+            page: "logs",
+            query: {
+              outcome: "cancelled",
+            },
+          },
         },
         {
           text: String(recentRejectedCount),
           label: "Rejected",
           tone: "warn",
           title: `Requests within the last ${snapshot.recentRequestLimit} retained log entries that never received a backend assignment. This includes cases like no configured backend match, no enabled backend, or timing out while waiting in the queue before a backend slot was assigned.`,
+          drilldown: {
+            page: "logs",
+            query: {
+              outcome: "rejected",
+            },
+          },
         },
       ],
-    },
-    {
-      key: "uptime",
-      label: "Uptime",
-      value: formatDuration(uptimeMs),
-      note: "",
-      title: `How long the current llmproxy process has been running. Started: ${formatDate(snapshot.startedAt)}.`,
     },
   ];
 }

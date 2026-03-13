@@ -47,13 +47,15 @@ function backendStateClass(backend: BackendSnapshot): "good" | "bad" | "disabled
 }
 
 function backendStateTitle(backend: BackendSnapshot): string {
+  const lastCheckText = backend.lastCheckedAt ? ` Last check: ${formatDate(backend.lastCheckedAt)}.` : "";
+
   if (!backend.enabled) {
-    return "Backend is disabled and excluded from routing.";
+    return `Backend is disabled and excluded from routing.${lastCheckText}`;
   }
 
   return backend.healthy
-    ? "Backend is healthy and routable."
-    : "Backend is currently unhealthy or unavailable for routing.";
+    ? `Backend is healthy and routable.${lastCheckText}`
+    : `Backend is currently unhealthy or unavailable for routing.${lastCheckText}`;
 }
 
 function backendStatusError(backend: BackendSnapshot): string {
@@ -141,7 +143,7 @@ function recentWindowLabel(): string {
         <tr>
           <th>Backend</th>
           <th>Type</th>
-          <th v-if="isConfigMode()">Max concurrency</th>
+          <th v-if="isConfigMode()" class="backend-number-cell">Max concurrency</th>
           <th v-if="isRuntimeMode()">Status</th>
           <th v-if="isConfigMode()">Effective models</th>
           <th v-if="isRuntimeMode()">Traffic</th>
@@ -168,26 +170,20 @@ function recentWindowLabel(): string {
           <td>
             <div class="log-primary">{{ connectorLabel(backend.connector) }}</div>
           </td>
-          <td v-if="isConfigMode()">
+          <td v-if="isConfigMode()" class="backend-number-cell">
             <div class="log-primary" title="Configured maximum number of concurrent requests for this backend.">
               {{ backend.maxConcurrency }}
             </div>
           </td>
           <td v-if="isRuntimeMode()">
-            <div class="request-meta">
-              <span
-                class="badge neutral"
-                title="Current backend slot usage. The first number is the active connections on this backend, and the second is the configured maximum concurrency."
-              >
-                connections {{ backend.activeRequests }} / {{ backend.maxConcurrency }}
-              </span>
+            <div
+              class="log-primary"
+              title="Current backend slot usage. The first number is the active connections on this backend, and the second is the configured maximum concurrency."
+            >
+              connections {{ backend.activeRequests }} / {{ backend.maxConcurrency }}
             </div>
-            <div class="table-sub">
-              Last check: {{ formatDate(backend.lastCheckedAt) }}
-              <template v-if="backendStatusError(backend)">
-                <br />
-                {{ backendStatusError(backend) }}
-              </template>
+            <div v-if="backendStatusError(backend)" class="table-sub">
+              {{ backendStatusError(backend) }}
             </div>
           </td>
           <td v-if="isConfigMode()">
@@ -212,17 +208,17 @@ function recentWindowLabel(): string {
             </div>
           </td>
           <td v-if="isRuntimeMode()">
-            <div class="request-meta">
-              <span class="badge good" :title="`Successful requests served by this backend ${recentWindowLabel()}.`">ok {{ recentBackendSuccessCount(backend) }}</span>
-              <span class="badge bad" :title="`Failed requests served by this backend ${recentWindowLabel()}.`">fail {{ recentBackendFailureCount(backend) }}</span>
-              <span class="badge warn" :title="`Cancelled requests served by this backend ${recentWindowLabel()}.`">cancel {{ recentBackendCancelledCount(backend) }}</span>
+            <div class="inline-metric-row log-primary">
+              <span class="inline-metric good" :title="`Successful requests served by this backend ${recentWindowLabel()}.`">ok {{ recentBackendSuccessCount(backend) }}</span>
+              <span class="inline-metric bad" :title="`Failed requests served by this backend ${recentWindowLabel()}.`">fail {{ recentBackendFailureCount(backend) }}</span>
+              <span class="inline-metric warn" :title="`Cancelled requests served by this backend ${recentWindowLabel()}.`">cancel {{ recentBackendCancelledCount(backend) }}</span>
             </div>
             <div class="table-sub" :title="`Total retained requests for this backend ${recentWindowLabel()}.`">total {{ recentBackendRequestCount(backend) }}</div>
           </td>
           <td v-if="isRuntimeMode()">
-            <div class="request-meta">
-              <span class="badge neutral" :title="`Average end-to-end latency for this backend ${recentWindowLabel()}.`">avg {{ formatDuration(recentBackendAverageLatency(backend)) }}</span>
-              <span class="badge neutral" :title="`Most recent retained request latency for this backend ${recentWindowLabel()}.`">last {{ formatDuration(recentBackendLastLatency(backend)) }}</span>
+            <div class="inline-metric-row log-primary">
+              <span class="inline-metric neutral" :title="`Average end-to-end latency for this backend ${recentWindowLabel()}.`">avg {{ formatDuration(recentBackendAverageLatency(backend)) }}</span>
+              <span class="inline-metric neutral" :title="`Most recent retained request latency for this backend ${recentWindowLabel()}.`">last {{ formatDuration(recentBackendLastLatency(backend)) }}</span>
             </div>
           </td>
           <td v-if="isRuntimeMode()">

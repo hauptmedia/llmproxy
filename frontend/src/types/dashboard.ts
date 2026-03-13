@@ -296,6 +296,11 @@ export interface SummaryCard {
     tone?: "good" | "warn" | "bad" | "neutral" | "info";
     title?: string;
     separatorBefore?: string;
+    drilldown?: {
+      page: DashboardPage;
+      hash?: string;
+      query?: Record<string, string>;
+    };
   }>;
 }
 

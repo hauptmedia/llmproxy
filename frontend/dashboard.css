@@ -107,9 +107,7 @@
   }
 
   .hero-sticky {
-    position: sticky;
-    top: 0;
-    z-index: 30;
+    position: static;
   }
 
   .hero {
@@ -118,11 +116,11 @@
   }
 
   .hero-bar {
-    @apply flex flex-wrap items-center justify-between gap-4;
+    @apply flex flex-wrap items-start justify-between gap-4;
   }
 
   .hero-nav-group {
-    @apply flex flex-wrap items-center gap-4;
+    @apply flex flex-wrap items-start gap-4;
     min-width: 0;
   }
 
@@ -133,6 +131,10 @@
   .brand-link {
     @apply px-0 py-0 text-inherit;
     text-decoration: none;
+  }
+
+  .brand-status-shell {
+    @apply relative inline-flex;
   }
 
   .brand-lockup {
@@ -160,6 +162,16 @@
   .brand-mark.compact {
     width: 2.75rem;
     height: 2.75rem;
+  }
+
+  .brand-connection-indicator {
+    @apply absolute inline-flex items-center justify-center border border-white/80 bg-white/92 shadow-sm;
+    bottom: -0.18rem;
+    right: -0.18rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 999px;
+    pointer-events: none;
   }
 
   .brand-copy {
@@ -217,6 +229,18 @@
   }
 
   .meta.disconnected .connection-dot {
+    @apply bg-red-700;
+  }
+
+  .brand-connection-indicator.connected .connection-dot {
+    background: #15803d;
+  }
+
+  .brand-connection-indicator.connecting .connection-dot {
+    @apply bg-amber-600;
+  }
+
+  .brand-connection-indicator.disconnected .connection-dot {
     @apply bg-red-700;
   }
 
@@ -318,6 +342,20 @@
 
   .card-value-segment {
     @apply flex min-w-0 flex-1 flex-col justify-center px-4 py-3;
+  }
+
+  .card-value-segment-button {
+    @apply flex w-full min-w-0 flex-col items-start justify-center rounded-[1rem] bg-transparent px-0 py-0 text-left text-inherit;
+    border: 0;
+  }
+
+  .card-value-segment-clickable .card-value-segment-button:hover {
+    filter: brightness(0.97);
+  }
+
+  .card-value-segment-clickable .card-value-segment-button:focus-visible {
+    outline: 2px solid rgba(180, 83, 9, 0.35);
+    outline-offset: 3px;
   }
 
   .card-value-segment-number {
@@ -533,6 +571,10 @@
 
   .backend-action-cell .icon-button {
     @apply inline-flex;
+  }
+
+  .backend-number-cell {
+    @apply text-center align-middle;
   }
 
   .table-name {
@@ -782,6 +824,30 @@
 
   .log-primary {
     @apply text-[13px] font-semibold leading-snug text-stone-900;
+  }
+
+  .inline-metric-row {
+    @apply flex flex-wrap items-center gap-x-3 gap-y-1;
+  }
+
+  .inline-metric {
+    @apply inline-flex items-center;
+  }
+
+  .inline-metric.good {
+    color: #166534;
+  }
+
+  .inline-metric.bad {
+    color: #b91c1c;
+  }
+
+  .inline-metric.warn {
+    color: #b45309;
+  }
+
+  .inline-metric.neutral {
+    color: #1c1917;
   }
 
   .log-secondary {
