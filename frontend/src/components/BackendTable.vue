@@ -3,7 +3,6 @@ import { ref } from "vue";
 import ConnectorBadge from "./ConnectorBadge.vue";
 import ModelInfoDialog from "./ModelInfoDialog.vue";
 import {
-  type BackendDraft,
   type BackendSnapshot,
   type ModelDetailView,
 } from "../types/dashboard";
@@ -12,11 +11,10 @@ import { buildModelSpecs } from "../utils/model-specs";
 
 defineProps<{
   backends: BackendSnapshot[];
-  drafts: Record<string, BackendDraft>;
 }>();
 
 const emit = defineEmits<{
-  (event: "save-backend", backendId: string): void;
+  (event: "edit-backend", backendId: string): void;
 }>();
 
 const selectedModelDetail = ref<ModelDetailView | null>(null);
@@ -51,8 +49,8 @@ function backendStatusError(backend: BackendSnapshot): string {
   return backend.lastError === "Backend disabled." ? "" : (backend.lastError ?? "");
 }
 
-function saveBackend(backendId: string): void {
-  emit("save-backend", backendId);
+function editBackend(backendId: string): void {
+  emit("edit-backend", backendId);
 }
 
 function openModelDetail(detail: ModelDetailView | undefined): void {
@@ -74,7 +72,7 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
           <th>Models</th>
           <th>Traffic</th>
           <th>Latency</th>
-          <th>Controls</th>
+          <th>Config</th>
         </tr>
       </thead>
       <tbody>
@@ -142,29 +140,19 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
               <span class="badge neutral" title="Most recent observed latency for this backend.">last {{ formatDuration(backend.lastLatencyMs) }}</span>
             </div>
           </td>
-          <td v-if="drafts[backend.id]">
-            <label class="inline-toggle">
-              <input v-model="drafts[backend.id].enabled" type="checkbox" />
-              Enabled
-            </label>
-            <label class="inline-number">
-              max
-              <input v-model.number="drafts[backend.id].maxConcurrency" type="number" min="1" step="1" />
-            </label>
-            <div>
-              <button
-                class="button secondary small"
-                type="button"
-                :disabled="drafts[backend.id].saving"
-                @click="saveBackend(backend.id)"
-              >
-                {{ drafts[backend.id].saving ? "Saving..." : "Save" }}
-              </button>
-            </div>
-            <div v-if="drafts[backend.id].error" class="inline-error">{{ drafts[backend.id].error }}</div>
-          </td>
-          <td v-else>
-            <div class="table-sub">Waiting for backend controls...</div>
+          <td>
+            <button
+              class="icon-button compact"
+              type="button"
+              title="Edit backend configuration"
+              aria-label="Edit backend configuration"
+              @click="editBackend(backend.id)"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+              </svg>
+            </button>
           </td>
         </tr>
       </tbody>

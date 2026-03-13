@@ -1,6 +1,6 @@
 import { computed, reactive, shallowReactive } from "vue";
 import { dashboardBootstrap } from "../dashboard-bootstrap";
-import type { BackendDraft, DashboardState } from "../types/dashboard";
+import type { DashboardState } from "../types/dashboard";
 import {
   badgeClass,
   buildConnectionCardBadges,
@@ -32,7 +32,30 @@ function createInitialState(): DashboardState {
       cache: {},
       lastFetchedAt: 0,
     }),
-    backendDrafts: reactive({}) as Record<string, BackendDraft>,
+    backendConfigs: reactive({}),
+    backendEditor: reactive({
+      open: false,
+      mode: "create",
+      originalId: "",
+      saving: false,
+      loading: false,
+      error: "",
+      fields: {
+        id: "",
+        name: "",
+        baseUrl: "",
+        connector: "openai",
+        enabled: true,
+        maxConcurrency: "1",
+        healthPath: "",
+        modelsText: "*",
+        headersText: "",
+        apiKey: "",
+        apiKeyEnv: "",
+        clearApiKey: false,
+        timeoutMs: "",
+      },
+    }),
     debug: reactive({
       model: "",
       systemPrompt: "",
@@ -108,8 +131,8 @@ function createDashboardStoreInternal() {
     }
 
     started = true;
-    backendControls.syncBackendDrafts(state.snapshot.backends);
     backendControls.ensureDebugModel();
+    void backendControls.loadBackendConfigs();
     liveFeed.connectLiveFeed();
     window.addEventListener("keydown", handleKeyDown);
   }
@@ -176,6 +199,7 @@ function createDashboardStoreInternal() {
     summaryCards,
     requestDetailTitle: requestDetail.requestDetailTitle,
     requestDetailSubtitle: requestDetail.requestDetailSubtitle,
+    requestLiveTransportBadges: requestDetail.requestLiveTransportBadges,
     requestStateBadge: requestDetail.requestStateBadge,
     requestMessages: requestDetail.requestMessages,
     requestResponseMetricRows: requestDetail.requestResponseMetricRows,
@@ -190,7 +214,10 @@ function createDashboardStoreInternal() {
     canCancelRequest,
     cancelActiveRequest,
     isRequestCancelling,
-    saveBackend: backendControls.saveBackend,
+    openCreateBackend: backendControls.openCreateBackend,
+    openEditBackend: backendControls.openEditBackend,
+    closeBackendEditor: backendControls.closeBackendEditor,
+    saveBackendEditor: backendControls.saveBackendEditor,
     sendDebugChat: debugChat.sendDebugChat,
     stopDebugChat: debugChat.stopDebugChat,
     clearDebugChat: debugChat.clearDebugChat,

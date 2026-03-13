@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { BackendConfig, BackendConnector, ProxyConfig, ServerConfig } from "./types";
+import { BackendConfig, BackendConnector, BackendEditorConfig, BackendSavePayload, ProxyConfig, ServerConfig } from "./types";
 
 const DEFAULT_SERVER_CONFIG: ServerConfig = {
   host: "0.0.0.0",
@@ -44,8 +44,57 @@ export class ConfigStore {
     }
 
     const next = normalizeConfig(current, this.configPath);
-    await fs.writeFile(this.configPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+    await fs.writeFile(this.configPath, `${JSON.stringify(serializeConfig(next), null, 2)}\n`, "utf8");
     return next;
+  }
+
+  public async listEditableBackends(): Promise<BackendEditorConfig[]> {
+    const current = await this.load();
+    return current.backends.map(toBackendEditorConfig);
+  }
+
+  public async createBackend(payload: BackendSavePayload): Promise<{ config: ProxyConfig; backend: BackendEditorConfig }> {
+    const current = await this.load();
+    const candidate = materializeBackendConfig(undefined, payload);
+    current.backends.push(candidate);
+
+    const next = normalizeConfig(current, this.configPath);
+    await fs.writeFile(this.configPath, `${JSON.stringify(serializeConfig(next), null, 2)}\n`, "utf8");
+
+    const createdBackend = next.backends.find((backend) => backend.id === candidate.id);
+    if (!createdBackend) {
+      throw new Error(`Backend "${candidate.id}" could not be created in ${this.configPath}.`);
+    }
+
+    return {
+      config: next,
+      backend: toBackendEditorConfig(createdBackend),
+    };
+  }
+
+  public async replaceBackend(currentId: string, payload: BackendSavePayload): Promise<{ config: ProxyConfig; backend: BackendEditorConfig }> {
+    const current = await this.load();
+    const backendIndex = current.backends.findIndex((entry) => entry.id === currentId);
+
+    if (backendIndex < 0) {
+      throw new Error(`Backend "${currentId}" was not found in ${this.configPath}.`);
+    }
+
+    const candidate = materializeBackendConfig(current.backends[backendIndex], payload);
+    current.backends.splice(backendIndex, 1, candidate);
+
+    const next = normalizeConfig(current, this.configPath);
+    await fs.writeFile(this.configPath, `${JSON.stringify(serializeConfig(next), null, 2)}\n`, "utf8");
+
+    const updatedBackend = next.backends.find((backend) => backend.id === candidate.id);
+    if (!updatedBackend) {
+      throw new Error(`Backend "${candidate.id}" could not be updated in ${this.configPath}.`);
+    }
+
+    return {
+      config: next,
+      backend: toBackendEditorConfig(updatedBackend),
+    };
   }
 }
 
@@ -133,11 +182,15 @@ function normalizeBackendConfig(config: Partial<BackendConfig>): BackendConfig {
         : 1,
     healthPath:
       typeof config.healthPath === "string" && config.healthPath.trim().length > 0 ? config.healthPath.trim() : undefined,
-    models: Array.isArray(config.models)
-      ? config.models
+    models: Array.isArray(config.allowedModels)
+      ? config.allowedModels
           .filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
           .map((entry) => entry.trim())
-      : undefined,
+      : Array.isArray(config.models)
+        ? config.models
+          .filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+          .map((entry) => entry.trim())
+        : undefined,
     headers:
       config.headers && typeof config.headers === "object"
         ? Object.fromEntries(
@@ -152,4 +205,89 @@ function normalizeBackendConfig(config: Partial<BackendConfig>): BackendConfig {
 
 function normalizeConnector(value: unknown): BackendConnector {
   return value === "ollama" ? "ollama" : "openai";
+}
+
+function serializeConfig(config: ProxyConfig): Record<string, unknown> {
+  return {
+    server: config.server,
+    backends: config.backends.map(serializeBackendConfig),
+  };
+}
+
+function serializeBackendConfig(backend: BackendConfig): Record<string, unknown> {
+  const serialized: Record<string, unknown> = {
+    id: backend.id,
+    name: backend.name,
+    baseUrl: backend.baseUrl,
+    connector: backend.connector,
+    enabled: backend.enabled,
+    maxConcurrency: backend.maxConcurrency,
+  };
+
+  if (backend.healthPath) {
+    serialized.healthPath = backend.healthPath;
+  }
+
+  if (backend.models && backend.models.length > 0) {
+    serialized.allowedModels = [...backend.models];
+  }
+
+  if (backend.headers && Object.keys(backend.headers).length > 0) {
+    serialized.headers = { ...backend.headers };
+  }
+
+  if (backend.apiKey) {
+    serialized.apiKey = backend.apiKey;
+  }
+
+  if (backend.apiKeyEnv) {
+    serialized.apiKeyEnv = backend.apiKeyEnv;
+  }
+
+  if (backend.timeoutMs) {
+    serialized.timeoutMs = backend.timeoutMs;
+  }
+
+  return serialized;
+}
+
+function materializeBackendConfig(current: BackendConfig | undefined, payload: BackendSavePayload): BackendConfig {
+  const nextApiKey =
+    payload.clearApiKey
+      ? undefined
+      : (typeof payload.apiKey === "string" && payload.apiKey.trim().length > 0
+          ? payload.apiKey.trim()
+          : current?.apiKey);
+
+  return normalizeBackendConfig({
+    id: payload.id,
+    name: payload.name,
+    baseUrl: payload.baseUrl,
+    connector: payload.connector,
+    enabled: payload.enabled,
+    maxConcurrency: payload.maxConcurrency,
+    healthPath: payload.healthPath,
+    models: payload.models,
+    headers: payload.headers,
+    apiKey: nextApiKey,
+    apiKeyEnv: payload.apiKeyEnv,
+    timeoutMs: payload.timeoutMs,
+  });
+}
+
+function toBackendEditorConfig(backend: BackendConfig): BackendEditorConfig {
+  return {
+    id: backend.id,
+    name: backend.name,
+    baseUrl: backend.baseUrl,
+    connector: backend.connector === "ollama" ? "ollama" : "openai",
+    enabled: backend.enabled,
+    maxConcurrency: backend.maxConcurrency,
+    healthPath: backend.healthPath,
+    models: backend.models ? [...backend.models] : undefined,
+    headers: backend.headers ? { ...backend.headers } : undefined,
+    apiKeyEnv: backend.apiKeyEnv,
+    apiKeyConfigured: typeof backend.apiKey === "string" && backend.apiKey.length > 0,
+    timeoutMs: backend.timeoutMs,
+  };
 }

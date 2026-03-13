@@ -93,11 +93,13 @@ Important configuration fields:
 - `baseUrl`: target URL of the OpenAI-compatible backend
 - `connector`: backend adapter to use, currently `openai` or `ollama`
 - `maxConcurrency`: concurrent requests allowed for that backend
-- `models`: optional model list or patterns such as `["llama-*"]` or `["*"]`
+- `allowedModels`: optional model allowlist or patterns such as `["llama-*"]` or `["*"]`
 - `healthPath`: optional backend health endpoint, for `openai` usually `/v1/models`, for `ollama` usually `/api/tags`
 - `apiKey` or `apiKeyEnv`: optional upstream authentication
 
-Dashboard changes to `enabled` and `maxConcurrency` are written back to your local `llmproxy.config.json`.
+The `Backends` page now opens in a read-only runtime view by default. Use `Edit` or `Add backend` there to write full backend config changes back to your local `llmproxy.config.json`; updates become active immediately after saving.
+Existing `models` entries are still accepted for backwards compatibility, but `allowedModels` is the preferred config key going forward.
+If `allowedModels` is omitted entirely, llmproxy treats that backend like `["*"]`, meaning all models are allowed.
 
 ## Notes
 

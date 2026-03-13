@@ -142,11 +142,45 @@ export interface DebugTranscriptEntry {
   finish_reason?: string;
 }
 
-export interface BackendDraft {
+export interface EditableBackendConfig {
+  id: string;
+  name: string;
+  baseUrl: string;
+  connector: "openai" | "ollama";
   enabled: boolean;
   maxConcurrency: number;
+  healthPath?: string;
+  models?: string[];
+  headers?: Record<string, string>;
+  apiKeyEnv?: string;
+  apiKeyConfigured: boolean;
+  timeoutMs?: number;
+}
+
+export interface BackendEditorFields {
+  id: string;
+  name: string;
+  baseUrl: string;
+  connector: "openai" | "ollama";
+  enabled: boolean;
+  maxConcurrency: string;
+  healthPath: string;
+  modelsText: string;
+  headersText: string;
+  apiKey: string;
+  apiKeyEnv: string;
+  clearApiKey: boolean;
+  timeoutMs: string;
+}
+
+export interface BackendEditorState {
+  open: boolean;
+  mode: "create" | "edit";
+  originalId: string;
   saving: boolean;
+  loading: boolean;
   error: string;
+  fields: BackendEditorFields;
 }
 
 export interface DebugParams {
@@ -209,7 +243,8 @@ export interface DashboardState {
   connectionText: string;
   models: KnownModel[];
   requestDetail: RequestDetailState;
-  backendDrafts: Record<string, BackendDraft>;
+  backendConfigs: Record<string, EditableBackendConfig>;
+  backendEditor: BackendEditorState;
   debug: DebugState;
 }
 

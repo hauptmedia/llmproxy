@@ -23,10 +23,42 @@ export interface BackendConfig {
   enabled: boolean;
   maxConcurrency: number;
   healthPath?: string;
+  allowedModels?: string[];
   models?: string[];
   headers?: Record<string, string>;
   apiKey?: string;
   apiKeyEnv?: string;
+  timeoutMs?: number;
+}
+
+export interface BackendEditorConfig {
+  id: string;
+  name: string;
+  baseUrl: string;
+  connector: BackendConnector;
+  enabled: boolean;
+  maxConcurrency: number;
+  healthPath?: string;
+  models?: string[];
+  headers?: Record<string, string>;
+  apiKeyEnv?: string;
+  apiKeyConfigured: boolean;
+  timeoutMs?: number;
+}
+
+export interface BackendSavePayload {
+  id: string;
+  name: string;
+  baseUrl: string;
+  connector?: BackendConnector;
+  enabled: boolean;
+  maxConcurrency: number;
+  healthPath?: string;
+  models?: string[];
+  headers?: Record<string, string>;
+  apiKey?: string;
+  apiKeyEnv?: string;
+  clearApiKey?: boolean;
   timeoutMs?: number;
 }
 

@@ -12,7 +12,7 @@ const route = useRoute();
 
 const pageLinks: Array<{ page: DashboardPage; label: string }> = [
   { page: "overview", label: "Overview" },
-  { page: "logs", label: "Recent Requests" },
+  { page: "logs", label: "Requests" },
   { page: "backends", label: "Backends" },
   { page: "chat", label: "Chat" },
 ];

@@ -402,6 +402,47 @@ test("missing model selects the first free backend with a concrete model", async
   await balancer.stop();
 });
 
+test("missing allowedModels behaves like a wildcard allowlist", async () => {
+  const config: ProxyConfig = {
+    server: {
+      ...TEST_CONFIG.server,
+      port: 4006,
+    },
+    backends: [
+      {
+        id: "open-backend",
+        name: "Open Backend",
+        baseUrl: "http://127.0.0.1:9500",
+        enabled: true,
+        maxConcurrency: 1,
+      },
+    ],
+  };
+
+  const balancer = new LoadBalancer(config, {
+    fetcher: async () => jsonResponse({ object: "list", data: [] }),
+  });
+
+  const lease = await balancer.acquire({
+    id: "req-open-model",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "any-model-name",
+    stream: true,
+  });
+
+  assert.equal(lease.backend.id, "open-backend");
+  assert.equal(lease.selectedModel, "any-model-name");
+
+  lease.release({
+    outcome: "success",
+    latencyMs: 20,
+    statusCode: 200,
+    queuedMs: lease.queueMs,
+  });
+});
+
 test("captures discovered model metadata from /v1/models for backend snapshots", async () => {
   const config: ProxyConfig = {
     server: {

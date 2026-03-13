@@ -17,7 +17,7 @@
       "enabled": true,
       "maxConcurrency": 1,
       "healthPath": "/v1/models",
-      "models": [
+      "allowedModels": [
         "*"
       ]
     }

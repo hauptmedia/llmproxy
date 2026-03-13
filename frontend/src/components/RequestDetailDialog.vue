@@ -76,30 +76,45 @@ watch(
       <div class="panel-header">
         <div>
           <h2 id="request-detail-title" class="panel-title">{{ store.requestDetailTitle }}</h2>
-          <div class="mt-1.5 flex flex-wrap items-center gap-2">
-            <p class="hint m-0">{{ store.requestDetailSubtitle }}</p>
-            <div v-if="store.requestStateBadge" class="inline-flex items-center gap-1.5">
+          <div
+            v-if="store.requestLiveTransportBadges.length || store.requestStateBadge"
+            class="request-meta mt-2"
+          >
+            <template v-if="store.requestLiveTransportBadges.length">
+              <span
+                v-for="badge in store.requestLiveTransportBadges"
+                :key="badge.text + (badge.title || '')"
+                :class="store.badgeClass(badge)"
+                :title="badge.title"
+              >
+                {{ badge.text }}
+              </span>
+            </template>
+            <template v-else-if="store.requestStateBadge">
               <span
                 :class="store.badgeClass(store.requestStateBadge)"
                 :title="store.requestStateBadge.title"
               >
                 {{ store.requestStateBadge.text }}
               </span>
-              <button
-                v-if="store.canCancelRequest(store.state.requestDetail.requestId)"
-                class="icon-button danger compact"
-                type="button"
-                :disabled="store.isRequestCancelling(store.state.requestDetail.requestId)"
-                :aria-label="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection' : 'End this active connection'"
-                :title="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection...' : 'End this active connection after confirmation.'"
-                @click="store.cancelActiveRequest(store.state.requestDetail.requestId)"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 3.5v7"></path>
-                  <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
-                </svg>
-              </button>
-            </div>
+            </template>
+          </div>
+          <div class="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+            <p class="hint m-0">{{ store.requestDetailSubtitle }}</p>
+            <button
+              v-if="store.canCancelRequest(store.state.requestDetail.requestId)"
+              class="icon-button danger compact"
+              type="button"
+              :disabled="store.isRequestCancelling(store.state.requestDetail.requestId)"
+              :aria-label="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection' : 'End this active connection'"
+              :title="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection...' : 'End this active connection after confirmation.'"
+              @click="store.cancelActiveRequest(store.state.requestDetail.requestId)"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3.5v7"></path>
+                <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
+              </svg>
+            </button>
           </div>
         </div>
         <div class="request-actions">

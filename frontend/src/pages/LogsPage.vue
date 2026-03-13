@@ -1,7 +1,7 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
-import type { RequestLogEntry } from "../types/dashboard";
+import type { ActiveConnectionSnapshot, RequestLogEntry } from "../types/dashboard";
 import { describeFinishReason } from "../utils/dashboard-badges";
 import { formatDate, formatDuration, formatTokenRate } from "../utils/formatters";
 
@@ -19,6 +19,31 @@ type FilterKey =
   | "note";
 type SortKey = Exclude<FilterKey, never>;
 type SortDirection = "asc" | "desc" | "";
+type RowOutcome = RequestLogEntry["outcome"] | "queued" | "connected" | "streaming";
+
+interface RecentRequestRow {
+  id: string;
+  time: string;
+  method: string;
+  path: string;
+  model?: string;
+  backendName?: string;
+  backendId?: string;
+  outcome: RowOutcome;
+  queuedMs: number;
+  latencyMs: number;
+  statusCode?: number;
+  error?: string;
+  completionTokens?: number;
+  totalTokens?: number;
+  contentTokens?: number;
+  reasoningTokens?: number;
+  textTokens?: number;
+  completionTokensPerSecond?: number;
+  finishReason?: string;
+  hasDetail: boolean;
+  live: boolean;
+}
 
 const openFilterKey = ref<FilterKey | "">("");
 const sortKey = ref<SortKey | "">("");
@@ -56,24 +81,62 @@ const numericComparatorOptions = [
 ];
 
 const columnTitles: Record<FilterKey | "action", string> = {
-  time: "When llmproxy recorded this request in the retained recent-request history.",
-  outcome: "Final request result. Successful requests show their backend finish reason instead of a generic success label.",
+  time: "When llmproxy first saw this request. Live rows update in place until they finish and move into retained history.",
+  outcome: "Current live state or final request result. Finished successful requests show their backend finish reason instead of a generic success label.",
   request: "Short request identifier plus the proxied API route that was called.",
   model: "Model name requested by the client.",
-  backend: "Backend that ultimately handled the request.",
-  queue: "Time the request spent waiting for a free backend slot before execution began.",
-  latency: "Total end-to-end request duration from arrival at llmproxy until completion.",
+  backend: "Backend that currently handles or finally handled the request.",
+  queue: "Time the request spent waiting for a free backend slot before execution began, or the current wait time while it is still queued.",
+  latency: "Total end-to-end request duration so far for live rows, or final duration for retained history.",
   tokens: "Generated completion tokens for this request. Falls back to other stored token totals when needed.",
   rate: "Generation speed in tokens per second, when available from live or final metrics.",
   note: "Error text or other noteworthy final detail recorded for this request.",
-  action: "Open the stored request debugger for this entry when detailed request data is available.",
+  action: "Open the request debugger for this entry when detailed request data is available.",
 };
+
+const tableEntries = computed<RecentRequestRow[]>(() => {
+  const rows = new Map<string, RecentRequestRow>();
+
+  for (const connection of store.state.snapshot.activeConnections) {
+    rows.set(connection.id, normalizeActiveConnectionRow(connection));
+  }
+
+  for (const entry of store.state.snapshot.recentRequests) {
+    if (rows.has(entry.id)) {
+      continue;
+    }
+
+    rows.set(entry.id, normalizeRequestLogRow(entry));
+  }
+
+  return Array.from(rows.values());
+});
 
 const outcomeOptions = computed(() => {
   const options = [{ value: "all", label: "All outcomes" }];
+  const liveOutcomes = Array.from(
+    new Set(
+      tableEntries.value
+        .filter((entry) => entry.live)
+        .map((entry) => entry.outcome),
+    ),
+  );
+
+  if (liveOutcomes.includes("queued")) {
+    options.push({ value: "queued", label: "Queued" });
+  }
+
+  if (liveOutcomes.includes("connected")) {
+    options.push({ value: "connected", label: "Connected" });
+  }
+
+  if (liveOutcomes.includes("streaming")) {
+    options.push({ value: "streaming", label: "Streaming" });
+  }
+
   const finishReasons = Array.from(
     new Set(
-      store.state.snapshot.recentRequests
+      tableEntries.value
         .filter((entry) => entry.outcome === "success" && typeof entry.finishReason === "string" && entry.finishReason.length > 0)
         .map((entry) => entry.finishReason as string),
     ),
@@ -86,7 +149,7 @@ const outcomeOptions = computed(() => {
     });
   }
 
-  if (store.state.snapshot.recentRequests.some((entry) => entry.outcome === "success" && !entry.finishReason)) {
+  if (tableEntries.value.some((entry) => entry.outcome === "success" && !entry.finishReason)) {
     options.push({ value: "completed", label: "Completed" });
   }
 
@@ -102,7 +165,7 @@ const outcomeOptions = computed(() => {
 const modelOptions = computed(() => {
   const names = Array.from(
     new Set(
-      store.state.snapshot.recentRequests
+      tableEntries.value
         .map((entry) => entry.model)
         .filter((value): value is string => Boolean(value)),
     ),
@@ -117,7 +180,7 @@ const modelOptions = computed(() => {
 const backendOptions = computed(() => {
   const names = Array.from(
     new Set(
-      store.state.snapshot.recentRequests
+      tableEntries.value
         .map((entry) => entry.backendName)
         .filter((value): value is string => Boolean(value)),
     ),
@@ -130,7 +193,7 @@ const backendOptions = computed(() => {
 });
 
 const filteredEntries = computed(() => {
-  return store.state.snapshot.recentRequests.filter((entry) => {
+  return tableEntries.value.filter((entry) => {
     if (!matchesText(filters.time, [formatDate(entry.time), entry.time])) {
       return false;
     }
@@ -196,6 +259,58 @@ const sortedEntries = computed(() => {
     .map(({ entry }) => entry);
 });
 
+function normalizeRequestLogRow(entry: RequestLogEntry): RecentRequestRow {
+  return {
+    id: entry.id,
+    time: entry.time,
+    method: entry.method,
+    path: entry.path,
+    model: entry.model,
+    backendName: entry.backendName,
+    backendId: entry.backendId,
+    outcome: entry.outcome,
+    queuedMs: entry.queuedMs,
+    latencyMs: entry.latencyMs,
+    statusCode: entry.statusCode,
+    error: entry.error,
+    completionTokens: entry.completionTokens,
+    totalTokens: entry.totalTokens,
+    contentTokens: entry.contentTokens,
+    reasoningTokens: entry.reasoningTokens,
+    textTokens: entry.textTokens,
+    completionTokensPerSecond: entry.completionTokensPerSecond,
+    finishReason: entry.finishReason,
+    hasDetail: Boolean(entry.hasDetail),
+    live: false,
+  };
+}
+
+function normalizeActiveConnectionRow(connection: ActiveConnectionSnapshot): RecentRequestRow {
+  return {
+    id: connection.id,
+    time: connection.startedAt,
+    method: connection.method,
+    path: connection.path,
+    model: connection.model,
+    backendName: connection.backendName,
+    backendId: connection.backendId,
+    outcome: connection.phase,
+    queuedMs: connection.phase === "queued" ? connection.elapsedMs : connection.queueMs,
+    latencyMs: connection.elapsedMs,
+    statusCode: connection.statusCode,
+    error: connection.error,
+    completionTokens: connection.completionTokens,
+    totalTokens: connection.totalTokens,
+    contentTokens: connection.contentTokens,
+    reasoningTokens: connection.reasoningTokens,
+    textTokens: connection.textTokens,
+    completionTokensPerSecond: connection.completionTokensPerSecond,
+    finishReason: connection.finishReason,
+    hasDetail: Boolean(connection.hasDetail),
+    live: true,
+  };
+}
+
 function toggleFilter(filterKey: FilterKey): void {
   openFilterKey.value = openFilterKey.value === filterKey ? "" : filterKey;
 }
@@ -227,10 +342,10 @@ function isSortedBy(candidate: SortKey): boolean {
 
 function sortIndicator(candidate: SortKey): string {
   if (sortKey.value !== candidate || !sortDirection.value) {
-    return "↕";
+    return "?";
   }
 
-  return sortDirection.value === "asc" ? "↑" : "↓";
+  return sortDirection.value === "asc" ? "?" : "?";
 }
 
 function sortTitle(candidate: SortKey): string {
@@ -417,7 +532,7 @@ function matchesNumeric(
   return true;
 }
 
-function compareEntries(left: RequestLogEntry, right: RequestLogEntry, key: SortKey): number {
+function compareEntries(left: RecentRequestRow, right: RecentRequestRow, key: SortKey): number {
   if (key === "time") {
     return compareNumberValues(Date.parse(left.time), Date.parse(right.time));
   }
@@ -485,7 +600,15 @@ function compareTextValues(left: string, right: string): number {
   return left.localeCompare(right, undefined, { sensitivity: "base", numeric: true });
 }
 
-function outcomeBadgeClass(entry: RequestLogEntry): string {
+function outcomeBadgeClass(entry: RecentRequestRow): string {
+  if (entry.outcome === "streaming") {
+    return "badge good";
+  }
+
+  if (entry.outcome === "queued" || entry.outcome === "connected") {
+    return "badge warn";
+  }
+
   if (entry.outcome === "success") {
     return "badge good";
   }
@@ -497,7 +620,19 @@ function outcomeBadgeClass(entry: RequestLogEntry): string {
   return "badge bad";
 }
 
-function outcomeLabel(entry: RequestLogEntry): string {
+function outcomeLabel(entry: RecentRequestRow): string {
+  if (entry.outcome === "queued") {
+    return "queued";
+  }
+
+  if (entry.outcome === "connected") {
+    return "connected";
+  }
+
+  if (entry.outcome === "streaming") {
+    return "streaming";
+  }
+
   if (entry.outcome === "success" && entry.finishReason) {
     return entry.finishReason;
   }
@@ -513,7 +648,19 @@ function outcomeLabel(entry: RequestLogEntry): string {
   return entry.outcome;
 }
 
-function outcomeTitle(entry: RequestLogEntry): string {
+function outcomeTitle(entry: RecentRequestRow): string {
+  if (entry.outcome === "queued") {
+    return "This live request is still waiting in the scheduler queue for a free backend slot.";
+  }
+
+  if (entry.outcome === "connected") {
+    return "This live request already has a backend assigned, but the response has not started streaming yet.";
+  }
+
+  if (entry.outcome === "streaming") {
+    return "This live request is currently streaming or actively generating.";
+  }
+
   if (entry.outcome === "success" && entry.finishReason) {
     return describeFinishReason(entry.finishReason);
   }
@@ -537,7 +684,11 @@ function finishOutcomeKey(finishReason: string): string {
   return `finish:${finishReason}`;
 }
 
-function logOutcomeKey(entry: RequestLogEntry): string {
+function logOutcomeKey(entry: RecentRequestRow): string {
+  if (entry.outcome === "queued" || entry.outcome === "connected" || entry.outcome === "streaming") {
+    return entry.outcome;
+  }
+
   if (entry.outcome === "success" && entry.finishReason) {
     return finishOutcomeKey(entry.finishReason);
   }
@@ -549,16 +700,16 @@ function logOutcomeKey(entry: RequestLogEntry): string {
   return entry.outcome;
 }
 
-function tokenCountSummary(entry: RequestLogEntry): string {
+function tokenCountSummary(entry: RecentRequestRow): string {
   const tokenCount = entryTokenCount(entry);
   return tokenCount !== null ? `${tokenCount} tok` : "-";
 }
 
-function tokenRateSummary(entry: RequestLogEntry): string {
+function tokenRateSummary(entry: RecentRequestRow): string {
   return formatTokenRate(entry.completionTokensPerSecond) || "-";
 }
 
-function entryTokenCount(entry: RequestLogEntry): number | null {
+function entryTokenCount(entry: RecentRequestRow): number | null {
   if (typeof entry.completionTokens === "number") {
     return entry.completionTokens;
   }
@@ -571,7 +722,7 @@ function entryTokenCount(entry: RequestLogEntry): number | null {
   return derived > 0 ? derived : null;
 }
 
-function noteSummary(entry: RequestLogEntry): string {
+function noteSummary(entry: RecentRequestRow): string {
   return entry.error || "";
 }
 
@@ -600,11 +751,11 @@ onBeforeUnmount(() => {
     <div class="panel">
       <div class="panel-header">
         <div>
-          <h2 class="panel-title">Recent Requests ({{ store.state.snapshot.recentRequestLimit }})</h2>
+          <h2 class="panel-title">Requests ({{ store.state.snapshot.recentRequestLimit }})</h2>
         </div>
         <div class="log-toolbar">
           <div class="log-filter-count">
-            {{ filteredEntries.length }} / {{ store.state.snapshot.recentRequests.length }}
+            {{ filteredEntries.length }} / {{ tableEntries.length }}
           </div>
           <button
             type="button"

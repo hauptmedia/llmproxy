@@ -1,6 +1,11 @@
 import { computed } from "vue";
 import type { DashboardState, RequestLogDetail } from "../types/dashboard";
-import { buildRequestParamRows, buildRequestResponseMetricRows, buildRequestStateBadge } from "../utils/dashboard-badges";
+import {
+  buildConnectionTransportBadges,
+  buildRequestParamRows,
+  buildRequestResponseMetricRows,
+  buildRequestStateBadge,
+} from "../utils/dashboard-badges";
 import { formatDate, shortId } from "../utils/formatters";
 import { isClientRecord } from "../utils/guards";
 import { readErrorResponse } from "../utils/http";
@@ -142,9 +147,22 @@ export function useRequestDetail(state: DashboardState) {
     Array.isArray(requestBody.value?.messages) ? requestBody.value.messages : []
   ));
 
+  const requestLiveConnection = computed(() => {
+    const requestId = state.requestDetail.requestId;
+    if (!requestId) {
+      return null;
+    }
+
+    return state.snapshot.activeConnections.find((connection) => connection.id === requestId) ?? null;
+  });
+
+  const requestLiveTransportBadges = computed(() => (
+    requestLiveConnection.value ? buildConnectionTransportBadges(requestLiveConnection.value) : []
+  ));
+
   const requestStateBadge = computed(() => buildRequestStateBadge(
     state.requestDetail.detail?.entry,
-    Boolean(state.requestDetail.detail?.live),
+    Boolean(state.requestDetail.detail?.live && !requestLiveConnection.value),
   ));
   const requestResponseMetricRows = computed(() => buildRequestResponseMetricRows(state.requestDetail.detail?.entry));
   const requestParamRows = computed(() => buildRequestParamRows(requestBody.value));
@@ -160,6 +178,7 @@ export function useRequestDetail(state: DashboardState) {
     refreshRequestDetail,
     requestDetailSubtitle,
     requestDetailTitle,
+    requestLiveTransportBadges,
     requestMessages,
     requestParamRows,
     requestResponseMetricRows,

@@ -18,6 +18,7 @@ import {
   ActiveConnectionKind,
   ActiveConnectionPhase,
   ActiveConnectionSnapshot,
+  BackendSavePayload,
   BackendLease,
   JsonValue,
   KnownModel,
@@ -235,6 +236,11 @@ export class LlmProxyServer {
       return;
     }
 
+    if (method === "GET" && url.pathname === "/api/backends") {
+      await this.handleBackendList(response);
+      return;
+    }
+
     if (method === "POST" && url.pathname.startsWith("/api/requests/") && url.pathname.endsWith("/cancel")) {
       this.handleRequestCancel(response, url.pathname);
       return;
@@ -269,6 +275,16 @@ export class LlmProxyServer {
 
     if (method === "PATCH" && url.pathname.startsWith("/api/backends/")) {
       await this.handleBackendPatch(request, response, url.pathname);
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/backends") {
+      await this.handleBackendCreate(request, response);
+      return;
+    }
+
+    if (method === "PUT" && url.pathname.startsWith("/api/backends/")) {
+      await this.handleBackendReplace(request, response, url.pathname);
       return;
     }
 
@@ -373,6 +389,15 @@ export class LlmProxyServer {
     });
   }
 
+  private async handleBackendList(response: ServerResponse): Promise<void> {
+    try {
+      const backends = await this.configStore.listEditableBackends();
+      sendJson(response, 200, { data: backends });
+    } catch (error) {
+      sendJson(response, 500, proxyError(toErrorMessage(error)));
+    }
+  }
+
   private async handleBackendPatch(
     request: IncomingMessage,
     response: ServerResponse,
@@ -413,6 +438,63 @@ export class LlmProxyServer {
       sendJson(response, 200, { ok: true, backendId, patch });
     } catch (error) {
       sendJson(response, 404, proxyError(toErrorMessage(error)));
+    }
+  }
+
+  private async handleBackendCreate(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const body = await readRequestBody(request);
+    const parsed = tryParseJsonBuffer(body, request.headers["content-type"]);
+
+    if (!parsed) {
+      sendJson(response, 400, proxyError("Expected a JSON body."));
+      return;
+    }
+
+    let payload: BackendSavePayload;
+    try {
+      payload = parseBackendSavePayload(parsed);
+    } catch (error) {
+      sendJson(response, 400, proxyError(toErrorMessage(error)));
+      return;
+    }
+
+    try {
+      const result = await this.configStore.createBackend(payload);
+      this.loadBalancer.replaceConfig(result.config);
+      sendJson(response, 201, { ok: true, backend: result.backend });
+    } catch (error) {
+      sendJson(response, 400, proxyError(toErrorMessage(error)));
+    }
+  }
+
+  private async handleBackendReplace(
+    request: IncomingMessage,
+    response: ServerResponse,
+    pathname: string,
+  ): Promise<void> {
+    const currentId = decodeURIComponent(pathname.replace("/api/backends/", ""));
+    const body = await readRequestBody(request);
+    const parsed = tryParseJsonBuffer(body, request.headers["content-type"]);
+
+    if (!parsed) {
+      sendJson(response, 400, proxyError("Expected a JSON body."));
+      return;
+    }
+
+    let payload: BackendSavePayload;
+    try {
+      payload = parseBackendSavePayload(parsed);
+    } catch (error) {
+      sendJson(response, 400, proxyError(toErrorMessage(error)));
+      return;
+    }
+
+    try {
+      const result = await this.configStore.replaceBackend(currentId, payload);
+      this.loadBalancer.replaceConfig(result.config);
+      sendJson(response, 200, { ok: true, backend: result.backend });
+    } catch (error) {
+      sendJson(response, 400, proxyError(toErrorMessage(error)));
     }
   }
 
@@ -1356,4 +1438,154 @@ function readRequestedProxyRequestId(headerValue: string | string[] | undefined)
   }
 
   return /^[A-Za-z0-9._:-]{1,128}$/.test(trimmed) ? trimmed : undefined;
+}
+
+function parseBackendSavePayload(input: Record<string, unknown>): BackendSavePayload {
+  const id = parseRequiredTrimmedString(input.id, "id");
+  const name = parseRequiredTrimmedString(input.name, "name");
+  const baseUrl = parseRequiredTrimmedString(input.baseUrl, "baseUrl");
+  const connector = parseBackendConnector(input.connector);
+  const enabled = parseRequiredBoolean(input.enabled, "enabled");
+  const maxConcurrency = parseRequiredPositiveInteger(input.maxConcurrency, "maxConcurrency");
+  const healthPath = parseOptionalTrimmedString(input.healthPath, "healthPath");
+  const models = parseOptionalStringArray(input.models, "models");
+  const headers = parseOptionalStringRecord(input.headers, "headers");
+  const apiKey = parseOptionalTrimmedString(input.apiKey, "apiKey");
+  const apiKeyEnv = parseOptionalTrimmedString(input.apiKeyEnv, "apiKeyEnv");
+  const clearApiKey = parseOptionalBoolean(input.clearApiKey, "clearApiKey");
+  const timeoutMs = parseOptionalPositiveInteger(input.timeoutMs, "timeoutMs");
+
+  return {
+    id,
+    name,
+    baseUrl,
+    connector,
+    enabled,
+    maxConcurrency,
+    healthPath,
+    models,
+    headers,
+    apiKey,
+    apiKeyEnv,
+    clearApiKey,
+    timeoutMs,
+  };
+}
+
+function parseRequiredTrimmedString(value: unknown, fieldName: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`"${fieldName}" must be a non-empty string.`);
+  }
+
+  return value.trim();
+}
+
+function parseOptionalTrimmedString(value: unknown, fieldName: string): string | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error(`"${fieldName}" must be a string when provided.`);
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseRequiredBoolean(value: unknown, fieldName: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`"${fieldName}" must be a boolean.`);
+  }
+
+  return value;
+}
+
+function parseOptionalBoolean(value: unknown, fieldName: string): boolean | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "boolean") {
+    throw new Error(`"${fieldName}" must be a boolean when provided.`);
+  }
+
+  return value;
+}
+
+function parseRequiredPositiveInteger(value: unknown, fieldName: string): number {
+  if (!isPositiveInteger(value)) {
+    throw new Error(`"${fieldName}" must be a positive integer.`);
+  }
+
+  return value;
+}
+
+function parseOptionalPositiveInteger(value: unknown, fieldName: string): number | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (!isPositiveInteger(value)) {
+    throw new Error(`"${fieldName}" must be a positive integer when provided.`);
+  }
+
+  return value;
+}
+
+function parseOptionalStringArray(value: unknown, fieldName: string): string[] | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw new Error(`"${fieldName}" must be an array of strings when provided.`);
+  }
+
+  const normalized = value
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function parseOptionalStringRecord(value: unknown, fieldName: string): Record<string, string> | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`"${fieldName}" must be an object of string values when provided.`);
+  }
+
+  const entries = Object.entries(value);
+  const record: Record<string, string> = {};
+
+  for (const [key, entryValue] of entries) {
+    if (typeof entryValue !== "string") {
+      throw new Error(`"${fieldName}.${key}" must be a string.`);
+    }
+
+    const normalizedKey = key.trim();
+    const normalizedValue = entryValue.trim();
+    if (!normalizedKey || !normalizedValue) {
+      continue;
+    }
+
+    record[normalizedKey] = normalizedValue;
+  }
+
+  return Object.keys(record).length > 0 ? record : undefined;
+}
+
+function parseBackendConnector(value: unknown): "openai" | "ollama" {
+  if (value === undefined || value === null || value === "openai") {
+    return "openai";
+  }
+
+  if (value === "ollama") {
+    return "ollama";
+  }
+
+  throw new Error('"connector" must be "openai" or "ollama".');
 }
