@@ -1486,7 +1486,7 @@
   .conversation-surface-footer {
     @apply mt-4;
     flex: 0 0 auto;
-    overflow: hidden;
+    overflow: visible;
     background-clip: padding-box;
     border-bottom-left-radius: inherit;
     border-bottom-right-radius: inherit;
@@ -1527,6 +1527,8 @@
 
   .chat-composer-inline {
     @apply rounded-none border-0 border-t border-amber-900/10 bg-transparent px-0 pb-0 pt-4;
+    padding-right: 2px;
+    padding-bottom: 2px;
   }
 
   .chat-advanced-inline {
