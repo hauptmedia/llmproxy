@@ -1271,6 +1271,92 @@
     @apply flex flex-wrap items-center gap-2.5;
   }
 
+  .chat-panel {
+    @apply flex flex-col gap-[18px];
+    min-height: min(82vh, 960px);
+  }
+
+  .chat-toolbar {
+    @apply grid gap-3.5;
+  }
+
+  .chat-model-field {
+    max-width: 320px;
+  }
+
+  .chat-model-inline {
+    @apply flex items-center gap-3;
+  }
+
+  .chat-model-inline select {
+    flex: 1 1 auto;
+  }
+
+  .chat-model-label {
+    @apply mb-0 shrink-0;
+  }
+
+  .chat-advanced-panel {
+    @apply overflow-hidden rounded-3xl border border-amber-900/10 bg-white/72;
+  }
+
+  .chat-advanced-summary {
+    @apply cursor-pointer list-none px-4 py-3 text-sm font-semibold text-stone-700;
+  }
+
+  .chat-advanced-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .chat-advanced-body {
+    @apply border-t border-amber-900/10 px-4 py-4;
+  }
+
+  .chat-advanced-note {
+    @apply mt-0 mb-4 text-sm leading-relaxed text-stone-600;
+  }
+
+  .chat-thread {
+    @apply grid gap-4;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .chat-conversation-card {
+    min-height: 0;
+  }
+
+  .chat-conversation-viewport {
+    max-height: none;
+  }
+
+  .chat-transcript {
+    @apply gap-4;
+  }
+
+  .chat-editor-turn {
+    @apply grid gap-3;
+  }
+
+  .chat-editor-textarea {
+    @apply w-full rounded-2xl border border-amber-900/10 bg-white/88 px-4 py-3 text-stone-950 shadow-sm outline-none transition;
+    min-height: 120px;
+    resize: vertical;
+  }
+
+  .chat-editor-textarea:focus {
+    @apply border-amber-700/30 ring-2 ring-amber-500/20;
+  }
+
+  .chat-composer {
+    @apply rounded-3xl border border-amber-900/10 bg-white/82 p-4;
+    flex: 0 0 auto;
+  }
+
+  .chat-composer-actions {
+    @apply mt-3 flex flex-wrap items-center justify-end gap-2.5;
+  }
+
   .transcript {
     @apply grid gap-3.5;
   }
