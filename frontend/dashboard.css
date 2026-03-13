@@ -120,7 +120,7 @@
   }
 
   .hero-nav-group {
-    @apply flex flex-wrap items-start gap-4;
+    @apply flex flex-wrap items-center gap-4;
     min-width: 0;
   }
 
@@ -166,7 +166,7 @@
 
   .brand-connection-indicator {
     @apply absolute inline-flex items-center justify-center border border-white/80 bg-white/92 shadow-sm;
-    bottom: -0.18rem;
+    top: -0.18rem;
     right: -0.18rem;
     width: 1rem;
     height: 1rem;
