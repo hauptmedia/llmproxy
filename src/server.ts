@@ -82,6 +82,7 @@ interface ActiveConnectionRuntime {
   generationMs?: number;
   promptTokensPerSecond?: number;
   completionTokensPerSecond?: number;
+  requestedCompletionTokenLimit?: number;
   firstTokenAt?: number;
   finishReason?: string;
   metricsExact: boolean;
@@ -634,6 +635,7 @@ export class LlmProxyServer {
         phase: "connected",
         backendId: lease.backend.id,
         backendName: lease.backend.name,
+        model: lease.selectedModel ?? route.model,
         queueMs: lease.queueMs,
       }, true);
       const upstreamParsedBody = applySelectedModel(parsedBody, lease.selectedModel);
@@ -787,11 +789,13 @@ export class LlmProxyServer {
   }
 
   private getSnapshot(): ProxySnapshot {
+    const loadBalancerSnapshot = this.loadBalancer.getSnapshot();
+
     return {
-      ...this.loadBalancer.getSnapshot(),
+      ...loadBalancerSnapshot,
       activeConnections: Array.from(this.activeConnections.values())
         .sort((left, right) => left.receivedAt - right.receivedAt)
-        .map((connection) => this.toActiveConnectionSnapshot(connection)),
+        .map((connection) => this.toActiveConnectionSnapshot(connection, loadBalancerSnapshot.backends)),
     };
   }
 
@@ -817,6 +821,7 @@ export class LlmProxyServer {
       reasoningTokens: 0,
       textTokens: 0,
       metricsExact: false,
+      requestedCompletionTokenLimit: resolveRequestedCompletionLimit(route.requestBody),
       requestBody: route.requestBody,
     });
     this.broadcastCurrentSnapshot();
@@ -902,6 +907,10 @@ export class LlmProxyServer {
       (connection.firstTokenAt && completionTokens && completionTokens > 0
         ? completionTokens / Math.max(0.001, (Date.now() - connection.firstTokenAt) / 1000)
         : undefined);
+    const effectiveCompletionTokenLimit = resolveEffectiveCompletionTokenLimit(
+      connection.requestedCompletionTokenLimit,
+      resolveModelCompletionLimit(connection.model, connection.backendId, this.loadBalancer.getSnapshot().backends),
+    );
 
     return {
       promptTokens: connection.promptTokens,
@@ -914,6 +923,7 @@ export class LlmProxyServer {
       generationMs: connection.generationMs ?? (connection.firstTokenAt ? Date.now() - connection.firstTokenAt : undefined),
       promptTokensPerSecond: connection.promptTokensPerSecond,
       completionTokensPerSecond,
+      effectiveCompletionTokenLimit: effectiveCompletionTokenLimit ?? undefined,
       timeToFirstTokenMs: connection.firstTokenAt ? connection.firstTokenAt - connection.receivedAt : undefined,
       finishReason: connection.finishReason,
       metricsExact: connection.metricsExact,
@@ -921,7 +931,10 @@ export class LlmProxyServer {
     };
   }
 
-  private toActiveConnectionSnapshot(connection: ActiveConnectionRuntime): ActiveConnectionSnapshot {
+  private toActiveConnectionSnapshot(
+    connection: ActiveConnectionRuntime,
+    backends: ProxySnapshot["backends"],
+  ): ActiveConnectionSnapshot {
     const elapsedMs = Math.max(0, Date.now() - connection.receivedAt);
     const completionTokens = connection.completionTokens;
     const liveCompletionRate =
@@ -929,6 +942,10 @@ export class LlmProxyServer {
       (connection.firstTokenAt && completionTokens && completionTokens > 0
         ? completionTokens / Math.max(0.001, (Date.now() - connection.firstTokenAt) / 1000)
         : undefined);
+    const effectiveCompletionTokenLimit = resolveEffectiveCompletionTokenLimit(
+      connection.requestedCompletionTokenLimit,
+      resolveModelCompletionLimit(connection.model, connection.backendId, backends),
+    );
 
     return {
       id: connection.id,
@@ -957,6 +974,7 @@ export class LlmProxyServer {
       generationMs: connection.generationMs ?? (connection.firstTokenAt ? Date.now() - connection.firstTokenAt : undefined),
       promptTokensPerSecond: connection.promptTokensPerSecond,
       completionTokensPerSecond: liveCompletionRate,
+      effectiveCompletionTokenLimit: effectiveCompletionTokenLimit ?? undefined,
       timeToFirstTokenMs: connection.firstTokenAt ? connection.firstTokenAt - connection.receivedAt : undefined,
       finishReason: connection.finishReason,
       metricsExact: connection.metricsExact,
@@ -1155,7 +1173,7 @@ export class LlmProxyServer {
       return undefined;
     }
 
-    const snapshot = this.toActiveConnectionSnapshot(connection);
+    const snapshot = this.toActiveConnectionSnapshot(connection, this.loadBalancer.getSnapshot().backends);
     return {
       live: true,
       entry: {
@@ -1184,6 +1202,7 @@ export class LlmProxyServer {
         generationMs: snapshot.generationMs,
         promptTokensPerSecond: snapshot.promptTokensPerSecond,
         completionTokensPerSecond: snapshot.completionTokensPerSecond,
+        effectiveCompletionTokenLimit: snapshot.effectiveCompletionTokenLimit,
         timeToFirstTokenMs: snapshot.timeToFirstTokenMs,
         finishReason: snapshot.finishReason,
         metricsExact: snapshot.metricsExact,
@@ -1490,6 +1509,136 @@ function applySelectedModel(
     ...parsedBody,
     model: selectedModel,
   };
+}
+
+function resolveRequestedCompletionLimit(requestBody: JsonValue | undefined): number | undefined {
+  if (!isJsonRecord(requestBody)) {
+    return undefined;
+  }
+
+  const maxCompletionTokens = readPositiveInteger(requestBody.max_completion_tokens);
+  if (maxCompletionTokens !== undefined) {
+    return maxCompletionTokens;
+  }
+
+  return readPositiveInteger(requestBody.max_tokens);
+}
+
+function resolveModelCompletionLimit(
+  model: string | undefined,
+  backendId: string | undefined,
+  backends: ProxySnapshot["backends"],
+): number | undefined {
+  if (!model || backends.length === 0) {
+    return undefined;
+  }
+
+  const preferredBackends = backendId
+    ? backends.filter((backend) => backend.id === backendId)
+    : backends;
+  const candidateBackends = preferredBackends.length > 0 ? preferredBackends : backends;
+
+  for (const backend of candidateBackends) {
+    const detail = backend.discoveredModelDetails.find((entry) => {
+      if (entry.id === model) {
+        return true;
+      }
+
+      if (!isJsonRecord(entry.metadata)) {
+        return false;
+      }
+
+      const aliases = entry.metadata.aliases;
+      return Array.isArray(aliases) && aliases.some((alias) => alias === model);
+    });
+
+    const limit = readExplicitModelCompletionLimit(detail?.metadata);
+    if (limit !== undefined) {
+      return limit;
+    }
+  }
+
+  return undefined;
+}
+
+function resolveEffectiveCompletionTokenLimit(
+  requestLimit: number | undefined,
+  modelLimit: number | undefined,
+): number | undefined {
+  if (typeof requestLimit === "number" && typeof modelLimit === "number") {
+    return Math.min(requestLimit, modelLimit);
+  }
+
+  if (typeof requestLimit === "number") {
+    return requestLimit;
+  }
+
+  if (typeof modelLimit === "number") {
+    return modelLimit;
+  }
+
+  return undefined;
+}
+
+function readExplicitModelCompletionLimit(value: unknown): number | undefined {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const nested = readExplicitModelCompletionLimit(entry);
+      if (nested !== undefined) {
+        return nested;
+      }
+    }
+
+    return undefined;
+  }
+
+  if (!isJsonRecord(value)) {
+    return undefined;
+  }
+
+  const explicitKeys = [
+    "max_completion_tokens",
+    "max_output_tokens",
+    "max_generated_tokens",
+    "completion_token_limit",
+    "output_token_limit",
+    "num_predict",
+  ];
+
+  for (const key of explicitKeys) {
+    const parsed = readPositiveInteger(value[key]);
+    if (parsed !== undefined) {
+      return parsed;
+    }
+  }
+
+  for (const nestedValue of Object.values(value)) {
+    const nested = readExplicitModelCompletionLimit(nestedValue);
+    if (nested !== undefined) {
+      return nested;
+    }
+  }
+
+  return undefined;
+}
+
+function readPositiveInteger(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value.trim());
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+function isJsonRecord(value: unknown): value is Record<string, JsonValue> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function readRequestedProxyRequestId(headerValue: string | string[] | undefined): string | undefined {

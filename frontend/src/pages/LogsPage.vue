@@ -43,10 +43,19 @@ interface RecentRequestRow {
   reasoningTokens?: number;
   textTokens?: number;
   completionTokensPerSecond?: number;
+  effectiveCompletionTokenLimit?: number;
   finishReason?: string;
   hasDetail: boolean;
   live: boolean;
 }
+
+const logDateFormatter = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "short",
+});
+
+const logTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeStyle: "short",
+});
 
 const openFilterKey = ref<FilterKey | "">("");
 const sortKey = ref<SortKey | "">("");
@@ -104,7 +113,7 @@ const columnTitles: Record<FilterKey | "action", string> = {
   backend: "Backend that currently handles or finally handled the request.",
   queue: "Time the request spent waiting for a free backend slot before execution began, or the current wait time while it is still queued.",
   latency: "Total end-to-end request duration so far for live rows, or final duration for retained history.",
-  tokens: "Generated completion tokens for this request. Falls back to other stored token totals when needed.",
+  tokens: "Generated completion tokens for this request, shown against the effective completion-token limit when llmproxy can resolve one from the request or backend model metadata.",
   rate: "Generation speed in tokens per second, when available from live or final metrics.",
   note: "Error text or other noteworthy final detail recorded for this request.",
   action: "Open the request debugger for this entry when detailed request data is available.",
@@ -213,7 +222,7 @@ const backendOptions = computed(() => {
 
 const filteredEntries = computed(() => {
   return tableEntries.value.filter((entry) => {
-    if (!matchesText(filters.time, [formatDate(entry.time), entry.time])) {
+    if (!matchesText(filters.time, [formatDate(entry.time), formatLogDate(entry.time), formatLogTime(entry.time), entry.time])) {
       return false;
     }
 
@@ -298,6 +307,7 @@ function normalizeRequestLogRow(entry: RequestLogEntry): RecentRequestRow {
     reasoningTokens: entry.reasoningTokens,
     textTokens: entry.textTokens,
     completionTokensPerSecond: entry.completionTokensPerSecond,
+    effectiveCompletionTokenLimit: entry.effectiveCompletionTokenLimit,
     finishReason: entry.finishReason,
     hasDetail: Boolean(entry.hasDetail),
     live: false,
@@ -324,6 +334,7 @@ function normalizeActiveConnectionRow(connection: ActiveConnectionSnapshot): Rec
     reasoningTokens: connection.reasoningTokens,
     textTokens: connection.textTokens,
     completionTokensPerSecond: connection.completionTokensPerSecond,
+    effectiveCompletionTokenLimit: connection.effectiveCompletionTokenLimit,
     finishReason: connection.finishReason,
     hasDetail: Boolean(connection.hasDetail),
     live: true,
@@ -783,7 +794,18 @@ function logOutcomeKey(entry: RecentRequestRow): string {
 
 function tokenCountSummary(entry: RecentRequestRow): string {
   const tokenCount = entryTokenCount(entry);
-  return tokenCount !== null ? `${tokenCount} tok` : "-";
+  const tokenLimit = entry.effectiveCompletionTokenLimit;
+
+  if (tokenCount === null && tokenLimit == null) {
+    return "-";
+  }
+
+  const usedLabel = new Intl.NumberFormat("en-US").format(tokenCount ?? 0);
+  const limitLabel =
+    typeof tokenLimit === "number"
+      ? new Intl.NumberFormat("en-US").format(tokenLimit)
+      : "∞";
+  return `${usedLabel} / ${limitLabel} tok`;
 }
 
 function tokenRateSummary(entry: RecentRequestRow): string {
@@ -800,11 +822,31 @@ function entryTokenCount(entry: RecentRequestRow): number | null {
   }
 
   const derived = (entry.contentTokens ?? 0) + (entry.reasoningTokens ?? 0) + (entry.textTokens ?? 0);
-  return derived > 0 ? derived : null;
+  if (derived > 0) {
+    return derived;
+  }
+
+  return typeof entry.effectiveCompletionTokenLimit === "number" ? 0 : null;
 }
 
 function noteSummary(entry: RecentRequestRow): string {
   return entry.error || "";
+}
+
+function formatLogDate(value: string): string {
+  try {
+    return logDateFormatter.format(new Date(value));
+  } catch {
+    return formatDate(value);
+  }
+}
+
+function formatLogTime(value: string): string {
+  try {
+    return logTimeFormatter.format(new Date(value));
+  } catch {
+    return "";
+  }
 }
 
 function handleDocumentPointerDown(event: PointerEvent): void {
@@ -925,7 +967,7 @@ onBeforeUnmount(() => {
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('outcome') }" :title="sortTitle('outcome')" @click="toggleSort('outcome')">
-                      <span class="log-header-label" :title="columnTitles.outcome">Outcome</span>
+                      <span class="log-header-label" :title="columnTitles.outcome">Status</span>
                       <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('outcome') }}</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('outcome') }" title="Filter outcome" @click.stop="toggleFilter('outcome')">
@@ -1145,7 +1187,10 @@ onBeforeUnmount(() => {
               :key="entry.id"
             >
               <td class="log-cell-tight">
-                <div class="log-primary">{{ formatDate(entry.time) }}</div>
+                <div class="log-time-stack">
+                  <div class="log-time-date">{{ formatLogDate(entry.time) }}</div>
+                  <div class="log-time-clock">{{ formatLogTime(entry.time) }}</div>
+                </div>
               </td>
               <td class="log-cell-tight">
                 <span

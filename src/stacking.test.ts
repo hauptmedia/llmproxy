@@ -445,7 +445,10 @@ async function startMockToolCallBackend(
   return server;
 }
 
-async function startMockSlowStreamingBackend(port: number): Promise<Server> {
+async function startMockSlowStreamingBackend(
+  port: number,
+  modelMetadata?: Record<string, unknown>,
+): Promise<Server> {
   const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     const method = request.method?.toUpperCase() ?? "GET";
@@ -462,6 +465,7 @@ async function startMockSlowStreamingBackend(port: number): Promise<Server> {
             object: "model",
             created: 0,
             owned_by: "mock-live-backend",
+            ...modelMetadata,
           },
         ],
       }));
@@ -656,6 +660,7 @@ async function waitForActiveConnection(
   id: string;
   hasDetail?: boolean;
   path: string;
+  effectiveCompletionTokenLimit?: number;
 }> {
   let lastPayload:
     | {
@@ -663,6 +668,7 @@ async function waitForActiveConnection(
           id: string;
           hasDetail?: boolean;
           path: string;
+          effectiveCompletionTokenLimit?: number;
         }>;
       }
     | undefined;
@@ -675,6 +681,7 @@ async function waitForActiveConnection(
         id: string;
         hasDetail?: boolean;
         path: string;
+        effectiveCompletionTokenLimit?: number;
       }>;
     };
     lastPayload = payload;
@@ -1468,7 +1475,9 @@ test("active connections expose live request details for chat history inspection
   const mockPort = await getFreePort();
   const routerPort = await getFreePort();
 
-  const mockServer = await startMockSlowStreamingBackend(mockPort);
+  const mockServer = await startMockSlowStreamingBackend(mockPort, {
+    max_completion_tokens: 256,
+  });
   cleanup.push(async () => {
     await new Promise<void>((resolve, reject) => {
       mockServer.close((error) => {
@@ -1523,6 +1532,7 @@ test("active connections expose live request details for chat history inspection
     },
     body: JSON.stringify({
       model: "mock-live-model",
+      max_completion_tokens: 128,
       stream: true,
       messages: [
         {
@@ -1541,6 +1551,7 @@ test("active connections expose live request details for chat history inspection
   assert.equal(activeConnection.id, requestedRequestId);
   assert.equal(activeConnection.path, "/v1/chat/completions");
   assert.equal(activeConnection.hasDetail, true);
+  assert.equal(activeConnection.effectiveCompletionTokenLimit, 128);
 
   const detailResponse = await fetch(`${baseUrl}/api/requests/${encodeURIComponent(activeConnection.id)}`);
   assert.equal(detailResponse.status, 200);
@@ -1548,6 +1559,7 @@ test("active connections expose live request details for chat history inspection
     live?: boolean;
     requestBody?: {
       model?: string;
+      max_completion_tokens?: number;
       stream?: boolean;
       messages?: Array<{
         role?: string;
@@ -1565,6 +1577,7 @@ test("active connections expose live request details for chat history inspection
 
   assert.equal(detailPayload.live, true);
   assert.equal(detailPayload.requestBody?.model, "mock-live-model");
+  assert.equal(detailPayload.requestBody?.max_completion_tokens, 128);
   assert.equal(detailPayload.requestBody?.stream, true);
   assert.equal(detailPayload.requestBody?.messages?.[0]?.role, "system");
   assert.equal(detailPayload.requestBody?.messages?.[0]?.content, "Stay concise.");
@@ -1578,6 +1591,20 @@ test("active connections expose live request details for chat history inspection
   const liveBody = await liveResponse.text();
   assert.match(liveBody, /Streaming /);
   assert.match(liveBody, /response\./);
+
+  await waitForRecentRequest(baseUrl, (entry) => entry.id === requestedRequestId);
+  const stateResponse = await fetch(`${baseUrl}/api/state`);
+  assert.equal(stateResponse.status, 200);
+  const statePayload = await stateResponse.json() as {
+    recentRequests: Array<{
+      id: string;
+      effectiveCompletionTokenLimit?: number;
+    }>;
+  };
+  assert.equal(
+    statePayload.recentRequests.find((entry) => entry.id === requestedRequestId)?.effectiveCompletionTokenLimit,
+    128,
+  );
 });
 
 test("cancelled requests retain the partial streamed response in request history", async (t) => {

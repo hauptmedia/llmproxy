@@ -346,6 +346,7 @@ export class LoadBalancer extends EventEmitter {
           generationMs: result.generationMs,
           promptTokensPerSecond: result.promptTokensPerSecond,
           completionTokensPerSecond: result.completionTokensPerSecond,
+          effectiveCompletionTokenLimit: result.effectiveCompletionTokenLimit,
           timeToFirstTokenMs: result.timeToFirstTokenMs,
           finishReason: result.finishReason,
           metricsExact: result.metricsExact,
@@ -603,6 +604,7 @@ export class LoadBalancer extends EventEmitter {
       latencyMs: Date.now() - route.receivedAt,
       queuedMs,
       error,
+      effectiveCompletionTokenLimit: resolveRequestedCompletionLimit(route.requestBody),
       hasDetail: route.requestBody !== undefined,
     });
     this.trimRecentRequests();
@@ -636,6 +638,22 @@ export class LoadBalancer extends EventEmitter {
 
     this.trimRecentRequests();
   }
+}
+
+function resolveRequestedCompletionLimit(value: ProxyRouteRequest["requestBody"]): number | undefined {
+  if (!isJsonRecord(value)) {
+    return undefined;
+  }
+
+  return readPositiveInteger(value.max_completion_tokens) ?? readPositiveInteger(value.max_tokens);
+}
+
+function readPositiveInteger(value: JsonValue | undefined): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+function isJsonRecord(value: JsonValue | undefined): value is Record<string, JsonValue> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function matchesPattern(pattern: string, value: string): boolean {

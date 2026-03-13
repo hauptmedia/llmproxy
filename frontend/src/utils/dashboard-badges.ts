@@ -262,7 +262,13 @@ export function buildConnectionTransportBadges(connection: ActiveConnectionSnaps
   const liveCompletionTokens = typeof connection.completionTokens === "number"
     ? connection.completionTokens
     : connection.contentTokens + connection.reasoningTokens + connection.textTokens;
-  const tokenCountLabel = liveCompletionTokens > 0 ? `${liveCompletionTokens} tok` : "";
+  const completionTokenLimitLabel =
+    typeof connection.effectiveCompletionTokenLimit === "number"
+      ? new Intl.NumberFormat("en-US").format(connection.effectiveCompletionTokenLimit)
+      : "∞";
+  const tokenCountLabel = liveCompletionTokens > 0
+    ? `${new Intl.NumberFormat("en-US").format(liveCompletionTokens)} / ${completionTokenLimitLabel} tok`
+    : "";
   const timeToFirstToken = typeof connection.timeToFirstTokenMs === "number"
     ? formatDuration(connection.timeToFirstTokenMs)
     : "";
@@ -286,7 +292,7 @@ export function buildConnectionTransportBadges(connection: ActiveConnectionSnaps
         ? ` First time value: waited ${formatDuration(connection.queueMs)} in queue before a backend was assigned.`
         : "";
   const tokenCountDetail = tokenCountLabel
-    ? ` Current generated completion tokens: ${liveCompletionTokens}.`
+    ? ` Current generated completion tokens: ${new Intl.NumberFormat("en-US").format(liveCompletionTokens)} of ${completionTokenLimitLabel}.`
     : "";
   const tokenRateDetail = tokenRate
     ? ` Current generation speed: ${tokenRate}.`

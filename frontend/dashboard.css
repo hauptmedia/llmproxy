@@ -795,7 +795,7 @@
   }
 
   .log-col-time {
-    width: 136px;
+    width: 92px;
   }
 
   .log-col-outcome {
@@ -803,15 +803,15 @@
   }
 
   .log-col-request {
-    width: 232px;
+    width: 220px;
   }
 
   .log-col-model {
-    width: 148px;
+    width: 140px;
   }
 
   .log-col-backend {
-    width: 148px;
+    width: 140px;
   }
 
   .log-col-queue,
@@ -820,7 +820,7 @@
   }
 
   .log-col-tokens {
-    width: 102px;
+    width: 124px;
   }
 
   .log-col-token-rate {
@@ -828,7 +828,7 @@
   }
 
   .log-col-note {
-    width: 172px;
+    width: 160px;
   }
 
   .log-col-action {
@@ -841,6 +841,18 @@
 
   .log-primary {
     @apply text-[13px] font-semibold leading-snug text-stone-900;
+  }
+
+  .log-time-stack {
+    @apply grid gap-0.5;
+  }
+
+  .log-time-date {
+    @apply text-[12px] font-semibold leading-none text-stone-900;
+  }
+
+  .log-time-clock {
+    @apply text-[11px] leading-none text-stone-500;
   }
 
   .inline-metric-row {

@@ -83,6 +83,7 @@ export interface ActiveConnectionSnapshot {
   generationMs?: number;
   promptTokensPerSecond?: number;
   completionTokensPerSecond?: number;
+  effectiveCompletionTokenLimit?: number;
   timeToFirstTokenMs?: number;
   finishReason?: string;
   metricsExact: boolean;
@@ -113,6 +114,7 @@ export interface RequestLogEntry {
   generationMs?: number;
   promptTokensPerSecond?: number;
   completionTokensPerSecond?: number;
+  effectiveCompletionTokenLimit?: number;
   timeToFirstTokenMs?: number;
   finishReason?: string;
   metricsExact?: boolean;
