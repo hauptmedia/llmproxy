@@ -206,17 +206,19 @@ function recentWindowLabel(): string {
       </thead>
       <tbody>
         <tr v-for="backend in backends" :key="backend.id">
-          <td>
-            <div class="table-name">
-              <span
-                :class="['backend-health-dot', backendStateClass(backend)]"
-                :title="backendStateTitle(backend)"
-                aria-hidden="true"
-              ></span>
-              <span>{{ backend.name }}</span>
-            </div>
-            <div class="table-sub backend-identity">
-              <span class="backend-url">{{ backend.baseUrl }}</span>
+          <td class="backend-name-cell">
+            <div class="backend-name-content">
+              <div class="table-name">
+                <span
+                  :class="['backend-health-dot', backendStateClass(backend)]"
+                  :title="backendStateTitle(backend)"
+                  aria-hidden="true"
+                ></span>
+                <span>{{ backend.name }}</span>
+              </div>
+              <div class="table-sub backend-identity">
+                <span class="backend-url">{{ backend.baseUrl }}</span>
+              </div>
             </div>
           </td>
           <td class="backend-type-cell">

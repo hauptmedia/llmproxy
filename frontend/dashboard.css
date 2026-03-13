@@ -672,6 +672,17 @@
     @apply align-middle text-center;
   }
 
+  .backend-name-cell {
+    @apply align-middle;
+  }
+
+  .backend-name-content {
+    min-height: 56px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
   .backend-action-content {
     min-height: 56px;
     display: flex;
