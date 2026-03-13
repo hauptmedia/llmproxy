@@ -234,12 +234,16 @@ export function useBackendControls(
 
   function ensureDebugModel(): void {
     if (state.models.length === 0) {
-      state.debug.model = "";
+      state.debug.model = "auto";
+      return;
+    }
+
+    if (state.debug.model === "auto") {
       return;
     }
 
     if (!state.debug.model || !state.models.some((model: KnownModel) => model.id === state.debug.model)) {
-      state.debug.model = state.models[0].id;
+      state.debug.model = "auto";
     }
   }
 

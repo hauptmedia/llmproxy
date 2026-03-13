@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import ConversationSurface from "../components/ConversationSurface.vue";
 import MessageCard from "../components/MessageCard.vue";
 import type { DebugTranscriptEntry } from "../types/dashboard";
@@ -8,6 +8,7 @@ import { useDashboardStore } from "../composables/useDashboardStore";
 const store = useDashboardStore();
 const hasTranscript = computed(() => store.state.debug.transcript.length > 0);
 const trimmedSystemPrompt = computed(() => store.state.debug.systemPrompt.trim());
+const showAdvancedParameters = ref(false);
 const advancedParamHelp = {
   temperature: "Controls randomness. Lower values are more deterministic, higher values are more creative. Typical range: 0.0 to 2.0. This UI accepts values >= 0.",
   top_p: "Nucleus sampling. The model samples only from the smallest token set whose cumulative probability reaches this value. Range: 0.0 to 1.0.",
@@ -62,15 +63,6 @@ const chatConversationSignature = computed(() => [
         <div class="panel-header">
           <div class="chat-header-main">
             <h2 class="panel-title">Conversation</h2>
-            <div class="field chat-model-field chat-model-inline chat-model-inline-header">
-              <select id="debug-model" v-model="store.state.debug.model">
-                <option value="">Select a model</option>
-                <option value="auto">auto</option>
-                <option v-for="model in store.state.models" :key="model.id" :value="model.id">
-                  {{ model.id }}
-                </option>
-              </select>
-            </div>
           </div>
           <div class="debug-actions">
             <button
@@ -136,49 +128,8 @@ const chatConversationSignature = computed(() => [
                 placeholder="Enter the first user message to send through the proxy."
                 @keydown="handleChatPromptKeydown"
               ></textarea>
-              <div class="chat-composer-actions">
-                <button class="button" type="submit" :disabled="store.state.debug.sending">
-                  {{ store.state.debug.sending ? "Sending..." : "Send first message" }}
-                </button>
-              </div>
-            </form>
-
-            <MessageCard
-              v-for="(entry, index) in store.state.debug.transcript"
-              :key="index + ':' + entry.role + ':' + (entry.backend || '')"
-              :message="entry"
-              :index="Number(index) + (trimmedSystemPrompt ? 1 : 0)"
-              :finish-reason="entry.finish_reason || ''"
-              :reasoning-collapsed="shouldCollapseDebugReasoning(entry, Number(index))"
-            />
-          </div>
-
-          <template #footer>
-            <form
-              v-if="hasTranscript && !store.state.debug.sending"
-              class="chat-composer chat-composer-inline"
-              @submit.prevent="store.sendDebugChat()"
-            >
-              <label class="field-label" for="debug-follow-up">Follow-up message</label>
-              <textarea
-                id="debug-follow-up"
-                v-model="store.state.debug.prompt"
-                class="chat-editor-textarea"
-                placeholder="Enter the next message to continue the conversation."
-                @keydown="handleChatPromptKeydown"
-              ></textarea>
-              <div class="chat-composer-actions">
-                <button class="button" type="submit" :disabled="store.state.debug.sending">
-                  {{ store.state.debug.sending ? "Sending..." : "Send follow-up" }}
-                </button>
-              </div>
-            </form>
-
-            <div class="chat-toolbar">
-              <details class="chat-advanced-panel">
-                <summary class="chat-advanced-summary">Advanced parameters</summary>
+              <div v-if="showAdvancedParameters" class="chat-advanced-inline">
                 <div class="chat-advanced-body">
-                  <p class="chat-advanced-note">Streaming is always enabled so llmproxy can show live metrics and keep the request debugger in sync.</p>
                   <div class="param-grid">
                     <div class="field">
                       <div class="field-label-row">
@@ -224,8 +175,150 @@ const chatConversationSignature = computed(() => [
                     </div>
                   </div>
                 </div>
-              </details>
-            </div>
+              </div>
+              <div class="chat-composer-actions">
+                <div class="field chat-composer-model-field">
+                  <select id="debug-model" v-model="store.state.debug.model" class="chat-composer-model-select">
+                    <option value="auto">auto</option>
+                    <option v-for="model in store.state.models" :key="model.id" :value="model.id">
+                      {{ model.id }}
+                    </option>
+                  </select>
+                </div>
+                <div class="chat-composer-primary-actions">
+                  <button
+                    class="icon-button compact"
+                    type="button"
+                    :aria-label="showAdvancedParameters ? 'Hide advanced parameters' : 'Show advanced parameters'"
+                    :title="showAdvancedParameters ? 'Hide advanced parameters' : 'Show advanced parameters'"
+                    @click="showAdvancedParameters = !showAdvancedParameters"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="3.2"></circle>
+                      <path d="M12 2.75v2.1"></path>
+                      <path d="M12 19.15v2.1"></path>
+                      <path d="m4.93 4.93 1.48 1.48"></path>
+                      <path d="m17.59 17.59 1.48 1.48"></path>
+                      <path d="M2.75 12h2.1"></path>
+                      <path d="M19.15 12h2.1"></path>
+                      <path d="m4.93 19.07 1.48-1.48"></path>
+                      <path d="m17.59 6.41 1.48-1.48"></path>
+                    </svg>
+                  </button>
+                  <button class="button" type="submit" :disabled="store.state.debug.sending">
+                    {{ store.state.debug.sending ? "Sending..." : "Send first message" }}
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <MessageCard
+              v-for="(entry, index) in store.state.debug.transcript"
+              :key="index + ':' + entry.role + ':' + (entry.backend || '')"
+              :message="entry"
+              :index="Number(index) + (trimmedSystemPrompt ? 1 : 0)"
+              :finish-reason="entry.finish_reason || ''"
+              :reasoning-collapsed="shouldCollapseDebugReasoning(entry, Number(index))"
+            />
+          </div>
+
+          <template #footer>
+            <form
+              v-if="hasTranscript && !store.state.debug.sending"
+              class="chat-composer chat-composer-inline"
+              @submit.prevent="store.sendDebugChat()"
+            >
+              <label class="field-label" for="debug-follow-up">Follow-up message</label>
+              <textarea
+                id="debug-follow-up"
+                v-model="store.state.debug.prompt"
+                class="chat-editor-textarea"
+                placeholder="Enter the next message to continue the conversation."
+                @keydown="handleChatPromptKeydown"
+              ></textarea>
+              <div v-if="showAdvancedParameters" class="chat-advanced-inline">
+                <div class="chat-advanced-body">
+                  <div class="param-grid">
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-temperature-follow-up">Temperature</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.temperature" aria-label="Temperature help">i</span>
+                      </div>
+                      <input id="debug-temperature-follow-up" v-model.number="store.state.debug.params.temperature" :title="advancedParamHelp.temperature" type="number" step="0.1" min="0" />
+                    </div>
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-top-p-follow-up">Top P</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.top_p" aria-label="Top P help">i</span>
+                      </div>
+                      <input id="debug-top-p-follow-up" v-model.number="store.state.debug.params.top_p" :title="advancedParamHelp.top_p" type="number" step="0.01" min="0" max="1" />
+                    </div>
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-top-k-follow-up">Top K</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.top_k" aria-label="Top K help">i</span>
+                      </div>
+                      <input id="debug-top-k-follow-up" v-model.number="store.state.debug.params.top_k" :title="advancedParamHelp.top_k" type="number" step="1" min="0" />
+                    </div>
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-min-p-follow-up">Min P</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.min_p" aria-label="Min P help">i</span>
+                      </div>
+                      <input id="debug-min-p-follow-up" v-model.number="store.state.debug.params.min_p" :title="advancedParamHelp.min_p" type="number" step="0.01" min="0" max="1" />
+                    </div>
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-repeat-penalty-follow-up">Repeat Penalty</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.repeat_penalty" aria-label="Repeat Penalty help">i</span>
+                      </div>
+                      <input id="debug-repeat-penalty-follow-up" v-model.number="store.state.debug.params.repeat_penalty" :title="advancedParamHelp.repeat_penalty" type="number" step="0.05" min="0" />
+                    </div>
+                    <div class="field">
+                      <div class="field-label-row">
+                        <label class="field-label" for="debug-max-tokens-follow-up">Max Tokens</label>
+                        <span class="chat-param-help" :title="advancedParamHelp.max_tokens" aria-label="Max Tokens help">i</span>
+                      </div>
+                      <input id="debug-max-tokens-follow-up" v-model.number="store.state.debug.params.max_tokens" :title="advancedParamHelp.max_tokens" type="number" step="1" min="1" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="chat-composer-actions">
+                <div class="field chat-composer-model-field">
+                  <select v-model="store.state.debug.model" class="chat-composer-model-select">
+                    <option value="auto">auto</option>
+                    <option v-for="model in store.state.models" :key="model.id" :value="model.id">
+                      {{ model.id }}
+                    </option>
+                  </select>
+                </div>
+                <div class="chat-composer-primary-actions">
+                  <button
+                    class="icon-button compact"
+                    type="button"
+                    :aria-label="showAdvancedParameters ? 'Hide advanced parameters' : 'Show advanced parameters'"
+                    :title="showAdvancedParameters ? 'Hide advanced parameters' : 'Show advanced parameters'"
+                    @click="showAdvancedParameters = !showAdvancedParameters"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="3.2"></circle>
+                      <path d="M12 2.75v2.1"></path>
+                      <path d="M12 19.15v2.1"></path>
+                      <path d="m4.93 4.93 1.48 1.48"></path>
+                      <path d="m17.59 17.59 1.48 1.48"></path>
+                      <path d="M2.75 12h2.1"></path>
+                      <path d="M19.15 12h2.1"></path>
+                      <path d="m4.93 19.07 1.48-1.48"></path>
+                      <path d="m17.59 6.41 1.48-1.48"></path>
+                    </svg>
+                  </button>
+                  <button class="button" type="submit" :disabled="store.state.debug.sending">
+                    {{ store.state.debug.sending ? "Sending..." : "Send follow-up" }}
+                  </button>
+                </div>
+              </div>
+            </form>
           </template>
         </ConversationSurface>
       </div>

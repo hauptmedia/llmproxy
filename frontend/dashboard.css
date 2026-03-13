@@ -1364,32 +1364,8 @@
     overflow: hidden;
   }
 
-  .chat-toolbar {
-    @apply grid gap-3.5;
-  }
-
   .chat-header-main {
     @apply flex min-w-0 flex-wrap items-center gap-3;
-  }
-
-  .chat-model-field {
-    max-width: 320px;
-  }
-
-  .chat-model-inline {
-    @apply flex items-center gap-3;
-  }
-
-  .chat-model-inline select {
-    flex: 1 1 auto;
-  }
-
-  .chat-model-inline-header {
-    min-width: min(320px, 100%);
-  }
-
-  .chat-model-label {
-    @apply mb-0 shrink-0;
   }
 
   .chat-param-help {
@@ -1492,8 +1468,30 @@
     @apply rounded-none border-0 border-t border-amber-900/10 bg-transparent px-0 pb-0 pt-4;
   }
 
+  .chat-advanced-inline {
+    @apply mt-3 overflow-hidden rounded-3xl border border-amber-900/10 bg-white/70;
+  }
+
   .chat-composer-actions {
-    @apply mt-3 flex flex-wrap items-center justify-end gap-2.5;
+    @apply mt-3 flex flex-wrap items-center justify-between gap-2.5;
+  }
+
+  .chat-composer-model-field {
+    @apply mb-0;
+    width: min(280px, 100%);
+    min-width: 0;
+  }
+
+  .chat-composer-model-select {
+    @apply w-full rounded-2xl border border-amber-900/12 bg-white/92 px-3 py-2.5 text-sm text-stone-950 shadow-sm outline-none transition;
+  }
+
+  .chat-composer-model-select:focus {
+    @apply border-amber-700/30 ring-2 ring-amber-500/20;
+  }
+
+  .chat-composer-primary-actions {
+    @apply flex flex-wrap items-center justify-end gap-2.5;
   }
 
   .transcript {
