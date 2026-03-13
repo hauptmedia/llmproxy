@@ -126,6 +126,10 @@
     min-width: 0;
   }
 
+  .hero-actions {
+    @apply flex items-center gap-2.5;
+  }
+
   .brand-link {
     @apply px-0 py-0 text-inherit;
     text-decoration: none;
@@ -197,30 +201,23 @@
   }
 
   .meta {
-    @apply inline-flex items-center justify-center border border-amber-900/10 bg-white/88 p-0 text-stone-600 shadow-sm;
-    width: 44px;
-    height: 44px;
-    border-radius: 9999px;
+    @apply inline-flex items-center justify-center p-0 text-stone-600;
   }
 
   .connection-dot {
     @apply h-2.5 w-2.5 rounded-full bg-stone-300;
-    box-shadow: 0 0 0 4px rgba(214, 211, 209, 0.26);
   }
 
   .meta.connected .connection-dot {
     background: #15803d;
-    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.22);
   }
 
   .meta.connecting .connection-dot {
     @apply bg-amber-600;
-    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.16);
   }
 
   .meta.disconnected .connection-dot {
     @apply bg-red-700;
-    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.14);
   }
 
   .panel {
@@ -852,6 +849,14 @@
     @apply mb-2 block text-sm text-stone-600;
   }
 
+  .field-label-row {
+    @apply mb-2 flex flex-wrap items-center gap-2;
+  }
+
+  .field-label-row .field-label {
+    @apply mb-0;
+  }
+
   .toggle-row,
   .debug-actions {
     @apply flex flex-wrap items-center gap-2.5;
@@ -1092,6 +1097,10 @@
     max-width: min(1120px, calc(100vw - 32px));
   }
 
+  .server-editor-dialog {
+    max-width: min(760px, calc(100vw - 32px));
+  }
+
   .backend-editor-grid {
     @apply grid flex-1 gap-[18px];
     grid-template-columns: minmax(280px, 0.92fr) minmax(320px, 1.08fr);
@@ -1118,6 +1127,22 @@
 
   .backend-editor-actions {
     @apply mt-[18px] flex flex-wrap items-center justify-between gap-3;
+  }
+
+  .config-notice {
+    @apply rounded-2xl border border-stone-900/10 bg-white/70 px-4 py-3 text-sm leading-relaxed text-stone-700;
+  }
+
+  .config-notice.good {
+    border-color: rgba(21, 128, 61, 0.18);
+    background: rgba(240, 253, 244, 0.88);
+    color: #166534;
+  }
+
+  .config-notice.warn {
+    border-color: rgba(180, 83, 9, 0.2);
+    background: rgba(255, 247, 237, 0.9);
+    color: #9a3412;
   }
 
   .model-detail-grid {

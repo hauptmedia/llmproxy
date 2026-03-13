@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 import BrandLogo from "./components/BrandLogo.vue";
 import RequestDetailDialog from "./components/RequestDetailDialog.vue";
+import ServerConfigEditorDialog from "./components/ServerConfigEditorDialog.vue";
 import { useDashboardStore } from "./composables/useDashboardStore";
 import { getPageTitle } from "./dashboard-bootstrap";
 import type { DashboardPage } from "./types/dashboard";
@@ -11,9 +12,9 @@ const store = useDashboardStore();
 const route = useRoute();
 
 const pageLinks: Array<{ page: DashboardPage; label: string }> = [
-  { page: "overview", label: "Overview" },
+  { page: "overview", label: "Dashboard" },
   { page: "logs", label: "Requests" },
-  { page: "backends", label: "Backends" },
+  { page: "backends", label: "Config" },
   { page: "chat", label: "Chat" },
 ];
 
@@ -64,8 +65,22 @@ watch(
               </RouterLink>
             </nav>
           </div>
-          <div :class="['meta', store.state.connectionStatus]" :title="store.state.connectionText">
-            <span class="connection-dot" aria-hidden="true"></span>
+          <div class="hero-actions">
+            <button
+              class="icon-button compact"
+              type="button"
+              title="Edit llmproxy config"
+              aria-label="Edit llmproxy config"
+              @click="store.openServerEditor"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"></path>
+              </svg>
+            </button>
+            <div :class="['meta', store.state.connectionStatus]" :title="store.state.connectionText">
+              <span class="connection-dot" aria-hidden="true"></span>
+            </div>
           </div>
         </div>
       </header>
@@ -73,5 +88,10 @@ watch(
 
     <RouterView />
     <RequestDetailDialog />
+    <ServerConfigEditorDialog
+      :state="store.state.serverEditor"
+      @close="store.closeServerEditor"
+      @save="store.saveServerEditor"
+    />
   </div>
 </template>

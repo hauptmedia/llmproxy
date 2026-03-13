@@ -46,6 +46,11 @@ export interface BackendEditorConfig {
   timeoutMs?: number;
 }
 
+export interface ProxyEditorConfig {
+  server: ServerConfig;
+  backends: BackendEditorConfig[];
+}
+
 export interface BackendSavePayload {
   id: string;
   name: string;

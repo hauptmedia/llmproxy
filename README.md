@@ -13,7 +13,7 @@ Prerequisite: Node.js 18+ should be available on your system `PATH` or configure
 - Load balancing across multiple backends with configurable `maxConcurrency`
 - Queueing when local backends are fully utilized
 - Vue-based single page dashboard served by the backend under `/dashboard`, refactored into Vue single-file components and built with Vite plus Tailwind CSS
-- Overview page with health status and live active connections, plus dedicated subpages for chat debugging and backend management
+- Dashboard page with health status and live active connections, plus dedicated subpages for chat debugging, requests, and configuration management
 - Built-in chat debugger with model selection, live token metrics, sampler parameters, and raw request/response views
 - Aggregated `/v1/models`
 - Connector-aware health checks and model discovery for OpenAI-compatible backends and native Ollama backends
@@ -36,9 +36,9 @@ npm start
 After that:
 
 - Proxy API: `http://localhost:4100/v1/...`
-- Overview dashboard: `http://localhost:4100/dashboard`
+- Dashboard: `http://localhost:4100/dashboard`
 - Chat: `http://localhost:4100/dashboard/chat`
-- Backends: `http://localhost:4100/dashboard/backends`
+- Config: `http://localhost:4100/dashboard/backends`
 
 The backend serves the built Vue dashboard app directly on the `/dashboard` routes, so frontend and backend stay separated while deployment still stays simple.
 
@@ -58,9 +58,9 @@ That mode does three things for you:
 
 You still open the dashboard through the backend URL:
 
-- Overview dashboard: `http://localhost:4100/dashboard`
+- Dashboard: `http://localhost:4100/dashboard`
 - Chat: `http://localhost:4100/dashboard/chat`
-- Backends: `http://localhost:4100/dashboard/backends`
+- Config: `http://localhost:4100/dashboard/backends`
 
 In dev mode, those routes load the dashboard code from the Vite dev server automatically, so UI changes show up immediately without rebuilding manually.
 
@@ -97,7 +97,8 @@ Important configuration fields:
 - `healthPath`: optional backend health endpoint, for `openai` usually `/v1/models`, for `ollama` usually `/api/tags`
 - `apiKey` or `apiKeyEnv`: optional upstream authentication
 
-The `Backends` page now opens in a read-only runtime view by default. Use `Edit` or `Add backend` there to write full backend config changes back to your local `llmproxy.config.json`; updates become active immediately after saving.
+The `Config` page opens in a read-only view by default. Use the pencil button in the top-right header to edit the main `llmproxy` server config, or the backend actions on the page to edit backend entries and write changes back to your local `llmproxy.config.json`.
+Backend changes become active immediately after saving. For the main server config, `requestTimeoutMs`, `queueTimeoutMs`, `healthCheckIntervalMs`, and `recentRequestLimit` apply immediately; `host`, `port`, and `dashboardPath` are saved right away but require an `llmproxy` restart to take effect.
 Existing `models` entries are still accepted for backwards compatibility, but `allowedModels` is the preferred config key going forward.
 If `allowedModels` is omitted entirely, llmproxy treats that backend like `["*"]`, meaning all models are allowed.
 

@@ -181,3 +181,31 @@ test("replaces a backend, keeps stored api keys unless cleared, and supports ren
     assert.equal(updated?.apiKey, undefined);
   });
 });
+
+test("updates server config and persists it", async () => {
+  await withConfigStore(async (store, configPath) => {
+    const next = await store.updateServerConfig({
+      host: "0.0.0.0",
+      port: 4200,
+      dashboardPath: "/ops",
+      requestTimeoutMs: 120_000,
+      queueTimeoutMs: 45_000,
+      healthCheckIntervalMs: 5_000,
+      recentRequestLimit: 250,
+    });
+
+    assert.deepEqual(next.server, {
+      host: "0.0.0.0",
+      port: 4200,
+      dashboardPath: "/ops",
+      requestTimeoutMs: 120_000,
+      queueTimeoutMs: 45_000,
+      healthCheckIntervalMs: 5_000,
+      recentRequestLimit: 250,
+    });
+    assert.equal(next.backends.length, 1);
+
+    const persisted = JSON.parse(await readFile(configPath, "utf8")) as ProxyConfig;
+    assert.deepEqual(persisted.server, next.server);
+  });
+});

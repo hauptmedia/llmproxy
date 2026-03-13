@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { BackendConfig, BackendConnector, BackendEditorConfig, BackendSavePayload, ProxyConfig, ServerConfig } from "./types";
+import { BackendConfig, BackendConnector, BackendEditorConfig, BackendSavePayload, ProxyConfig, ProxyEditorConfig, ServerConfig } from "./types";
 
 const DEFAULT_SERVER_CONFIG: ServerConfig = {
   host: "0.0.0.0",
@@ -44,7 +44,16 @@ export class ConfigStore {
     }
 
     const next = normalizeConfig(current, this.configPath);
-    await fs.writeFile(this.configPath, `${JSON.stringify(serializeConfig(next), null, 2)}\n`, "utf8");
+    await this.writeConfig(next);
+    return next;
+  }
+
+  public async updateServerConfig(server: ServerConfig): Promise<ProxyConfig> {
+    const current = await this.load();
+    current.server = normalizeServerConfig(server);
+
+    const next = normalizeConfig(current, this.configPath);
+    await this.writeConfig(next);
     return next;
   }
 
@@ -53,13 +62,21 @@ export class ConfigStore {
     return current.backends.map(toBackendEditorConfig);
   }
 
+  public async loadEditableConfig(): Promise<ProxyEditorConfig> {
+    const current = await this.load();
+    return {
+      server: current.server,
+      backends: current.backends.map(toBackendEditorConfig),
+    };
+  }
+
   public async createBackend(payload: BackendSavePayload): Promise<{ config: ProxyConfig; backend: BackendEditorConfig }> {
     const current = await this.load();
     const candidate = materializeBackendConfig(undefined, payload);
     current.backends.push(candidate);
 
     const next = normalizeConfig(current, this.configPath);
-    await fs.writeFile(this.configPath, `${JSON.stringify(serializeConfig(next), null, 2)}\n`, "utf8");
+    await this.writeConfig(next);
 
     const createdBackend = next.backends.find((backend) => backend.id === candidate.id);
     if (!createdBackend) {
@@ -84,7 +101,7 @@ export class ConfigStore {
     current.backends.splice(backendIndex, 1, candidate);
 
     const next = normalizeConfig(current, this.configPath);
-    await fs.writeFile(this.configPath, `${JSON.stringify(serializeConfig(next), null, 2)}\n`, "utf8");
+    await this.writeConfig(next);
 
     const updatedBackend = next.backends.find((backend) => backend.id === candidate.id);
     if (!updatedBackend) {
@@ -95,6 +112,10 @@ export class ConfigStore {
       config: next,
       backend: toBackendEditorConfig(updatedBackend),
     };
+  }
+
+  private async writeConfig(config: ProxyConfig): Promise<void> {
+    await fs.writeFile(this.configPath, `${JSON.stringify(serializeConfig(config), null, 2)}\n`, "utf8");
   }
 }
 

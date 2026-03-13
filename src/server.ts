@@ -23,9 +23,11 @@ import {
   JsonValue,
   KnownModel,
   LeaseReleaseResult,
+  ProxyConfig,
   ProxyRouteRequest,
   ProxySnapshot,
   RequestLogDetail,
+  ServerConfig,
 } from "./types";
 import {
   StreamingAccumulator,
@@ -50,6 +52,8 @@ const HOP_BY_HOP_HEADERS = new Set([
   "host",
   "content-length",
 ]);
+
+const RESTART_REQUIRED_SERVER_FIELDS: Array<keyof ServerConfig> = ["host", "port", "dashboardPath"];
 
 interface ActiveConnectionRuntime {
   id: string;
@@ -241,6 +245,11 @@ export class LlmProxyServer {
       return;
     }
 
+    if (method === "PUT" && url.pathname === "/api/config/server") {
+      await this.handleServerConfigUpdate(request, response);
+      return;
+    }
+
     if (method === "POST" && url.pathname.startsWith("/api/requests/") && url.pathname.endsWith("/cancel")) {
       this.handleRequestCancel(response, url.pathname);
       return;
@@ -391,10 +400,50 @@ export class LlmProxyServer {
 
   private async handleBackendList(response: ServerResponse): Promise<void> {
     try {
-      const backends = await this.configStore.listEditableBackends();
-      sendJson(response, 200, { data: backends });
+      const config = await this.configStore.loadEditableConfig();
+      sendJson(response, 200, {
+        server: config.server,
+        data: config.backends,
+      });
     } catch (error) {
       sendJson(response, 500, proxyError(toErrorMessage(error)));
+    }
+  }
+
+  private async handleServerConfigUpdate(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const body = await readRequestBody(request);
+    const parsed = tryParseJsonBuffer(body, request.headers["content-type"]);
+
+    if (!parsed) {
+      sendJson(response, 400, proxyError("Expected a JSON body."));
+      return;
+    }
+
+    let payload: ServerConfig;
+    try {
+      payload = parseServerConfigSavePayload(parsed);
+    } catch (error) {
+      sendJson(response, 400, proxyError(toErrorMessage(error)));
+      return;
+    }
+
+    try {
+      const currentRuntimeServer = this.loadBalancer.getServerConfig();
+      const nextConfig = await this.configStore.updateServerConfig(payload);
+      const changedFields = findChangedServerFields(currentRuntimeServer, nextConfig.server);
+      const restartRequiredFields = changedFields.filter((field) => RESTART_REQUIRED_SERVER_FIELDS.includes(field));
+      const appliedImmediatelyFields = changedFields.filter((field) => !RESTART_REQUIRED_SERVER_FIELDS.includes(field));
+      const runtimeConfig = buildRuntimeAppliedConfig(nextConfig, currentRuntimeServer);
+
+      this.loadBalancer.replaceConfig(runtimeConfig);
+      sendJson(response, 200, {
+        ok: true,
+        server: nextConfig.server,
+        restartRequiredFields,
+        appliedImmediatelyFields,
+      });
+    } catch (error) {
+      sendJson(response, 400, proxyError(toErrorMessage(error)));
     }
   }
 
@@ -1438,6 +1487,47 @@ function readRequestedProxyRequestId(headerValue: string | string[] | undefined)
   }
 
   return /^[A-Za-z0-9._:-]{1,128}$/.test(trimmed) ? trimmed : undefined;
+}
+
+function parseServerConfigSavePayload(input: Record<string, unknown>): ServerConfig {
+  const dashboardPath = parseRequiredTrimmedString(input.dashboardPath, "dashboardPath");
+  if (!dashboardPath.startsWith("/")) {
+    throw new Error('"dashboardPath" must start with "/".');
+  }
+
+  return {
+    host: parseRequiredTrimmedString(input.host, "host"),
+    port: parseRequiredPositiveInteger(input.port, "port"),
+    dashboardPath,
+    requestTimeoutMs: parseRequiredPositiveInteger(input.requestTimeoutMs, "requestTimeoutMs"),
+    queueTimeoutMs: parseRequiredPositiveInteger(input.queueTimeoutMs, "queueTimeoutMs"),
+    healthCheckIntervalMs: parseRequiredPositiveInteger(input.healthCheckIntervalMs, "healthCheckIntervalMs"),
+    recentRequestLimit: parseRequiredPositiveInteger(input.recentRequestLimit, "recentRequestLimit"),
+  };
+}
+
+function findChangedServerFields(current: ServerConfig, next: ServerConfig): Array<keyof ServerConfig> {
+  const changedFields: Array<keyof ServerConfig> = [];
+
+  for (const field of Object.keys(next) as Array<keyof ServerConfig>) {
+    if (current[field] !== next[field]) {
+      changedFields.push(field);
+    }
+  }
+
+  return changedFields;
+}
+
+function buildRuntimeAppliedConfig(nextConfig: { server: ServerConfig; backends: ProxyConfig["backends"] }, currentRuntimeServer: ServerConfig) {
+  return {
+    ...nextConfig,
+    server: {
+      ...nextConfig.server,
+      host: currentRuntimeServer.host,
+      port: currentRuntimeServer.port,
+      dashboardPath: currentRuntimeServer.dashboardPath,
+    },
+  };
 }
 
 function parseBackendSavePayload(input: Record<string, unknown>): BackendSavePayload {

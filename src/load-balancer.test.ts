@@ -628,3 +628,39 @@ test("retains only the configured number of recent requests", async () => {
   assert.equal(balancer.getRequestLogDetail("req-limit-1"), undefined);
   assert.equal(balancer.getRequestLogDetail("req-limit-2")?.entry.id, "req-limit-2");
 });
+
+test("applies health check interval changes without restarting the load balancer", async () => {
+  let healthChecks = 0;
+  const balancer = new LoadBalancer({
+    ...TEST_CONFIG,
+    server: {
+      ...TEST_CONFIG.server,
+      healthCheckIntervalMs: 10_000,
+    },
+  }, {
+    fetcher: async () => {
+      healthChecks += 1;
+      return jsonResponse({ object: "list", data: [] });
+    },
+  });
+
+  await balancer.start();
+  const baselineChecks = healthChecks;
+
+  balancer.replaceConfig({
+    ...TEST_CONFIG,
+    server: {
+      ...TEST_CONFIG.server,
+      healthCheckIntervalMs: 25,
+    },
+  });
+
+  await delay(70);
+  await balancer.stop();
+
+  assert.ok(baselineChecks >= TEST_CONFIG.backends.length);
+  assert.ok(
+    healthChecks > baselineChecks,
+    `expected health checks to increase after interval update, got ${baselineChecks} -> ${healthChecks}`,
+  );
+});

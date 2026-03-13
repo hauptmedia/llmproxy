@@ -141,6 +141,7 @@ export class LoadBalancer extends EventEmitter {
   }
 
   public replaceConfig(nextConfig: ProxyConfig): void {
+    const previousHealthIntervalMs = this.config.server.healthCheckIntervalMs;
     const previous = new Map(this.backends.map((backend) => [backend.config.id, backend] as const));
     this.config = nextConfig;
     this.backends = nextConfig.backends.map((config) => {
@@ -166,6 +167,12 @@ export class LoadBalancer extends EventEmitter {
 
     this.emitSnapshot();
     this.trimRecentRequests();
+    if (this.healthTimer && previousHealthIntervalMs !== nextConfig.server.healthCheckIntervalMs) {
+      clearInterval(this.healthTimer);
+      this.healthTimer = setInterval(() => {
+        void this.refreshHealth();
+      }, this.config.server.healthCheckIntervalMs);
+    }
     void this.refreshHealth();
   }
 

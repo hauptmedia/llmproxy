@@ -1,6 +1,16 @@
 export type DashboardPage = "overview" | "logs" | "chat" | "backends";
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
+export interface EditableServerConfig {
+  host: string;
+  port: number;
+  dashboardPath: string;
+  requestTimeoutMs: number;
+  queueTimeoutMs: number;
+  healthCheckIntervalMs: number;
+  recentRequestLimit: number;
+}
+
 export interface DashboardBootstrap {
   dashboardPath: string;
   page: DashboardPage;
@@ -183,6 +193,28 @@ export interface BackendEditorState {
   fields: BackendEditorFields;
 }
 
+export interface ServerEditorFields {
+  host: string;
+  port: string;
+  dashboardPath: string;
+  requestTimeoutMs: string;
+  queueTimeoutMs: string;
+  healthCheckIntervalMs: string;
+  recentRequestLimit: string;
+}
+
+export interface ServerEditorState {
+  open: boolean;
+  saving: boolean;
+  loading: boolean;
+  error: string;
+  notice: string;
+  noticeTone: "good" | "warn" | "neutral";
+  restartRequiredFields: string[];
+  appliedImmediatelyFields: string[];
+  fields: ServerEditorFields;
+}
+
 export interface DebugParams {
   temperature: number;
   top_p: number;
@@ -242,9 +274,11 @@ export interface DashboardState {
   connectionStatus: "connecting" | "connected";
   connectionText: string;
   models: KnownModel[];
+  serverConfig: EditableServerConfig | null;
   requestDetail: RequestDetailState;
   backendConfigs: Record<string, EditableBackendConfig>;
   backendEditor: BackendEditorState;
+  serverEditor: ServerEditorState;
   debug: DebugState;
 }
 

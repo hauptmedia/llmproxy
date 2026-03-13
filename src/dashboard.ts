@@ -131,7 +131,7 @@ export function renderDashboardHtml(snapshot: ProxySnapshot, options: DashboardR
       ? "Requests"
       : options.page === "chat"
       ? "Chat"
-      : (options.page === "backends" ? "Backends" : "Overview");
+      : (options.page === "backends" ? "Config" : "Dashboard");
   const bootstrap: DashboardBootstrapPayload = {
     dashboardPath,
     page: options.page,

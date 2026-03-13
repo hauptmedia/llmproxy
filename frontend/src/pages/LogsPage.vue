@@ -751,7 +751,7 @@ onBeforeUnmount(() => {
     <div class="panel">
       <div class="panel-header">
         <div>
-          <h2 class="panel-title">Requests ({{ store.state.snapshot.recentRequestLimit }})</h2>
+          <h2 class="panel-title">Requests (last {{ store.state.snapshot.recentRequestLimit }})</h2>
         </div>
         <div class="log-toolbar">
           <div class="log-filter-count">
@@ -765,8 +765,11 @@ onBeforeUnmount(() => {
             @click="resetFilters()"
           >
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 11a8 8 0 1 1-2.34-5.66"></path>
-              <path d="M20 4v7h-7"></path>
+              <path d="M4 6h16"></path>
+              <path d="M7 12h10"></path>
+              <path d="M10 18h4"></path>
+              <path d="M16.5 8.5l4 4"></path>
+              <path d="M20.5 8.5l-4 4"></path>
             </svg>
           </button>
         </div>

@@ -21,8 +21,8 @@ export function getPageTitle(page: DashboardPage): string {
   }
 
   if (page === "backends") {
-    return "Backends";
+    return "Config";
   }
 
-  return "Overview";
+  return "Dashboard";
 }

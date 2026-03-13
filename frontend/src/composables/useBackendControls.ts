@@ -3,15 +3,24 @@ import type {
   BackendEditorState,
   BackendSnapshot,
   DashboardState,
+  EditableServerConfig,
   EditableBackendConfig,
   KnownModel,
   ProxySnapshot,
+  ServerEditorFields,
 } from "../types/dashboard";
 import { readErrorResponse } from "../utils/http";
 import { collectSnapshotModels } from "../utils/model-catalog";
 
 interface BackendListResponse {
+  server?: EditableServerConfig;
   data?: EditableBackendConfig[];
+}
+
+interface ServerConfigSaveResponse {
+  server?: EditableServerConfig;
+  restartRequiredFields?: string[];
+  appliedImmediatelyFields?: string[];
 }
 
 function createEmptyBackendFields(): BackendEditorFields {
@@ -29,6 +38,18 @@ function createEmptyBackendFields(): BackendEditorFields {
     apiKeyEnv: "",
     clearApiKey: false,
     timeoutMs: "",
+  };
+}
+
+function createServerFields(config?: EditableServerConfig | null): ServerEditorFields {
+  return {
+    host: config?.host ?? "",
+    port: config ? String(config.port) : "",
+    dashboardPath: config?.dashboardPath ?? "/dashboard",
+    requestTimeoutMs: config ? String(config.requestTimeoutMs) : "",
+    queueTimeoutMs: config ? String(config.queueTimeoutMs) : "",
+    healthCheckIntervalMs: config ? String(config.healthCheckIntervalMs) : "",
+    recentRequestLimit: config ? String(config.recentRequestLimit) : "",
   };
 }
 
@@ -60,6 +81,13 @@ function resetBackendEditor(editor: BackendEditorState): void {
   editor.loading = false;
   editor.error = "";
   editor.fields = createEmptyBackendFields();
+}
+
+function closeServerEditorState(state: DashboardState): void {
+  state.serverEditor.open = false;
+  state.serverEditor.saving = false;
+  state.serverEditor.loading = false;
+  state.serverEditor.error = "";
 }
 
 function parseModelsText(modelsText: string): string[] | undefined {
@@ -134,6 +162,46 @@ function isBackendListResponse(value: unknown): value is BackendListResponse {
   return Boolean(value) && typeof value === "object";
 }
 
+function isServerConfigSaveResponse(value: unknown): value is ServerConfigSaveResponse {
+  return Boolean(value) && typeof value === "object";
+}
+
+function formatServerFieldLabel(field: string): string {
+  if (field === "host") {
+    return "host";
+  }
+
+  if (field === "port") {
+    return "port";
+  }
+
+  if (field === "dashboardPath") {
+    return "dashboard path";
+  }
+
+  if (field === "requestTimeoutMs") {
+    return "request timeout";
+  }
+
+  if (field === "queueTimeoutMs") {
+    return "queue timeout";
+  }
+
+  if (field === "healthCheckIntervalMs") {
+    return "health check interval";
+  }
+
+  if (field === "recentRequestLimit") {
+    return "recent request limit";
+  }
+
+  return field;
+}
+
+function joinFieldLabels(fields: string[]): string {
+  return fields.map(formatServerFieldLabel).join(", ");
+}
+
 export function useBackendControls(state: DashboardState) {
   async function loadBackendConfigs(): Promise<void> {
     state.backendEditor.error = "";
@@ -149,6 +217,7 @@ export function useBackendControls(state: DashboardState) {
 
       const payload = await response.json() as unknown;
       const backends = isBackendListResponse(payload) && Array.isArray(payload.data) ? payload.data : [];
+      state.serverConfig = isBackendListResponse(payload) && payload.server ? payload.server : null;
       state.backendConfigs = normalizeBackendRecord(backends);
     } catch (error) {
       state.backendEditor.error = error instanceof Error ? error.message : String(error);
@@ -212,6 +281,95 @@ export function useBackendControls(state: DashboardState) {
     resetBackendEditor(state.backendEditor);
   }
 
+  async function openServerEditor(): Promise<void> {
+    state.serverEditor.error = "";
+
+    if (!state.serverConfig) {
+      state.serverEditor.loading = true;
+      await loadBackendConfigs();
+      state.serverEditor.loading = false;
+    }
+
+    if (!state.serverConfig) {
+      state.serverEditor.error = "llmproxy config could not be loaded from disk.";
+      return;
+    }
+
+    state.serverEditor.open = true;
+    state.serverEditor.fields = createServerFields(state.serverConfig);
+  }
+
+  function closeServerEditor(): void {
+    closeServerEditorState(state);
+  }
+
+  async function saveServerEditor(): Promise<void> {
+    state.serverEditor.error = "";
+
+    try {
+      const requestBody = {
+        host: state.serverEditor.fields.host.trim(),
+        port: parsePositiveIntegerField(state.serverEditor.fields.port, "port"),
+        dashboardPath: state.serverEditor.fields.dashboardPath.trim(),
+        requestTimeoutMs: parsePositiveIntegerField(state.serverEditor.fields.requestTimeoutMs, "requestTimeoutMs"),
+        queueTimeoutMs: parsePositiveIntegerField(state.serverEditor.fields.queueTimeoutMs, "queueTimeoutMs"),
+        healthCheckIntervalMs: parsePositiveIntegerField(state.serverEditor.fields.healthCheckIntervalMs, "healthCheckIntervalMs"),
+        recentRequestLimit: parsePositiveIntegerField(state.serverEditor.fields.recentRequestLimit, "recentRequestLimit"),
+      };
+
+      state.serverEditor.saving = true;
+
+      const response = await fetch("/api/config/server", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorResponse(response));
+      }
+
+      const payload = await response.json() as unknown;
+      const persistedServerConfig = isServerConfigSaveResponse(payload) && payload.server ? payload.server : null;
+      const restartRequiredFields = isServerConfigSaveResponse(payload) && Array.isArray(payload.restartRequiredFields)
+        ? payload.restartRequiredFields.filter((field): field is string => typeof field === "string" && field.length > 0)
+        : [];
+      const appliedImmediatelyFields = isServerConfigSaveResponse(payload) && Array.isArray(payload.appliedImmediatelyFields)
+        ? payload.appliedImmediatelyFields.filter((field): field is string => typeof field === "string" && field.length > 0)
+        : [];
+
+      await loadBackendConfigs();
+      if (persistedServerConfig) {
+        state.serverConfig = persistedServerConfig;
+      }
+
+      state.serverEditor.restartRequiredFields = restartRequiredFields;
+      state.serverEditor.appliedImmediatelyFields = appliedImmediatelyFields;
+
+      if (restartRequiredFields.length > 0 && appliedImmediatelyFields.length > 0) {
+        state.serverEditor.notice = `Saved. Applied immediately: ${joinFieldLabels(appliedImmediatelyFields)}. Restart llmproxy to apply: ${joinFieldLabels(restartRequiredFields)}.`;
+        state.serverEditor.noticeTone = "warn";
+      } else if (restartRequiredFields.length > 0) {
+        state.serverEditor.notice = `Saved. Restart llmproxy to apply: ${joinFieldLabels(restartRequiredFields)}.`;
+        state.serverEditor.noticeTone = "warn";
+      } else if (appliedImmediatelyFields.length > 0) {
+        state.serverEditor.notice = `Saved and applied immediately: ${joinFieldLabels(appliedImmediatelyFields)}.`;
+        state.serverEditor.noticeTone = "good";
+      } else {
+        state.serverEditor.notice = "Saved. No config values changed.";
+        state.serverEditor.noticeTone = "neutral";
+      }
+
+      closeServerEditorState(state);
+    } catch (error) {
+      state.serverEditor.error = error instanceof Error ? error.message : String(error);
+    } finally {
+      state.serverEditor.saving = false;
+    }
+  }
+
   async function saveBackendEditor(): Promise<void> {
     const { fields, mode, originalId } = state.backendEditor;
     state.backendEditor.error = "";
@@ -268,6 +426,9 @@ export function useBackendControls(state: DashboardState) {
     openCreateBackend,
     openEditBackend,
     closeBackendEditor,
+    openServerEditor,
+    closeServerEditor,
+    saveServerEditor,
     saveBackendEditor,
   };
 }
