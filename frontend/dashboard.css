@@ -192,7 +192,12 @@
   }
 
   .page-nav {
-    @apply flex flex-wrap items-center gap-2 rounded-[1.35rem] border border-amber-900/10 bg-white/88 p-1.5 shadow-sm;
+    @apply flex flex-wrap items-center gap-2 rounded-[1.35rem] p-1.5;
+    border: 1px solid rgba(120, 113, 108, 0.12);
+    background: rgba(120, 113, 108, 0.08);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 1px 2px rgba(28, 25, 23, 0.04);
   }
 
   .page-link {
@@ -205,17 +210,18 @@
   }
 
   .page-link:hover {
-    @apply bg-amber-500/8 text-stone-900;
+    color: #44403c;
+    background: rgba(255, 248, 240, 0.42);
   }
 
   .page-link.active {
     color: #7c2d12;
-    border-color: rgba(194, 65, 12, 0.18);
+    border-color: rgba(194, 65, 12, 0.14);
     background:
-      linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(255, 237, 213, 0.94));
+      linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(255, 242, 229, 0.95));
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.84),
-      0 6px 14px rgba(194, 65, 12, 0.1);
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 8px 18px rgba(120, 53, 15, 0.1);
   }
 
   .meta {
@@ -543,9 +549,9 @@
   }
 
   .badge.identity-backend {
-    color: #047857;
-    border-color: rgba(16, 185, 129, 0.18);
-    background: rgba(209, 250, 229, 0.92);
+    color: #9d174d;
+    border-color: rgba(219, 39, 119, 0.18);
+    background: rgba(252, 231, 243, 0.94);
   }
 
   .chip.good {
@@ -796,6 +802,7 @@
   .backend-health-dot.good {
     background: #16a34a;
     box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+    animation: backend-health-sonar 2.2s ease-out infinite;
   }
 
   .backend-health-dot.bad {
@@ -808,6 +815,27 @@
       linear-gradient(135deg, transparent 0 42%, rgba(87, 83, 78, 0.95) 42% 58%, transparent 58% 100%),
       #d6d3d1;
     box-shadow: 0 0 0 4px rgba(168, 162, 158, 0.16);
+  }
+
+  @keyframes backend-health-sonar {
+    0%,
+    20% {
+      box-shadow:
+        0 0 0 4px rgba(34, 197, 94, 0.22),
+        0 0 0 0 rgba(34, 197, 94, 0.28);
+    }
+
+    72% {
+      box-shadow:
+        0 0 0 4px rgba(34, 197, 94, 0.14),
+        0 0 0 12px rgba(34, 197, 94, 0);
+    }
+
+    100% {
+      box-shadow:
+        0 0 0 4px rgba(34, 197, 94, 0.18),
+        0 0 0 0 rgba(34, 197, 94, 0);
+    }
   }
 
   .table-sub {
