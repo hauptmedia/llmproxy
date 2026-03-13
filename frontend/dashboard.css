@@ -613,6 +613,27 @@
     @apply min-w-0;
   }
 
+  .log-sort-trigger {
+    @apply inline-flex min-w-0 items-center gap-1.5 bg-transparent p-0 text-left text-inherit transition duration-150;
+  }
+
+  .log-sort-trigger:hover {
+    @apply text-stone-900;
+  }
+
+  .log-sort-trigger.active {
+    @apply text-amber-900;
+  }
+
+  .log-sort-indicator {
+    @apply text-[11px] font-semibold text-stone-400;
+    flex: 0 0 auto;
+  }
+
+  .log-sort-trigger.active .log-sort-indicator {
+    @apply text-amber-800;
+  }
+
   .log-filter-trigger {
     @apply inline-flex items-center justify-center rounded-full border border-amber-900/10 bg-white/92 text-stone-500 transition duration-150;
     width: 24px;

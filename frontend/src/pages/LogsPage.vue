@@ -17,8 +17,12 @@ type FilterKey =
   | "tokens"
   | "rate"
   | "note";
+type SortKey = Exclude<FilterKey, never>;
+type SortDirection = "asc" | "desc" | "";
 
 const openFilterKey = ref<FilterKey | "">("");
+const sortKey = ref<SortKey | "">("");
+const sortDirection = ref<SortDirection>("");
 const filterIconPath = [
   "M4 6h16",
   "M7 12h10",
@@ -171,8 +175,73 @@ const filteredEntries = computed(() => {
   });
 });
 
+const sortedEntries = computed(() => {
+  if (!sortKey.value || !sortDirection.value) {
+    return filteredEntries.value;
+  }
+
+  const activeSortKey = sortKey.value;
+  const direction = sortDirection.value === "asc" ? 1 : -1;
+
+  return filteredEntries.value
+    .map((entry, index) => ({ entry, index }))
+    .sort((left, right) => {
+      const comparison = compareEntries(left.entry, right.entry, activeSortKey);
+      if (comparison !== 0) {
+        return comparison * direction;
+      }
+
+      return left.index - right.index;
+    })
+    .map(({ entry }) => entry);
+});
+
 function toggleFilter(filterKey: FilterKey): void {
   openFilterKey.value = openFilterKey.value === filterKey ? "" : filterKey;
+}
+
+function toggleSort(nextSortKey: SortKey): void {
+  if (sortKey.value !== nextSortKey) {
+    sortKey.value = nextSortKey;
+    sortDirection.value = nextSortKey === "time" ? "desc" : "asc";
+    return;
+  }
+
+  if (sortDirection.value === "asc") {
+    sortDirection.value = "desc";
+    return;
+  }
+
+  if (sortDirection.value === "desc") {
+    sortKey.value = "";
+    sortDirection.value = "";
+    return;
+  }
+
+  sortDirection.value = nextSortKey === "time" ? "desc" : "asc";
+}
+
+function isSortedBy(candidate: SortKey): boolean {
+  return sortKey.value === candidate && sortDirection.value !== "";
+}
+
+function sortIndicator(candidate: SortKey): string {
+  if (sortKey.value !== candidate || !sortDirection.value) {
+    return "↕";
+  }
+
+  return sortDirection.value === "asc" ? "↑" : "↓";
+}
+
+function sortTitle(candidate: SortKey): string {
+  const label = candidate === "rate" ? "tok/s" : candidate;
+  if (sortKey.value !== candidate || !sortDirection.value) {
+    return `Sort by ${label}.`;
+  }
+
+  return sortDirection.value === "asc"
+    ? `Sorted ascending by ${label}. Click to sort descending.`
+    : `Sorted descending by ${label}. Click again to clear sorting.`;
 }
 
 function isFilterOpen(filterKey: FilterKey): boolean {
@@ -348,6 +417,74 @@ function matchesNumeric(
   return true;
 }
 
+function compareEntries(left: RequestLogEntry, right: RequestLogEntry, key: SortKey): number {
+  if (key === "time") {
+    return compareNumberValues(Date.parse(left.time), Date.parse(right.time));
+  }
+
+  if (key === "queue") {
+    return compareNumberValues(left.queuedMs, right.queuedMs);
+  }
+
+  if (key === "latency") {
+    return compareNumberValues(left.latencyMs, right.latencyMs);
+  }
+
+  if (key === "tokens") {
+    return compareNullableNumbers(entryTokenCount(left), entryTokenCount(right));
+  }
+
+  if (key === "rate") {
+    return compareNullableNumbers(left.completionTokensPerSecond, right.completionTokensPerSecond);
+  }
+
+  if (key === "outcome") {
+    return compareTextValues(outcomeLabel(left), outcomeLabel(right));
+  }
+
+  if (key === "request") {
+    return compareTextValues(`${left.method} ${left.path} ${left.id}`, `${right.method} ${right.path} ${right.id}`);
+  }
+
+  if (key === "model") {
+    return compareTextValues(left.model ?? "", right.model ?? "");
+  }
+
+  if (key === "backend") {
+    return compareTextValues(left.backendName ?? "", right.backendName ?? "");
+  }
+
+  return compareTextValues(noteSummary(left), noteSummary(right));
+}
+
+function compareNullableNumbers(left: number | null | undefined, right: number | null | undefined): number {
+  if (left == null && right == null) {
+    return 0;
+  }
+
+  if (left == null) {
+    return 1;
+  }
+
+  if (right == null) {
+    return -1;
+  }
+
+  return compareNumberValues(left, right);
+}
+
+function compareNumberValues(left: number, right: number): number {
+  if (left === right) {
+    return 0;
+  }
+
+  return left < right ? -1 : 1;
+}
+
+function compareTextValues(left: string, right: string): number {
+  return left.localeCompare(right, undefined, { sensitivity: "base", numeric: true });
+}
+
 function outcomeBadgeClass(entry: RequestLogEntry): string {
   if (entry.outcome === "success") {
     return "badge good";
@@ -479,7 +616,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="filteredEntries.length" class="table-wrap log-table-wrap">
+      <div v-if="sortedEntries.length" class="table-wrap log-table-wrap">
         <table class="backend-table log-table">
           <colgroup>
             <col class="log-col-time">
@@ -499,7 +636,10 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label" :title="columnTitles.time">Time</span>
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('time') }" :title="sortTitle('time')" @click="toggleSort('time')">
+                      <span class="log-header-label" :title="columnTitles.time">Time</span>
+                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('time') }}</span>
+                    </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('time') }" title="Filter time" @click.stop="toggleFilter('time')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -517,7 +657,10 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label" :title="columnTitles.outcome">Outcome</span>
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('outcome') }" :title="sortTitle('outcome')" @click="toggleSort('outcome')">
+                      <span class="log-header-label" :title="columnTitles.outcome">Outcome</span>
+                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('outcome') }}</span>
+                    </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('outcome') }" title="Filter outcome" @click.stop="toggleFilter('outcome')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -537,7 +680,10 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label" :title="columnTitles.request">Request</span>
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('request') }" :title="sortTitle('request')" @click="toggleSort('request')">
+                      <span class="log-header-label" :title="columnTitles.request">Request</span>
+                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('request') }}</span>
+                    </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('request') }" title="Filter request" @click.stop="toggleFilter('request')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -555,7 +701,10 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label" :title="columnTitles.model">Model</span>
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('model') }" :title="sortTitle('model')" @click="toggleSort('model')">
+                      <span class="log-header-label" :title="columnTitles.model">Model</span>
+                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('model') }}</span>
+                    </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('model') }" title="Filter model" @click.stop="toggleFilter('model')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -575,7 +724,10 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label" :title="columnTitles.backend">Backend</span>
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('backend') }" :title="sortTitle('backend')" @click="toggleSort('backend')">
+                      <span class="log-header-label" :title="columnTitles.backend">Backend</span>
+                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('backend') }}</span>
+                    </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('backend') }" title="Filter backend" @click.stop="toggleFilter('backend')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -595,7 +747,10 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label" :title="columnTitles.queue">Queue</span>
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('queue') }" :title="sortTitle('queue')" @click="toggleSort('queue')">
+                      <span class="log-header-label" :title="columnTitles.queue">Queue</span>
+                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('queue') }}</span>
+                    </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('queue') }" title="Filter queue" @click.stop="toggleFilter('queue')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -618,7 +773,10 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label" :title="columnTitles.latency">Latency</span>
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('latency') }" :title="sortTitle('latency')" @click="toggleSort('latency')">
+                      <span class="log-header-label" :title="columnTitles.latency">Latency</span>
+                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('latency') }}</span>
+                    </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('latency') }" title="Filter latency" @click.stop="toggleFilter('latency')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -641,7 +799,10 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label" :title="columnTitles.tokens">Tokens</span>
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('tokens') }" :title="sortTitle('tokens')" @click="toggleSort('tokens')">
+                      <span class="log-header-label" :title="columnTitles.tokens">Tokens</span>
+                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('tokens') }}</span>
+                    </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('tokens') }" title="Filter tokens" @click.stop="toggleFilter('tokens')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -664,7 +825,10 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label" :title="columnTitles.rate">tok/s</span>
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('rate') }" :title="sortTitle('rate')" @click="toggleSort('rate')">
+                      <span class="log-header-label" :title="columnTitles.rate">tok/s</span>
+                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('rate') }}</span>
+                    </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('rate') }" title="Filter token rate" @click.stop="toggleFilter('rate')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -687,7 +851,10 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
-                    <span class="log-header-label" :title="columnTitles.note">Note</span>
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('note') }" :title="sortTitle('note')" @click="toggleSort('note')">
+                      <span class="log-header-label" :title="columnTitles.note">Note</span>
+                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('note') }}</span>
+                    </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('note') }" title="Filter note" @click.stop="toggleFilter('note')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
@@ -707,7 +874,7 @@ onBeforeUnmount(() => {
           </thead>
           <tbody>
             <tr
-              v-for="entry in filteredEntries"
+              v-for="entry in sortedEntries"
               :key="entry.id"
             >
               <td class="log-cell-tight">
