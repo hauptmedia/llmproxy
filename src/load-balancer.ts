@@ -46,6 +46,11 @@ interface LoadBalancerOptions {
   fetcher?: typeof fetch;
 }
 
+interface BackendSelection {
+  backend: BackendRuntime;
+  model?: string;
+}
+
 export class LoadBalancer extends EventEmitter {
   private readonly fetcher: typeof fetch;
   private readonly startedAt = new Date().toISOString();
@@ -190,7 +195,9 @@ export class LoadBalancer extends EventEmitter {
     }
 
     if (!this.hasMatchingBackend(route.model)) {
-      const message = route.model
+      const message = isAutoModelRequest(route.model)
+        ? "No backend with a concrete model is currently available for automatic model selection."
+        : route.model
         ? `No backend configured for model "${route.model}".`
         : "No backend can serve this request.";
       this.recordRejectedRequest(route, message);
@@ -255,16 +262,21 @@ export class LoadBalancer extends EventEmitter {
   }
 
   private hasMatchingBackend(model?: string): boolean {
-    return this.backends.some((backend) => backend.config.enabled && this.backendSupportsModel(backend, model));
+    if (!model) {
+      return this.backends.some((backend) => backend.config.enabled);
+    }
+
+    return this.backends.some((backend) => backend.config.enabled && this.resolveModelForBackend(backend, model) !== undefined);
   }
 
   private tryAcquire(route: ProxyRouteRequest): BackendLease | undefined {
-    const available = this.pickBackend(route.model);
+    const selection = this.pickBackend(route.model);
 
-    if (!available) {
+    if (!selection) {
       return undefined;
     }
 
+    const { backend: available, model: selectedModel } = selection;
     const queueMs = Date.now() - route.receivedAt;
     available.activeRequests += 1;
     available.totalRequests += 1;
@@ -276,6 +288,7 @@ export class LoadBalancer extends EventEmitter {
     return {
       requestId: route.id,
       backend: available.config,
+      selectedModel,
       resolvedHeaders: { ...available.resolvedHeaders },
       queueMs,
       release: (result: LeaseReleaseResult) => {
@@ -344,13 +357,15 @@ export class LoadBalancer extends EventEmitter {
     };
   }
 
-  private pickBackend(model?: string): BackendRuntime | undefined {
+  private pickBackend(model?: string): BackendSelection | undefined {
     if (this.backends.length === 0) {
       return undefined;
     }
 
+    const startIndex = isAutoModelRequest(model) ? 0 : this.nextIndex;
+
     for (let offset = 0; offset < this.backends.length; offset += 1) {
-      const index = (this.nextIndex + offset) % this.backends.length;
+      const index = (startIndex + offset) % this.backends.length;
       const backend = this.backends[index];
 
       if (!backend.config.enabled || !backend.healthy) {
@@ -361,12 +376,19 @@ export class LoadBalancer extends EventEmitter {
         continue;
       }
 
-      if (!this.backendSupportsModel(backend, model)) {
+      const resolvedModel = this.resolveModelForBackend(backend, model);
+      if (model && resolvedModel === undefined) {
         continue;
       }
 
-      this.nextIndex = (index + 1) % this.backends.length;
-      return backend;
+      if (!isAutoModelRequest(model)) {
+        this.nextIndex = (index + 1) % this.backends.length;
+      }
+
+      return {
+        backend,
+        model: resolvedModel,
+      };
     }
 
     return undefined;
@@ -381,26 +403,54 @@ export class LoadBalancer extends EventEmitter {
       return true;
     }
 
-    const configuredPatterns = backend.config.models ?? [];
-    const discoveredNames = collectBackendDiscoveredModelNames(backend);
+    return this.resolveModelForBackend(backend, model) !== undefined;
+  }
 
-    if (discoveredNames.length > 0) {
-      if (!discoveredNames.includes(model)) {
-        return false;
+  private resolveModelForBackend(backend: BackendRuntime, model?: string): string | undefined {
+    if (!model) {
+      return undefined;
+    }
+
+    if (isAutoModelRequest(model)) {
+      const automaticModel = pickAutomaticBackendModel(backend);
+      if (!automaticModel) {
+        return undefined;
+      }
+
+      const configuredPatterns = backend.config.models ?? [];
+      if (configuredPatterns.length === 0) {
+        return automaticModel;
+      }
+
+      return configuredPatterns.some((pattern) => matchesPattern(pattern, automaticModel))
+        ? automaticModel
+        : undefined;
+    }
+
+    const configuredPatterns = backend.config.models ?? [];
+    const discoveredModel = resolveDiscoveredBackendModel(backend, model);
+
+    if (hasDiscoveredModels(backend)) {
+      if (!discoveredModel) {
+        return undefined;
       }
 
       if (configuredPatterns.length === 0) {
-        return true;
+        return discoveredModel;
       }
 
-      return configuredPatterns.some((pattern) => matchesPattern(pattern, model));
+      return configuredPatterns.some((pattern) => matchesPattern(pattern, model) || matchesPattern(pattern, discoveredModel))
+        ? discoveredModel
+        : undefined;
     }
 
     if (configuredPatterns.length === 0) {
-      return true;
+      return model;
     }
 
-    return configuredPatterns.some((pattern) => matchesPattern(pattern, model));
+    return configuredPatterns.some((pattern) => matchesPattern(pattern, model))
+      ? model
+      : undefined;
   }
 
   private dequeuePending(pending: PendingRequest): void {
@@ -602,26 +652,46 @@ function matchesPattern(pattern: string, value: string): boolean {
   return pattern === value;
 }
 
-function collectBackendDiscoveredModelNames(backend: BackendRuntime): string[] {
-  const names = new Set<string>();
+function isAutoModelRequest(model?: string): boolean {
+  return model === "*" || model === "auto";
+}
 
-  for (const model of backend.discoveredModels) {
-    if (typeof model === "string" && model.length > 0) {
-      names.add(model);
-    }
+function hasDiscoveredModels(backend: BackendRuntime): boolean {
+  return backend.discoveredModels.length > 0 || backend.discoveredModelDetails.length > 0;
+}
+
+function pickAutomaticBackendModel(backend: BackendRuntime): string | undefined {
+  if (backend.discoveredModels.length > 0) {
+    return backend.discoveredModels[0];
   }
 
   for (const detail of backend.discoveredModelDetails) {
     if (typeof detail.id === "string" && detail.id.length > 0) {
-      names.add(detail.id);
-    }
-
-    for (const alias of extractModelAliases(detail.metadata)) {
-      names.add(alias);
+      return detail.id;
     }
   }
 
-  return Array.from(names);
+  return backend.config.models?.find((model) => !model.includes("*"));
+}
+
+function resolveDiscoveredBackendModel(backend: BackendRuntime, requestedModel: string): string | undefined {
+  for (const detail of backend.discoveredModelDetails) {
+    if (detail.id === requestedModel) {
+      return detail.id;
+    }
+
+    for (const alias of extractModelAliases(detail.metadata)) {
+      if (alias === requestedModel) {
+        return detail.id;
+      }
+    }
+  }
+
+  if (backend.discoveredModels.includes(requestedModel)) {
+    return requestedModel;
+  }
+
+  return undefined;
 }
 
 function extractModelAliases(metadata: JsonValue | undefined): string[] {

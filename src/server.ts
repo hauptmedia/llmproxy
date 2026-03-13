@@ -488,13 +488,14 @@ export class LlmProxyServer {
         backendName: lease.backend.name,
         queueMs: lease.queueMs,
       }, true);
+      const upstreamParsedBody = applySelectedModel(parsedBody, lease.selectedModel);
       const requestPlan = buildBackendRequestPlan(
         lease.backend,
         method,
         url.pathname,
         url.search,
         body,
-        parsedBody,
+        upstreamParsedBody,
         Boolean(streamingKind),
       );
       const timeoutMs = lease.backend.timeoutMs ?? this.loadBalancer.getServerConfig().requestTimeoutMs;
@@ -1327,6 +1328,20 @@ function extractApiRequestId(pathname: string, suffix = ""): string | undefined 
   }
 
   return decodeURIComponent(rawRequestId);
+}
+
+function applySelectedModel(
+  parsedBody: Record<string, unknown> | undefined,
+  selectedModel?: string,
+): Record<string, unknown> | undefined {
+  if (!parsedBody || !selectedModel) {
+    return parsedBody;
+  }
+
+  return {
+    ...parsedBody,
+    model: selectedModel,
+  };
 }
 
 function readRequestedProxyRequestId(headerValue: string | string[] | undefined): string | undefined {

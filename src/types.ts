@@ -73,6 +73,7 @@ export interface BackendLease {
   requestId: string;
   queueMs: number;
   backend: BackendConfig;
+  selectedModel?: string;
   resolvedHeaders: Record<string, string>;
   release: (result: LeaseReleaseResult) => void;
 }

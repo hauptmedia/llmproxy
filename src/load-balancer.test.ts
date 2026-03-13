@@ -237,12 +237,99 @@ test("routes requests using discovered model aliases", async () => {
   });
 
   assert.equal(lease.backend.id, "alias-backend");
+  assert.equal(lease.selectedModel, "canonical-model");
 
   lease.release({
     outcome: "success",
     latencyMs: 35,
     statusCode: 200,
     queuedMs: lease.queueMs,
+  });
+
+  await balancer.stop();
+});
+
+test("auto selects the first free backend with a concrete model", async () => {
+  const config: ProxyConfig = {
+    server: {
+      ...TEST_CONFIG.server,
+      port: 4004,
+    },
+    backends: [
+      {
+        id: "auto-a",
+        name: "Auto A",
+        baseUrl: "http://127.0.0.1:9300",
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["*"],
+      },
+      {
+        id: "auto-b",
+        name: "Auto B",
+        baseUrl: "http://127.0.0.1:9301",
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["*"],
+      },
+    ],
+  };
+
+  const balancer = new LoadBalancer(config, {
+    fetcher: async (input) => {
+      const url = new URL(
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url,
+      );
+
+      if (url.port === "9300") {
+        return jsonResponse({ object: "list", data: [{ id: "auto-model-a" }] });
+      }
+
+      return jsonResponse({ object: "list", data: [{ id: "auto-model-b" }] });
+    },
+  });
+
+  await balancer.start();
+
+  const firstLease = await balancer.acquire({
+    id: "req-auto-1",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "auto",
+    stream: true,
+  });
+
+  assert.equal(firstLease.backend.id, "auto-a");
+  assert.equal(firstLease.selectedModel, "auto-model-a");
+
+  const secondLease = await balancer.acquire({
+    id: "req-auto-2",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "*",
+    stream: true,
+  });
+
+  assert.equal(secondLease.backend.id, "auto-b");
+  assert.equal(secondLease.selectedModel, "auto-model-b");
+
+  firstLease.release({
+    outcome: "success",
+    latencyMs: 25,
+    statusCode: 200,
+    queuedMs: firstLease.queueMs,
+  });
+  secondLease.release({
+    outcome: "success",
+    latencyMs: 25,
+    statusCode: 200,
+    queuedMs: secondLease.queueMs,
   });
 
   await balancer.stop();

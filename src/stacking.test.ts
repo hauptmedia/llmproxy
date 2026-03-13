@@ -42,6 +42,7 @@ async function getFreePort(): Promise<number> {
 async function startMockOpenAiBackend(
   port: number,
   streamModes: boolean[],
+  receivedPayloads?: Array<Record<string, unknown>>,
 ): Promise<Server> {
   const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -71,6 +72,7 @@ async function startMockOpenAiBackend(
         stream?: boolean;
         model?: string;
       };
+      receivedPayloads?.push(payload);
       streamModes.push(payload.stream === true);
 
       const chunks = [
@@ -931,6 +933,95 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
   assert.deepEqual(streamModes, [true, true]);
 });
 
+test("proxy rewrites auto model requests to the selected backend model", async (t) => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-auto-model-"));
+  const receivedPayloads: Array<Record<string, unknown>> = [];
+  const streamModes: boolean[] = [];
+  const cleanup: Array<() => Promise<void>> = [];
+
+  t.after(async () => {
+    for (const entry of cleanup.reverse()) {
+      await entry();
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  const upstreamPort = await getFreePort();
+  const proxyPort = await getFreePort();
+
+  const upstreamServer = await startMockOpenAiBackend(upstreamPort, streamModes, receivedPayloads);
+  cleanup.push(async () => {
+    await new Promise<void>((resolve, reject) => {
+      upstreamServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  });
+
+  const config: ProxyConfig = {
+    server: {
+      host: "127.0.0.1",
+      port: proxyPort,
+      dashboardPath: "/dashboard",
+      requestTimeoutMs: 15_000,
+      queueTimeoutMs: 2_000,
+      healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
+    },
+    backends: [
+      {
+        id: "auto-upstream",
+        name: "auto upstream",
+        baseUrl: `http://127.0.0.1:${upstreamPort}`,
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["*"],
+      },
+    ],
+  };
+
+  const router = await startRouter(config, path.join(tempDir, "auto-router.config.json"));
+  cleanup.push(async () => {
+    await router.server.stop();
+    await router.loadBalancer.stop();
+  });
+
+  const baseUrl = `http://127.0.0.1:${proxyPort}`;
+  await waitForOuterState(baseUrl, "mock-stack-model");
+
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "auto",
+      stream: false,
+      messages: [
+        {
+          role: "user",
+          content: "Hello through automatic model routing.",
+        },
+      ],
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-llmproxy-backend"), "auto-upstream");
+  const payload = await response.json() as {
+    model?: string;
+  };
+  assert.equal(payload.model, "mock-stack-model");
+  assert.equal(receivedPayloads[0]?.model, "mock-stack-model");
+  assert.deepEqual(streamModes, [true]);
+});
+
 test("ollama connector keeps the client surface OpenAI-compatible", async (t) => {
   const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-ollama-connector-"));
   const receivedPayloads: Array<Record<string, unknown>> = [];
@@ -1648,4 +1739,3 @@ test("dashboard can cancel a live connection and retain the partial response in 
   assert.equal(detailPayload.entry.outcome, "cancelled");
   assert.match(detailPayload.responseBody?.choices?.[0]?.message?.content ?? "", /Streaming/);
 });
-
