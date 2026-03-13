@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import ConversationSurface from "../components/ConversationSurface.vue";
+import ChatComposer from "../components/ChatComposer.vue";
 import MessageCard from "../components/MessageCard.vue";
 import type { DebugTranscriptEntry } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
@@ -122,102 +123,27 @@ const chatConversationSignature = computed(() => [
               :reasoning-collapsed="true"
             />
 
-            <form v-if="!hasTranscript" class="turn user chat-editor-turn" @submit.prevent="store.sendDebugChat()">
-              <textarea
-                id="debug-prompt"
-                v-model="store.state.debug.prompt"
-                class="chat-editor-textarea"
-                placeholder="Enter the first user message to send through the proxy."
-                @keydown="handleChatPromptKeydown"
-              ></textarea>
-              <div v-if="showAdvancedParameters" class="chat-advanced-inline">
-                <div class="chat-advanced-body">
-                  <div class="param-grid">
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-temperature">Temperature</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.temperature" aria-label="Temperature help">i</span>
-                      </div>
-                      <input id="debug-temperature" v-model.number="store.state.debug.params.temperature" :title="advancedParamHelp.temperature" type="number" step="0.1" min="0" />
-                    </div>
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-top-p">Top P</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.top_p" aria-label="Top P help">i</span>
-                      </div>
-                      <input id="debug-top-p" v-model.number="store.state.debug.params.top_p" :title="advancedParamHelp.top_p" type="number" step="0.01" min="0" max="1" />
-                    </div>
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-top-k">Top K</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.top_k" aria-label="Top K help">i</span>
-                      </div>
-                      <input id="debug-top-k" v-model.number="store.state.debug.params.top_k" :title="advancedParamHelp.top_k" type="number" step="1" min="0" />
-                    </div>
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-min-p">Min P</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.min_p" aria-label="Min P help">i</span>
-                      </div>
-                      <input id="debug-min-p" v-model.number="store.state.debug.params.min_p" :title="advancedParamHelp.min_p" type="number" step="0.01" min="0" max="1" />
-                    </div>
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-repeat-penalty">Repeat Penalty</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.repeat_penalty" aria-label="Repeat Penalty help">i</span>
-                      </div>
-                      <input id="debug-repeat-penalty" v-model.number="store.state.debug.params.repeat_penalty" :title="advancedParamHelp.repeat_penalty" type="number" step="0.05" min="0" />
-                    </div>
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-max-tokens">Max Tokens</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.max_tokens" aria-label="Max Tokens help">i</span>
-                      </div>
-                      <input id="debug-max-tokens" v-model.number="store.state.debug.params.max_tokens" :title="advancedParamHelp.max_tokens" type="number" step="1" min="1" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="chat-composer-actions">
-                <div class="chat-composer-settings">
-                  <div class="field chat-composer-model-field">
-                    <div class="chat-composer-model-inline-control">
-                      <label class="field-label chat-composer-model-label" for="debug-model">Model</label>
-                      <select id="debug-model" v-model="store.state.debug.model" class="chat-composer-model-select">
-                        <option value="auto">auto</option>
-                        <option v-for="model in store.state.models" :key="model.id" :value="model.id">
-                          {{ model.id }}
-                        </option>
-                      </select>
-                    </div>
-                  </div>
-                  <button
-                    class="icon-button compact"
-                    type="button"
-                    :aria-label="showAdvancedParameters ? 'Hide advanced parameters' : 'Show advanced parameters'"
-                    :title="showAdvancedParameters ? 'Hide advanced parameters' : 'Show advanced parameters'"
-                    @click="showAdvancedParameters = !showAdvancedParameters"
-                  >
-                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M4 7h10"></path>
-                      <path d="M18 7h2"></path>
-                      <path d="M14 7a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
-                      <path d="M4 12h4"></path>
-                      <path d="M12 12h8"></path>
-                      <path d="M8 12a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
-                      <path d="M4 17h10"></path>
-                      <path d="M18 17h2"></path>
-                      <path d="M14 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
-                    </svg>
-                  </button>
-                </div>
-                <div class="chat-composer-primary-actions">
-                  <button class="button" type="submit" :disabled="store.state.debug.sending">
-                    {{ store.state.debug.sending ? "Sending..." : "Send first message" }}
-                  </button>
-                </div>
-              </div>
-            </form>
+            <ChatComposer
+              v-if="!hasTranscript"
+              class="turn user chat-editor-turn"
+              :prompt="store.state.debug.prompt"
+              :model="store.state.debug.model"
+              :params="store.state.debug.params"
+              :models="store.state.models"
+              :sending="store.state.debug.sending"
+              :show-advanced-parameters="showAdvancedParameters"
+              submit-label="Send first message"
+              prompt-placeholder="Enter the first user message to send through the proxy."
+              prompt-id="debug-prompt"
+              model-id="debug-model"
+              advanced-id-prefix="debug"
+              :advanced-param-help="advancedParamHelp"
+              @update:prompt="store.state.debug.prompt = $event"
+              @update:model="store.state.debug.model = $event"
+              @submit="store.sendDebugChat()"
+              @toggle-advanced="showAdvancedParameters = !showAdvancedParameters"
+              @keydown-prompt="handleChatPromptKeydown"
+            />
 
             <MessageCard
               v-for="(entry, index) in store.state.debug.transcript"
@@ -230,106 +156,26 @@ const chatConversationSignature = computed(() => [
           </div>
 
           <template #footer>
-            <form
+            <ChatComposer
               v-if="hasTranscript && !store.state.debug.sending"
-              class="chat-composer chat-composer-inline"
-              @submit.prevent="store.sendDebugChat()"
-            >
-              <textarea
-                id="debug-follow-up"
-                v-model="store.state.debug.prompt"
-                class="chat-editor-textarea"
-                placeholder="Enter the next message to continue the conversation."
-                @keydown="handleChatPromptKeydown"
-              ></textarea>
-              <div v-if="showAdvancedParameters" class="chat-advanced-inline">
-                <div class="chat-advanced-body">
-                  <div class="param-grid">
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-temperature-follow-up">Temperature</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.temperature" aria-label="Temperature help">i</span>
-                      </div>
-                      <input id="debug-temperature-follow-up" v-model.number="store.state.debug.params.temperature" :title="advancedParamHelp.temperature" type="number" step="0.1" min="0" />
-                    </div>
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-top-p-follow-up">Top P</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.top_p" aria-label="Top P help">i</span>
-                      </div>
-                      <input id="debug-top-p-follow-up" v-model.number="store.state.debug.params.top_p" :title="advancedParamHelp.top_p" type="number" step="0.01" min="0" max="1" />
-                    </div>
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-top-k-follow-up">Top K</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.top_k" aria-label="Top K help">i</span>
-                      </div>
-                      <input id="debug-top-k-follow-up" v-model.number="store.state.debug.params.top_k" :title="advancedParamHelp.top_k" type="number" step="1" min="0" />
-                    </div>
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-min-p-follow-up">Min P</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.min_p" aria-label="Min P help">i</span>
-                      </div>
-                      <input id="debug-min-p-follow-up" v-model.number="store.state.debug.params.min_p" :title="advancedParamHelp.min_p" type="number" step="0.01" min="0" max="1" />
-                    </div>
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-repeat-penalty-follow-up">Repeat Penalty</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.repeat_penalty" aria-label="Repeat Penalty help">i</span>
-                      </div>
-                      <input id="debug-repeat-penalty-follow-up" v-model.number="store.state.debug.params.repeat_penalty" :title="advancedParamHelp.repeat_penalty" type="number" step="0.05" min="0" />
-                    </div>
-                    <div class="field">
-                      <div class="field-label-row">
-                        <label class="field-label" for="debug-max-tokens-follow-up">Max Tokens</label>
-                        <span class="chat-param-help" :title="advancedParamHelp.max_tokens" aria-label="Max Tokens help">i</span>
-                      </div>
-                      <input id="debug-max-tokens-follow-up" v-model.number="store.state.debug.params.max_tokens" :title="advancedParamHelp.max_tokens" type="number" step="1" min="1" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="chat-composer-actions">
-                <div class="chat-composer-settings">
-                  <div class="field chat-composer-model-field">
-                    <div class="chat-composer-model-inline-control">
-                      <label class="field-label chat-composer-model-label" for="debug-follow-up-model">Model</label>
-                      <select id="debug-follow-up-model" v-model="store.state.debug.model" class="chat-composer-model-select">
-                        <option value="auto">auto</option>
-                        <option v-for="model in store.state.models" :key="model.id" :value="model.id">
-                          {{ model.id }}
-                        </option>
-                      </select>
-                    </div>
-                  </div>
-                  <button
-                    class="icon-button compact"
-                    type="button"
-                    :aria-label="showAdvancedParameters ? 'Hide advanced parameters' : 'Show advanced parameters'"
-                    :title="showAdvancedParameters ? 'Hide advanced parameters' : 'Show advanced parameters'"
-                    @click="showAdvancedParameters = !showAdvancedParameters"
-                  >
-                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M4 7h10"></path>
-                      <path d="M18 7h2"></path>
-                      <path d="M14 7a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
-                      <path d="M4 12h4"></path>
-                      <path d="M12 12h8"></path>
-                      <path d="M8 12a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
-                      <path d="M4 17h10"></path>
-                      <path d="M18 17h2"></path>
-                      <path d="M14 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
-                    </svg>
-                  </button>
-                </div>
-                <div class="chat-composer-primary-actions">
-                  <button class="button" type="submit" :disabled="store.state.debug.sending">
-                    {{ store.state.debug.sending ? "Sending..." : "Send follow-up" }}
-                  </button>
-                </div>
-              </div>
-            </form>
+              :prompt="store.state.debug.prompt"
+              :model="store.state.debug.model"
+              :params="store.state.debug.params"
+              :models="store.state.models"
+              :sending="store.state.debug.sending"
+              :show-advanced-parameters="showAdvancedParameters"
+              submit-label="Send follow-up"
+              prompt-placeholder="Enter the next message to continue the conversation."
+              prompt-id="debug-follow-up"
+              model-id="debug-follow-up-model"
+              advanced-id-prefix="debug-follow-up"
+              :advanced-param-help="advancedParamHelp"
+              @update:prompt="store.state.debug.prompt = $event"
+              @update:model="store.state.debug.model = $event"
+              @submit="store.sendDebugChat()"
+              @toggle-advanced="showAdvancedParameters = !showAdvancedParameters"
+              @keydown-prompt="handleChatPromptKeydown"
+            />
             </template>
           </ConversationSurface>
         </div>

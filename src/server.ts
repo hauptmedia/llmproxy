@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createServer, IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from "node:http";
-import { extname, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { ConfigStore, BackendPatch } from "./config-store";
@@ -15,6 +13,33 @@ import {
 import { renderDashboardHtml } from "./dashboard";
 import { LoadBalancer } from "./load-balancer";
 import {
+  RESTART_REQUIRED_SERVER_FIELDS,
+  buildRuntimeAppliedConfig,
+  findChangedServerFields,
+  parseBackendSavePayload,
+  parseServerConfigSavePayload,
+} from "./server-config-payloads";
+import {
+  assetContentType,
+  matchDashboardRoute,
+  normalizeDashboardPath,
+  normalizeDashboardSubPath,
+  resolveDashboardAssetPath,
+} from "./server-dashboard-paths";
+import {
+  applySelectedModel,
+  canSendBody,
+  copyResponseHeaders,
+  extractApiRequestId,
+  isEventStream,
+  proxyError,
+  readRequestedProxyRequestId,
+  resolveEffectiveCompletionTokenLimit,
+  resolveModelCompletionLimit,
+  resolveRequestedCompletionLimit,
+  selectProxyStatus,
+} from "./server-request-utils";
+import {
   ActiveConnectionKind,
   ActiveConnectionPhase,
   ActiveConnectionSnapshot,
@@ -23,7 +48,6 @@ import {
   JsonValue,
   KnownModel,
   LeaseReleaseResult,
-  ProxyConfig,
   ProxyRouteRequest,
   ProxySnapshot,
   RequestLogDetail,
@@ -52,8 +76,6 @@ const HOP_BY_HOP_HEADERS = new Set([
   "host",
   "content-length",
 ]);
-
-const RESTART_REQUIRED_SERVER_FIELDS: Array<keyof ServerConfig> = ["host", "port", "dashboardPath"];
 
 interface ActiveConnectionRuntime {
   id: string;
@@ -90,10 +112,6 @@ interface ActiveConnectionRuntime {
   responseBody?: JsonValue;
   cancelSource?: "client_disconnect" | "dashboard" | "timeout";
   cancel?: (message?: string) => void;
-}
-
-interface DashboardRoute {
-  page: "overview" | "logs" | "chat" | "config";
 }
 
 export function isSupportedProxyRoute(method: string, pathname: string): boolean {
@@ -1318,532 +1336,4 @@ export class LlmProxyServer {
   private readonly handleLoadBalancerSnapshot = (): void => {
     this.broadcastCurrentSnapshot();
   };
-}
-
-function canSendBody(method: string): boolean {
-  return method !== "GET" && method !== "HEAD";
-}
-
-function copyResponseHeaders(headers: Headers, response: ServerResponse): void {
-  headers.forEach((value, key) => {
-    if (HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
-      return;
-    }
-
-    response.setHeader(key, value);
-  });
-}
-
-function isEventStream(headers: Headers): boolean {
-  const contentType = headers.get("content-type");
-  return typeof contentType === "string" && contentType.toLowerCase().includes("text/event-stream");
-}
-
-function proxyError(message: string, type = "proxy_error"): { error: { message: string; type: string } } {
-  return {
-    error: {
-      message,
-      type,
-    },
-  };
-}
-
-function normalizeDashboardPath(pathname: string): string {
-  if (!pathname || pathname === "/") {
-    return "/dashboard";
-  }
-
-  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
-}
-
-function matchDashboardRoute(pathname: string, dashboardPath: string): DashboardRoute | undefined {
-  const normalizedPathname = normalizeDashboardSubPath(pathname);
-
-  if (normalizedPathname === dashboardPath) {
-    return { page: "overview" };
-  }
-
-  if (normalizedPathname === `${dashboardPath}/chat`) {
-    return { page: "chat" };
-  }
-
-  if (normalizedPathname === `${dashboardPath}/logs`) {
-    return { page: "logs" };
-  }
-
-  if (normalizedPathname === `${dashboardPath}/config`) {
-    return { page: "config" };
-  }
-
-  return undefined;
-}
-
-function normalizeDashboardSubPath(pathname: string): string {
-  return pathname !== "/" && pathname.endsWith("/")
-    ? pathname.slice(0, -1)
-    : pathname;
-}
-
-function resolveDashboardAssetPath(pathname: string, dashboardPath: string): string | undefined {
-  const assetPrefix = `${dashboardPath}/assets/`;
-  if (!pathname.startsWith(assetPrefix)) {
-    return undefined;
-  }
-
-  const rawAssetPath = pathname.slice(assetPrefix.length);
-  if (!rawAssetPath) {
-    return undefined;
-  }
-
-  const segments = rawAssetPath
-    .split("/")
-    .filter(Boolean)
-    .map((segment) => decodeURIComponent(segment));
-
-  if (
-    segments.length === 0 ||
-    segments.some((segment) => segment === "." || segment === ".." || segment.includes("\\"))
-  ) {
-    return undefined;
-  }
-
-  const assetRoots = [
-    resolve(__dirname, "dashboard-app", "assets"),
-    resolve(__dirname, "..", "frontend", "src", "assets"),
-  ];
-
-  for (const assetRoot of assetRoots) {
-    const candidate = resolveDashboardAssetCandidate(assetRoot, segments);
-    if (candidate && existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return resolveDashboardAssetCandidate(assetRoots[0], segments);
-}
-
-function resolveDashboardAssetCandidate(assetRoot: string, segments: string[]): string | undefined {
-  const candidate = resolve(assetRoot, ...segments);
-  const allowedPrefix = assetRoot.endsWith(sep) ? assetRoot : `${assetRoot}${sep}`;
-
-  if (candidate !== assetRoot && !candidate.startsWith(allowedPrefix)) {
-    return undefined;
-  }
-
-  return candidate;
-}
-
-function assetContentType(pathname: string): string {
-  const extension = extname(pathname).toLowerCase();
-
-  if (extension === ".css") {
-    return "text/css; charset=utf-8";
-  }
-
-  if (extension === ".js") {
-    return "text/javascript; charset=utf-8";
-  }
-
-  if (extension === ".json" || extension === ".map") {
-    return "application/json; charset=utf-8";
-  }
-
-  return "application/octet-stream";
-}
-
-function selectProxyStatus(
-  message: string,
-  aborted: boolean,
-  clientDisconnected: boolean,
-  dashboardCancelled: boolean,
-): number {
-  if (aborted && clientDisconnected) {
-    return 499;
-  }
-
-  if (aborted && dashboardCancelled) {
-    return 409;
-  }
-
-  if (message.includes("Timed out after") && message.includes("waiting for a free backend slot")) {
-    return 503;
-  }
-
-  if (message.includes("No backend")) {
-    return 503;
-  }
-
-  if (message.includes("Upstream timeout")) {
-    return 504;
-  }
-
-  return 502;
-}
-
-function extractApiRequestId(pathname: string, suffix = ""): string | undefined {
-  const prefix = "/api/requests/";
-  if (!pathname.startsWith(prefix)) {
-    return undefined;
-  }
-
-  if (suffix && !pathname.endsWith(suffix)) {
-    return undefined;
-  }
-
-  const endIndex = suffix ? pathname.length - suffix.length : pathname.length;
-  const rawRequestId = pathname.slice(prefix.length, endIndex);
-  if (!rawRequestId) {
-    return undefined;
-  }
-
-  return decodeURIComponent(rawRequestId);
-}
-
-function applySelectedModel(
-  parsedBody: Record<string, unknown> | undefined,
-  selectedModel?: string,
-): Record<string, unknown> | undefined {
-  if (!parsedBody || !selectedModel) {
-    return parsedBody;
-  }
-
-  return {
-    ...parsedBody,
-    model: selectedModel,
-  };
-}
-
-function resolveRequestedCompletionLimit(requestBody: JsonValue | undefined): number | undefined {
-  if (!isJsonRecord(requestBody)) {
-    return undefined;
-  }
-
-  const maxCompletionTokens = readPositiveInteger(requestBody.max_completion_tokens);
-  if (maxCompletionTokens !== undefined) {
-    return maxCompletionTokens;
-  }
-
-  return readPositiveInteger(requestBody.max_tokens);
-}
-
-function resolveModelCompletionLimit(
-  model: string | undefined,
-  backendId: string | undefined,
-  backends: ProxySnapshot["backends"],
-): number | undefined {
-  if (!model || backends.length === 0) {
-    return undefined;
-  }
-
-  const preferredBackends = backendId
-    ? backends.filter((backend) => backend.id === backendId)
-    : backends;
-  const candidateBackends = preferredBackends.length > 0 ? preferredBackends : backends;
-
-  for (const backend of candidateBackends) {
-    const detail = backend.discoveredModelDetails.find((entry) => {
-      if (entry.id === model) {
-        return true;
-      }
-
-      if (!isJsonRecord(entry.metadata)) {
-        return false;
-      }
-
-      const aliases = entry.metadata.aliases;
-      return Array.isArray(aliases) && aliases.some((alias) => alias === model);
-    });
-
-    const limit = readExplicitModelCompletionLimit(detail?.metadata);
-    if (limit !== undefined) {
-      return limit;
-    }
-  }
-
-  return undefined;
-}
-
-function resolveEffectiveCompletionTokenLimit(
-  requestLimit: number | undefined,
-  modelLimit: number | undefined,
-): number | undefined {
-  if (typeof requestLimit === "number" && typeof modelLimit === "number") {
-    return Math.min(requestLimit, modelLimit);
-  }
-
-  if (typeof requestLimit === "number") {
-    return requestLimit;
-  }
-
-  if (typeof modelLimit === "number") {
-    return modelLimit;
-  }
-
-  return undefined;
-}
-
-function readExplicitModelCompletionLimit(value: unknown): number | undefined {
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const nested = readExplicitModelCompletionLimit(entry);
-      if (nested !== undefined) {
-        return nested;
-      }
-    }
-
-    return undefined;
-  }
-
-  if (!isJsonRecord(value)) {
-    return undefined;
-  }
-
-  const explicitKeys = [
-    "max_completion_tokens",
-    "max_output_tokens",
-    "max_generated_tokens",
-    "completion_token_limit",
-    "output_token_limit",
-    "num_predict",
-  ];
-
-  for (const key of explicitKeys) {
-    const parsed = readPositiveInteger(value[key]);
-    if (parsed !== undefined) {
-      return parsed;
-    }
-  }
-
-  for (const nestedValue of Object.values(value)) {
-    const nested = readExplicitModelCompletionLimit(nestedValue);
-    if (nested !== undefined) {
-      return nested;
-    }
-  }
-
-  return undefined;
-}
-
-function readPositiveInteger(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
-    return value;
-  }
-
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value.trim());
-    if (Number.isInteger(parsed) && parsed > 0) {
-      return parsed;
-    }
-  }
-
-  return undefined;
-}
-
-function isJsonRecord(value: unknown): value is Record<string, JsonValue> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readRequestedProxyRequestId(headerValue: string | string[] | undefined): string | undefined {
-  const candidate = Array.isArray(headerValue) ? headerValue[0] : headerValue;
-  if (typeof candidate !== "string") {
-    return undefined;
-  }
-
-  const trimmed = candidate.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  return /^[A-Za-z0-9._:-]{1,128}$/.test(trimmed) ? trimmed : undefined;
-}
-
-function parseServerConfigSavePayload(input: Record<string, unknown>): ServerConfig {
-  const dashboardPath = parseRequiredTrimmedString(input.dashboardPath, "dashboardPath");
-  if (!dashboardPath.startsWith("/")) {
-    throw new Error('"dashboardPath" must start with "/".');
-  }
-
-  return {
-    host: parseRequiredTrimmedString(input.host, "host"),
-    port: parseRequiredPositiveInteger(input.port, "port"),
-    dashboardPath,
-    requestTimeoutMs: parseRequiredPositiveInteger(input.requestTimeoutMs, "requestTimeoutMs"),
-    queueTimeoutMs: parseRequiredPositiveInteger(input.queueTimeoutMs, "queueTimeoutMs"),
-    healthCheckIntervalMs: parseRequiredPositiveInteger(input.healthCheckIntervalMs, "healthCheckIntervalMs"),
-    recentRequestLimit: parseRequiredPositiveInteger(input.recentRequestLimit, "recentRequestLimit"),
-  };
-}
-
-function findChangedServerFields(current: ServerConfig, next: ServerConfig): Array<keyof ServerConfig> {
-  const changedFields: Array<keyof ServerConfig> = [];
-
-  for (const field of Object.keys(next) as Array<keyof ServerConfig>) {
-    if (current[field] !== next[field]) {
-      changedFields.push(field);
-    }
-  }
-
-  return changedFields;
-}
-
-function buildRuntimeAppliedConfig(nextConfig: { server: ServerConfig; backends: ProxyConfig["backends"] }, currentRuntimeServer: ServerConfig) {
-  return {
-    ...nextConfig,
-    server: {
-      ...nextConfig.server,
-      host: currentRuntimeServer.host,
-      port: currentRuntimeServer.port,
-      dashboardPath: currentRuntimeServer.dashboardPath,
-    },
-  };
-}
-
-function parseBackendSavePayload(input: Record<string, unknown>): BackendSavePayload {
-  const id = parseRequiredTrimmedString(input.id, "id");
-  const name = parseRequiredTrimmedString(input.name, "name");
-  const baseUrl = parseRequiredTrimmedString(input.baseUrl, "baseUrl");
-  const connector = parseBackendConnector(input.connector);
-  const enabled = parseRequiredBoolean(input.enabled, "enabled");
-  const maxConcurrency = parseRequiredPositiveInteger(input.maxConcurrency, "maxConcurrency");
-  const healthPath = parseOptionalTrimmedString(input.healthPath, "healthPath");
-  const models = parseOptionalStringArray(input.models, "models");
-  const headers = parseOptionalStringRecord(input.headers, "headers");
-  const apiKey = parseOptionalTrimmedString(input.apiKey, "apiKey");
-  const apiKeyEnv = parseOptionalTrimmedString(input.apiKeyEnv, "apiKeyEnv");
-  const clearApiKey = parseOptionalBoolean(input.clearApiKey, "clearApiKey");
-  const timeoutMs = parseOptionalPositiveInteger(input.timeoutMs, "timeoutMs");
-
-  return {
-    id,
-    name,
-    baseUrl,
-    connector,
-    enabled,
-    maxConcurrency,
-    healthPath,
-    models,
-    headers,
-    apiKey,
-    apiKeyEnv,
-    clearApiKey,
-    timeoutMs,
-  };
-}
-
-function parseRequiredTrimmedString(value: unknown, fieldName: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`"${fieldName}" must be a non-empty string.`);
-  }
-
-  return value.trim();
-}
-
-function parseOptionalTrimmedString(value: unknown, fieldName: string): string | undefined {
-  if (value === null || value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== "string") {
-    throw new Error(`"${fieldName}" must be a string when provided.`);
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function parseRequiredBoolean(value: unknown, fieldName: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new Error(`"${fieldName}" must be a boolean.`);
-  }
-
-  return value;
-}
-
-function parseOptionalBoolean(value: unknown, fieldName: string): boolean | undefined {
-  if (value === null || value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== "boolean") {
-    throw new Error(`"${fieldName}" must be a boolean when provided.`);
-  }
-
-  return value;
-}
-
-function parseRequiredPositiveInteger(value: unknown, fieldName: string): number {
-  if (!isPositiveInteger(value)) {
-    throw new Error(`"${fieldName}" must be a positive integer.`);
-  }
-
-  return value;
-}
-
-function parseOptionalPositiveInteger(value: unknown, fieldName: string): number | undefined {
-  if (value === null || value === undefined) {
-    return undefined;
-  }
-
-  if (!isPositiveInteger(value)) {
-    throw new Error(`"${fieldName}" must be a positive integer when provided.`);
-  }
-
-  return value;
-}
-
-function parseOptionalStringArray(value: unknown, fieldName: string): string[] | undefined {
-  if (value === null || value === undefined) {
-    return undefined;
-  }
-
-  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
-    throw new Error(`"${fieldName}" must be an array of strings when provided.`);
-  }
-
-  const normalized = value
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-
-  return normalized.length > 0 ? normalized : undefined;
-}
-
-function parseOptionalStringRecord(value: unknown, fieldName: string): Record<string, string> | undefined {
-  if (value === null || value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`"${fieldName}" must be an object of string values when provided.`);
-  }
-
-  const entries = Object.entries(value);
-  const record: Record<string, string> = {};
-
-  for (const [key, entryValue] of entries) {
-    if (typeof entryValue !== "string") {
-      throw new Error(`"${fieldName}.${key}" must be a string.`);
-    }
-
-    const normalizedKey = key.trim();
-    const normalizedValue = entryValue.trim();
-    if (!normalizedKey || !normalizedValue) {
-      continue;
-    }
-
-    record[normalizedKey] = normalizedValue;
-  }
-
-  return Object.keys(record).length > 0 ? record : undefined;
-}
-
-function parseBackendConnector(value: unknown): "openai" | "ollama" {
-  if (value === undefined || value === null || value === "openai") {
-    return "openai";
-  }
-
-  if (value === "ollama") {
-    return "ollama";
-  }
-
-  throw new Error('"connector" must be "openai" or "ollama".');
 }

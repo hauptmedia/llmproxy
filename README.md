@@ -14,7 +14,7 @@ Prerequisite: Node.js 18+ should be available on your system `PATH` or configure
 - Queueing when local backends are fully utilized
 - Vue-based single page dashboard served by the backend under `/dashboard`, refactored into Vue single-file components and built with Vite plus Tailwind CSS
 - Dashboard page with health status and live active connections, plus dedicated subpages for chat debugging, requests, and configuration management
-- Built-in chat debugger with model selection, live token metrics, sampler parameters, and raw request/response views
+- Built-in chat debugger with model selection, live token metrics, sampler parameters, and direct jump-to-request debugging
 - Aggregated `/v1/models`
 - Connector-aware health checks and model discovery for OpenAI-compatible backends and native Ollama backends
 
@@ -97,10 +97,12 @@ Important configuration fields:
 - `healthPath`: optional backend health endpoint, for `openai` usually `/v1/models`, for `ollama` usually `/api/tags`
 - `apiKey` or `apiKeyEnv`: optional upstream authentication
 
-The `Config` page opens in a read-only view by default. Use the pencil button in the top-right header to edit the main `llmproxy` server config, or the backend actions on the page to edit backend entries and write changes back to your local `llmproxy.config.json`.
+The `Config` page opens in a read-only view by default. Use the pencil button in the `Config` panel to edit the main `llmproxy` server config, or the backend actions on the page to edit backend entries and write changes back to your local `llmproxy.config.json`.
 Backend changes become active immediately after saving. For the main server config, `requestTimeoutMs`, `queueTimeoutMs`, `healthCheckIntervalMs`, and `recentRequestLimit` apply immediately; `host`, `port`, and `dashboardPath` are saved right away but require an `llmproxy` restart to take effect.
 Existing `models` entries are still accepted for backwards compatibility, but `allowedModels` is the preferred config key going forward.
 If `allowedModels` is omitted entirely, llmproxy treats that backend like `["*"]`, meaning all models are allowed.
+
+For a short architecture overview of connectors, routing, retention, and config behavior, see [`docs/architecture.md`](docs/architecture.md).
 
 ## Notes
 
