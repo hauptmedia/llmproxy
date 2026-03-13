@@ -299,7 +299,7 @@ function recentWindowLabel(): string {
             <div class="backend-runtime-metric-stack backend-runtime-stat-list log-primary">
               <div class="backend-runtime-stat-row">
                 <span class="backend-runtime-stat-label neutral" :title="`Current summed completion token rate across active connections on this backend. Only active connections with measured token-rate metrics are included.`">
-                  all
+                  current
                 </span>
                 <span class="backend-runtime-stat-value neutral" :title="`Current summed completion token rate across active connections on this backend. Only active connections with measured token-rate metrics are included.`">
                   {{ formatTokenRate(currentBackendTokenRate(backend)) || "n/a" }}
