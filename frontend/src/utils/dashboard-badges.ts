@@ -353,10 +353,6 @@ export function buildConnectionCardBadges(connection: ActiveConnectionSnapshot):
     items.push(badgeSpec(`finish ${connection.finishReason}`, "good", describeFinishReason(connection.finishReason)));
   }
 
-  if (connection.error) {
-    items.push(badgeSpec(connection.error, "bad", "Current proxy or upstream error for this live request."));
-  }
-
   return items;
 }
 
