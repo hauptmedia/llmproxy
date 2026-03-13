@@ -75,7 +75,7 @@ watch(
       <header class="hero">
         <div class="hero-bar">
           <div class="hero-nav-group">
-            <nav class="page-nav" aria-label="Dashboard pages">
+            <div class="page-nav">
               <div class="brand-status-shell">
                 <RouterLink class="brand-link page-nav-brand" :to="{ name: 'config' }" aria-label="Open llmproxy config" title="Open llmproxy config">
                   <BrandLogo compact title="Open llmproxy config" />
@@ -88,6 +88,7 @@ watch(
                   <span class="connection-dot"></span>
                 </span>
               </div>
+              <nav class="page-nav-links" aria-label="Dashboard pages">
               <RouterLink
                 v-for="link in pageLinks"
                 :key="link.page"
@@ -100,7 +101,8 @@ watch(
                 </svg>
                 <span>{{ link.label }}</span>
               </RouterLink>
-            </nav>
+              </nav>
+            </div>
           </div>
         </div>
       </header>

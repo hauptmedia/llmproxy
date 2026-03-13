@@ -146,6 +146,7 @@
 
   .brand-status-shell {
     @apply relative inline-flex;
+    margin-right: 0.9rem;
   }
 
   .brand-lockup {
@@ -198,12 +199,16 @@
   }
 
   .page-nav {
-    @apply flex flex-wrap items-center gap-2;
+    @apply flex flex-wrap items-center;
     padding: 0;
     border: 0;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+  }
+
+  .page-nav-links {
+    @apply flex flex-wrap items-center gap-1.5;
   }
 
   .page-nav-brand {
@@ -214,7 +219,8 @@
 
   .page-link {
     @apply relative inline-flex items-center justify-center px-4 py-2.5 font-bold text-stone-600 transition duration-150;
-    flex: 0 0 124px;
+    flex: 0 0 auto;
+    min-width: 96px;
     min-height: 46px;
     border: 1px solid transparent;
     border-radius: 1rem;
