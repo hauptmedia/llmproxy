@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, useSlots, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from "vue";
 
 const props = withDefaults(defineProps<{
   title?: string;
@@ -18,6 +18,7 @@ const props = withDefaults(defineProps<{
 const slots = useSlots();
 const conversationViewport = ref<HTMLElement | null>(null);
 const autoFollowConversation = ref(true);
+let conversationObserver: MutationObserver | null = null;
 
 function hasSlot(name: "headerMeta" | "headerActions" | "footer"): boolean {
   return Boolean(slots[name]);
@@ -57,12 +58,47 @@ function handleConversationScroll(): void {
   autoFollowConversation.value = isConversationNearBottom();
 }
 
+function bindConversationObserver(): void {
+  conversationObserver?.disconnect();
+  conversationObserver = null;
+
+  const viewport = conversationViewport.value;
+  if (!viewport || typeof MutationObserver === "undefined") {
+    return;
+  }
+
+  conversationObserver = new MutationObserver(() => {
+    if (!autoFollowConversation.value) {
+      return;
+    }
+
+    scheduleConversationScrollToBottom();
+  });
+
+  conversationObserver.observe(viewport, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+}
+
+onMounted(() => {
+  bindConversationObserver();
+  scheduleConversationScrollToBottom();
+});
+
+onBeforeUnmount(() => {
+  conversationObserver?.disconnect();
+  conversationObserver = null;
+});
+
 watch(
   () => props.resetKey,
   () => {
     autoFollowConversation.value = true;
     scheduleConversationScrollToBottom();
   },
+  { flush: "post" },
 );
 
 watch(
@@ -70,6 +106,16 @@ watch(
   () => {
     scheduleConversationScrollToBottom();
   },
+  { flush: "post" },
+);
+
+watch(
+  conversationViewport,
+  () => {
+    bindConversationObserver();
+    scheduleConversationScrollToBottom();
+  },
+  { flush: "post" },
 );
 </script>
 

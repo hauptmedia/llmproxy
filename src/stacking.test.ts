@@ -887,10 +887,12 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
   assert.equal(nonStreamingPayload.choices[0]?.finish_reason, "stop");
   assert.equal(nonStreamingPayload.usage?.total_tokens, 7);
 
+  const requestedStreamingRequestId = "stacked-streaming-request";
   const streamingResponse = await fetch(`${outerBaseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      "x-llmproxy-request-id": requestedStreamingRequestId,
     },
     body: JSON.stringify({
       model: "mock-stack-model",
@@ -905,6 +907,7 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
   });
   assert.equal(streamingResponse.status, 200);
   assert.equal(streamingResponse.headers.get("x-llmproxy-backend"), "inner-router");
+  assert.equal(streamingResponse.headers.get("x-llmproxy-request-id"), requestedStreamingRequestId);
   assert.match(
     streamingResponse.headers.get("content-type") ?? "",
     /text\/event-stream/i,
@@ -913,6 +916,19 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
   assert.match(streamingBody, /"content":"Stacked "/);
   assert.match(streamingBody, /"content":"hello\."/);
   assert.match(streamingBody, /\[DONE\]/);
+
+  const streamingDetailResponse = await fetch(
+    `${outerBaseUrl}/api/requests/${encodeURIComponent(requestedStreamingRequestId)}`,
+  );
+  assert.equal(streamingDetailResponse.status, 200);
+  const streamingDetailPayload = await streamingDetailResponse.json() as {
+    entry?: {
+      id?: string;
+      backendId?: string;
+    };
+  };
+  assert.equal(streamingDetailPayload.entry?.id, requestedStreamingRequestId);
+  assert.equal(streamingDetailPayload.entry?.backendId, "inner-router");
 
   const historyResponse = await fetch(`${outerBaseUrl}/api/state`);
   assert.equal(historyResponse.status, 200);

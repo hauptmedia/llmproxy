@@ -652,7 +652,7 @@ export function useDebugChat(
       });
 
       state.debug.backend = response.headers.get("x-llmproxy-backend") || "";
-      state.debug.lastRequestId = response.headers.get("x-llmproxy-request-id") || requestId;
+      state.debug.lastRequestId = requestId;
       state.debug.status = `HTTP ${response.status}`;
       assistantTurn.backend = state.debug.backend;
 

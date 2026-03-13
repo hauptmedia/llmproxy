@@ -732,6 +732,7 @@ export class LlmProxyServer {
 
       response.statusCode = upstreamResponse.status;
       copyResponseHeaders(upstreamResponse.headers, response);
+      response.setHeader("x-llmproxy-request-id", route.id);
       response.setHeader("x-llmproxy-backend", lease.backend.id);
 
       if (!upstreamResponse.body) {
@@ -1018,6 +1019,7 @@ export class LlmProxyServer {
     if (clientStream) {
       response.statusCode = upstreamResponse.status;
       copyResponseHeaders(upstreamResponse.headers, response);
+      response.setHeader("x-llmproxy-request-id", requestId);
       response.setHeader("x-llmproxy-backend", backendId);
     }
 
