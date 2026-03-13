@@ -1399,7 +1399,7 @@
     @apply flex flex-col gap-[18px];
     height: 100%;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .chat-header-main {
@@ -1441,14 +1441,26 @@
     min-height: 0;
   }
 
+  .chat-conversation-shell {
+    @apply flex flex-col;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    background-clip: padding-box;
+    position: relative;
+    isolation: isolate;
+  }
+
   .conversation-surface-card {
     @apply min-h-0;
     flex: 1 1 auto;
     overflow: hidden;
+    background-clip: padding-box;
+    border-radius: inherit;
   }
 
   .conversation-surface-header {
-    @apply mb-4 flex flex-wrap items-center justify-between gap-3;
+    @apply mb-[18px] flex flex-wrap items-center justify-between gap-4;
   }
 
   .conversation-surface-heading {
@@ -1456,7 +1468,7 @@
   }
 
   .conversation-surface-title {
-    @apply m-0 text-lg font-semibold text-stone-900;
+    @apply m-0 text-xl font-semibold text-stone-950;
   }
 
   .conversation-surface-actions {
@@ -1466,11 +1478,14 @@
   .conversation-surface-footer {
     @apply mt-4;
     flex: 0 0 auto;
+    overflow: hidden;
+    background-clip: padding-box;
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
   }
 
   .chat-conversation-card {
-    flex: 1 1 auto;
-    min-height: 0;
+    display: contents;
   }
 
   .chat-conversation-viewport {
@@ -1875,6 +1890,9 @@
     scrollbar-gutter: stable;
     overflow-anchor: none;
     align-content: start;
+    background-clip: padding-box;
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
   }
 
   .conversation-viewport > * {
@@ -1883,6 +1901,10 @@
 
   .request-detail-section + .request-detail-section {
     margin-top: 18px;
+  }
+
+  .conversation-viewport > .request-detail-response-section {
+    margin-top: 8px;
   }
 
   .empty {

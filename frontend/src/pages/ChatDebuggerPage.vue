@@ -60,47 +60,51 @@ const chatConversationSignature = computed(() => [
   <section class="page-section chat-page-section">
     <div class="chat-panel">
       <div class="chat-thread">
-        <ConversationSurface
-          title="Conversation"
-          card-class="chat-conversation-card"
-          viewport-class="chat-conversation-viewport"
-          :reset-key="hasTranscript ? 'ready' : 'initial'"
-          :scroll-signature="chatConversationSignature"
-          follow-mode="latest-turn-start"
-          :follow-anchor-active="store.state.debug.sending"
-        >
-          <template #headerActions>
-            <button
-              v-if="store.state.debug.lastRequestId"
-              class="icon-button compact"
-              type="button"
-              aria-label="Open the last debug request in the request debugger"
-              title="Open the last debug request in the request debugger."
-              @click="store.openLastDebugRequest()"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
-                <circle cx="12" cy="12" r="2.8"></circle>
-              </svg>
-            </button>
-            <button
-              v-if="hasTranscript"
-              class="icon-button compact"
-              type="button"
-              aria-label="Clear the current chat conversation"
-              title="Clear the current chat conversation"
-              @click="store.clearDebugChat()"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 4.75h6"></path>
-                <path d="M4.75 7.5h14.5"></path>
-                <path d="M7.5 7.5 8.2 17a2 2 0 0 0 2 1.85h3.6a2 2 0 0 0 2-1.85l.7-9.5"></path>
-                <path d="M10 11v4.5"></path>
-                <path d="M14 11v4.5"></path>
-              </svg>
-            </button>
-          </template>
-
+        <div class="panel chat-conversation-shell">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Conversation</h2>
+            </div>
+            <div class="conversation-surface-actions">
+              <button
+                v-if="store.state.debug.lastRequestId"
+                class="icon-button compact"
+                type="button"
+                aria-label="Open the last debug request in the request debugger"
+                title="Open the last debug request in the request debugger."
+                @click="store.openLastDebugRequest()"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
+                  <circle cx="12" cy="12" r="2.8"></circle>
+                </svg>
+              </button>
+              <button
+                v-if="hasTranscript"
+                class="icon-button compact"
+                type="button"
+                aria-label="Clear the current chat conversation"
+                title="Clear the current chat conversation"
+                @click="store.clearDebugChat()"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 4.75h6"></path>
+                  <path d="M4.75 7.5h14.5"></path>
+                  <path d="M7.5 7.5 8.2 17a2 2 0 0 0 2 1.85h3.6a2 2 0 0 0 2-1.85l.7-9.5"></path>
+                  <path d="M10 11v4.5"></path>
+                  <path d="M14 11v4.5"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <ConversationSurface
+            card-class="chat-conversation-card"
+            viewport-class="chat-conversation-viewport"
+            :reset-key="hasTranscript ? 'ready' : 'initial'"
+            :scroll-signature="chatConversationSignature"
+            follow-mode="latest-turn-start"
+            :follow-anchor-active="store.state.debug.sending"
+          >
             <div class="transcript chat-transcript">
               <div v-if="!hasTranscript" class="turn system chat-editor-turn">
                 <textarea
@@ -326,8 +330,9 @@ const chatConversationSignature = computed(() => [
                 </div>
               </div>
             </form>
-          </template>
-        </ConversationSurface>
+            </template>
+          </ConversationSurface>
+        </div>
       </div>
     </div>
   </section>

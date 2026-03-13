@@ -219,13 +219,13 @@ watch(
 </script>
 
 <template>
-  <div class="request-detail-card conversation-surface-card" :class="cardClass">
+  <div class="conversation-surface-card" :class="cardClass">
     <div
       v-if="title || hasSlot('headerMeta') || hasSlot('headerActions')"
-      class="conversation-surface-header"
+      class="panel-header conversation-surface-header"
     >
       <div class="conversation-surface-heading">
-        <h3 v-if="title" class="conversation-surface-title">{{ title }}</h3>
+        <h3 v-if="title" class="panel-title conversation-surface-title">{{ title }}</h3>
         <slot name="headerMeta"></slot>
       </div>
       <div v-if="hasSlot('headerActions')" class="conversation-surface-actions">

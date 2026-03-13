@@ -200,7 +200,7 @@ watch(
             <div v-else class="empty">No OpenAI messages were stored for this request.</div>
           </section>
 
-          <section class="request-detail-section">
+          <section class="request-detail-section request-detail-response-section">
             <div class="detail-stack" v-html="store.requestResponseHtml"></div>
           </section>
         </ConversationSurface>
