@@ -69,27 +69,47 @@ export function buildSummaryCards(snapshot: ProxySnapshot): SummaryCard[] {
   return [
     {
       key: "healthy-backends",
-      label: "Healthy Backends",
+      label: "Backends",
       value: `${healthyCount} / ${enabledCount}`,
       note: "",
-      title: "Enabled backends that passed their most recent health check.",
+      title: "Backend availability overview. First value: enabled backends that passed their most recent health check. Second value: total enabled backends configured in llmproxy.",
       tone: healthyTone,
+      segments: [
+        {
+          text: String(healthyCount),
+          label: "Healthy",
+          tone: healthyTone,
+          title: "Enabled backends that passed their most recent health check.",
+        },
+        {
+          text: String(enabledCount),
+          label: "Total",
+          tone: "neutral",
+          title: "Total number of enabled backends currently configured in llmproxy.",
+        },
+      ],
     },
     {
       key: "live-connections",
       label: "Active Connections",
-      value: activeConnections,
+      value: `${activeConnections} - ${waitingConnections}`,
       note: "",
-      title: "Chat completion requests that are currently running through llmproxy or already assigned to a backend slot.",
+      title: "Chat completion request load. First value: requests currently active or already assigned to a backend slot. Second value: requests still queued and waiting for a free backend slot.",
       tone: "info",
-    },
-    {
-      key: "waiting-connections",
-      label: "Queue",
-      value: waitingConnections,
-      note: "",
-      title: "Chat completion requests that are still waiting in the scheduler queue because no backend slot is available yet.",
-      tone: "warn",
+      segments: [
+        {
+          text: String(activeConnections),
+          label: "Active",
+          tone: "info",
+          title: "Requests currently active or already assigned to a backend slot.",
+        },
+        {
+          text: String(waitingConnections),
+          label: "Queued",
+          tone: "warn",
+          title: "Requests still queued because no backend slot is available yet.",
+        },
+      ],
     },
     {
       key: "successful-requests",

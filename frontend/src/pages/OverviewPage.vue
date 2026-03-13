@@ -58,7 +58,23 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
         :title="card.title"
       >
         <div class="card-label">{{ card.label }}</div>
-        <div class="card-value">{{ card.value }}</div>
+        <div v-if="card.segments?.length" class="card-value card-value-segments">
+          <template v-for="(segment, index) in card.segments" :key="`${card.key}-segment-${index}`">
+            <span
+              v-if="index > 0"
+              class="card-value-divider"
+              aria-hidden="true"
+            ></span>
+            <span
+              :class="['card-value-segment', segment.tone ? `tone-${segment.tone}` : '']"
+              :title="segment.title || card.title"
+            >
+              <span class="card-value-segment-number">{{ segment.text }}</span>
+              <span v-if="segment.label" class="card-value-segment-label">{{ segment.label }}</span>
+            </span>
+          </template>
+        </div>
+        <div v-else class="card-value">{{ card.value }}</div>
         <div v-if="card.note" class="card-note">{{ card.note }}</div>
       </article>
     </div>

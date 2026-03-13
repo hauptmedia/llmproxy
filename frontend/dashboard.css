@@ -302,6 +302,44 @@
     @apply mt-2.5 text-3xl font-extrabold text-stone-950;
   }
 
+  .card-value-segments {
+    @apply flex items-stretch gap-0 overflow-hidden rounded-2xl border border-stone-900/8 bg-white/60;
+  }
+
+  .card-value-segment {
+    @apply flex min-w-0 flex-1 flex-col justify-center px-4 py-3;
+  }
+
+  .card-value-segment-number {
+    @apply text-3xl font-extrabold leading-none;
+  }
+
+  .card-value-segment-label {
+    @apply mt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-500;
+  }
+
+  .card-value-segment.tone-good .card-value-segment-number {
+    color: #166534;
+  }
+
+  .card-value-segment.tone-warn .card-value-segment-number {
+    color: #b45309;
+  }
+
+  .card-value-segment.tone-bad .card-value-segment-number {
+    color: #b91c1c;
+  }
+
+  .card-value-segment.tone-info .card-value-segment-number {
+    color: #0f766e;
+  }
+
+  .card-value-divider {
+    width: 1px;
+    flex: 0 0 auto;
+    background: rgba(120, 113, 108, 0.18);
+  }
+
   .card-note {
     @apply mt-2 leading-relaxed text-stone-600;
   }

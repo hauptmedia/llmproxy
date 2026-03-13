@@ -289,6 +289,13 @@ export interface SummaryCard {
   note: string;
   title: string;
   tone?: "good" | "warn" | "bad" | "neutral" | "info";
+  segments?: Array<{
+    text: string;
+    label?: string;
+    tone?: "good" | "warn" | "bad" | "neutral" | "info";
+    title?: string;
+    separatorBefore?: string;
+  }>;
 }
 
 export interface RequestFieldRow {
