@@ -499,7 +499,7 @@ function outcomeBadgeClass(entry: RequestLogEntry): string {
 
 function outcomeLabel(entry: RequestLogEntry): string {
   if (entry.outcome === "success" && entry.finishReason) {
-    return `finish: ${entry.finishReason}`;
+    return entry.finishReason;
   }
 
   if (entry.outcome === "success") {
