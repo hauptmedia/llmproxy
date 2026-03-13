@@ -164,7 +164,12 @@ export function useRequestDetail(state: DashboardState) {
     state.requestDetail.detail?.entry,
     Boolean(state.requestDetail.detail?.live && !requestLiveConnection.value),
   ));
-  const requestResponseMetricRows = computed(() => buildRequestResponseMetricRows(state.requestDetail.detail?.entry));
+  const requestResponseMetricRows = computed(() => buildRequestResponseMetricRows(state.requestDetail.detail?.entry, {
+    requestBody: state.requestDetail.detail?.requestBody,
+    responseBody: state.requestDetail.detail?.responseBody,
+    backends: state.snapshot.backends,
+    live: Boolean(state.requestDetail.detail?.live),
+  }));
   const requestParamRows = computed(() => buildRequestParamRows(requestBody.value));
   const requestToolsHtml = computed(() => renderToolsHtml(requestBody.value?.tools));
   const requestResponseHtml = computed(() => renderResponseChoicesHtml(
