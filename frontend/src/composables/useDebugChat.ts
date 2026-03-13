@@ -619,6 +619,8 @@ export function useDebugChat(
       state.debug.transcript.pop();
     }
 
+    state.debug.sending = true;
+
     if (userTurn) {
       state.debug.transcript.push(userTurn);
     }
@@ -636,7 +638,6 @@ export function useDebugChat(
     state.debug.rawRequest = prettyJson(payload);
     state.debug.rawResponse = "";
     state.debug.prompt = "";
-    state.debug.sending = true;
     state.debug.abortController = new AbortController();
     startDebugMetricsTicker();
 

@@ -66,6 +66,8 @@ const chatConversationSignature = computed(() => [
           viewport-class="chat-conversation-viewport"
           :reset-key="hasTranscript ? 'ready' : 'initial'"
           :scroll-signature="chatConversationSignature"
+          follow-mode="latest-turn-start"
+          :follow-anchor-active="store.state.debug.sending"
         >
           <template #headerActions>
             <button

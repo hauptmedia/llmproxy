@@ -185,6 +185,8 @@ watch(
           title="Conversation"
           :reset-key="store.state.requestDetail.requestId"
           :scroll-signature="requestConversationSignature"
+          follow-mode="latest-turn-start"
+          :follow-anchor-active="Boolean(store.state.requestDetail.detail?.live)"
         >
           <section class="request-detail-section">
             <div v-if="store.requestMessages.length" class="transcript">

@@ -1549,6 +1549,7 @@
 
   .transcript {
     @apply grid gap-3.5;
+    align-content: start;
   }
 
   .turn {
@@ -1872,6 +1873,12 @@
     flex: 1 1 auto;
     min-height: 0;
     scrollbar-gutter: stable;
+    overflow-anchor: none;
+    align-content: start;
+  }
+
+  .conversation-viewport > * {
+    align-self: start;
   }
 
   .request-detail-section + .request-detail-section {

@@ -7,18 +7,40 @@ const props = withDefaults(defineProps<{
   viewportClass?: string;
   resetKey?: string | number;
   scrollSignature?: string | number;
+  followMode?: "bottom" | "latest-turn-start";
+  followAnchorSelector?: string;
+  followAnchorActive?: boolean;
 }>(), {
   title: "",
   cardClass: "",
   viewportClass: "",
   resetKey: "",
   scrollSignature: "",
+  followMode: "bottom",
+  followAnchorSelector: ".turn.assistant",
+  followAnchorActive: false,
 });
 
 const slots = useSlots();
 const conversationViewport = ref<HTMLElement | null>(null);
 const autoFollowConversation = ref(true);
 let conversationObserver: MutationObserver | null = null;
+let anchoredScrollTop: number | null = null;
+
+function findFollowAnchorElement(): HTMLElement | null {
+  const viewport = conversationViewport.value;
+  if (!viewport) {
+    return null;
+  }
+
+  const rawAnchors = Array.from(viewport.querySelectorAll<HTMLElement>(props.followAnchorSelector));
+  const rawAnchor = rawAnchors[rawAnchors.length - 1] ?? null;
+  if (!rawAnchor) {
+    return null;
+  }
+
+  return rawAnchor.closest<HTMLElement>(".message-card-host") ?? rawAnchor;
+}
 
 function hasSlot(name: "headerMeta" | "headerActions" | "footer"): boolean {
   return Boolean(slots[name]);
@@ -42,6 +64,61 @@ function scrollConversationToBottom(): void {
   viewport.scrollTop = viewport.scrollHeight;
 }
 
+function computeAnchoredScrollTop(): number | null {
+  const viewport = conversationViewport.value;
+  const anchor = findFollowAnchorElement();
+  if (!viewport || !anchor) {
+    return null;
+  }
+
+  const anchorCard = anchor.closest<HTMLElement>(".message-card-host") ?? anchor;
+  const previousCard = anchorCard.previousElementSibling as HTMLElement | null;
+
+  if (previousCard) {
+    return Math.max(0, previousCard.offsetTop - 12);
+  }
+
+  return Math.max(0, anchorCard.offsetTop - 12);
+}
+
+function scrollConversationToAnchorIfPossible(): boolean {
+  const viewport = conversationViewport.value;
+  if (!viewport || props.followMode !== "latest-turn-start" || !props.followAnchorActive) {
+    return false;
+  }
+
+  if (anchoredScrollTop === null) {
+    const nextAnchoredScrollTop = computeAnchoredScrollTop();
+    if (nextAnchoredScrollTop === null) {
+      return false;
+    }
+
+    anchoredScrollTop = nextAnchoredScrollTop;
+  }
+
+  const anchor = findFollowAnchorElement();
+  if (!anchor) {
+    return false;
+  }
+
+  const anchorCard = anchor.closest<HTMLElement>(".message-card-host") ?? anchor;
+  const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+  const baseScrollTop = Math.min(anchoredScrollTop, maxScrollTop);
+  const anchorBottomAtBase = anchorCard.offsetTop + anchorCard.offsetHeight - baseScrollTop;
+
+  if (anchorBottomAtBase <= viewport.clientHeight - 8) {
+    viewport.scrollTop = baseScrollTop;
+    return true;
+  }
+
+  const followScrollTop = Math.max(
+    baseScrollTop,
+    anchorCard.offsetTop + anchorCard.offsetHeight - viewport.clientHeight + 8,
+  );
+  viewport.scrollTop = Math.min(followScrollTop, maxScrollTop);
+  return true;
+}
+
 function scheduleConversationScrollToBottom(): void {
   void nextTick(() => {
     if (!autoFollowConversation.value) {
@@ -49,6 +126,11 @@ function scheduleConversationScrollToBottom(): void {
     }
 
     window.requestAnimationFrame(() => {
+      if (props.followMode === "latest-turn-start" && props.followAnchorActive) {
+        scrollConversationToAnchorIfPossible();
+        return;
+      }
+
       scrollConversationToBottom();
     });
   });
@@ -96,6 +178,7 @@ watch(
   () => props.resetKey,
   () => {
     autoFollowConversation.value = true;
+    anchoredScrollTop = null;
     scheduleConversationScrollToBottom();
   },
   { flush: "post" },
@@ -105,6 +188,22 @@ watch(
   () => props.scrollSignature,
   () => {
     scheduleConversationScrollToBottom();
+  },
+  { flush: "post" },
+);
+
+watch(
+  () => props.followAnchorActive,
+  (active) => {
+    if (active) {
+      anchoredScrollTop = null;
+      scheduleConversationScrollToBottom();
+    } else {
+      anchoredScrollTop = null;
+      if (autoFollowConversation.value) {
+        scheduleConversationScrollToBottom();
+      }
+    }
   },
   { flush: "post" },
 );
