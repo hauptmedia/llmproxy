@@ -332,7 +332,7 @@ function normalizeMessageForOllama(value: unknown): JsonValue | undefined {
     message.tool_call_id = toolCallId;
   }
 
-  const toolCalls = normalizeJsonValue(value.tool_calls);
+  const toolCalls = normalizeToolCallsForOllama(value.tool_calls);
   if (toolCalls !== undefined) {
     message.tool_calls = toolCalls;
   }
@@ -342,6 +342,78 @@ function normalizeMessageForOllama(value: unknown): JsonValue | undefined {
   }
 
   return message;
+}
+
+function normalizeToolCallsForOllama(value: unknown): JsonValue[] | undefined {
+  if (!Array.isArray(value)) {
+    const normalized = normalizeJsonValue(value);
+    return Array.isArray(normalized) ? normalized : undefined;
+  }
+
+  const toolCalls: JsonValue[] = [];
+
+  for (const entry of value) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+
+    const toolCall: Record<string, JsonValue> = {};
+    const id = normalizeJsonValue(entry.id);
+    if (id !== undefined) {
+      toolCall.id = id;
+    }
+
+    const type = normalizeJsonValue(entry.type);
+    if (type !== undefined) {
+      toolCall.type = type;
+    }
+
+    const fn = isRecord(entry.function) ? entry.function : null;
+    if (fn) {
+      const functionPayload: Record<string, JsonValue> = {};
+
+      if (typeof fn.index === "number" && Number.isFinite(fn.index)) {
+        functionPayload.index = fn.index;
+      }
+
+      const name = normalizeJsonValue(fn.name);
+      if (name !== undefined) {
+        functionPayload.name = name;
+      }
+
+      const argumentsValue = normalizeOllamaToolArguments(fn.arguments);
+      if (argumentsValue !== undefined) {
+        functionPayload.arguments = argumentsValue;
+      }
+
+      toolCall.function = functionPayload;
+    }
+
+    if (Object.keys(toolCall).length > 0) {
+      toolCalls.push(toolCall);
+    }
+  }
+
+  return toolCalls.length > 0 ? toolCalls : undefined;
+}
+
+function normalizeOllamaToolArguments(value: unknown): JsonValue | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return "";
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      const normalized = normalizeJsonValue(parsed);
+      return normalized ?? trimmed;
+    } catch {
+      return trimmed;
+    }
+  }
+
+  return normalizeJsonValue(value);
 }
 
 function normalizeMessageContent(value: unknown): JsonValue | undefined {

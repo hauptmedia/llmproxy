@@ -48,6 +48,63 @@ test("maps OpenAI chat fields to Ollama native chat request payloads", () => {
   });
 });
 
+test("maps OpenAI tool call argument strings to native Ollama argument objects", () => {
+  const payload = JSON.parse(buildOllamaChatRequestBody({
+    model: "qwen-native",
+    stream: false,
+    messages: [
+      { role: "user", content: "Use the weather tool." },
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "call_demo",
+            type: "function",
+            function: {
+              name: "get_weather",
+              arguments: "{\"city\":\"Berlin\",\"unit\":\"celsius\"}",
+            },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        tool_call_id: "call_demo",
+        name: "get_weather",
+        content: "{\"temperature\":18,\"unit\":\"celsius\"}",
+      },
+    ],
+  }, false).toString("utf8")) as Record<string, any>;
+
+  assert.deepEqual(payload.messages, [
+    { role: "user", content: "Use the weather tool." },
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [
+        {
+          id: "call_demo",
+          type: "function",
+          function: {
+            name: "get_weather",
+            arguments: {
+              city: "Berlin",
+              unit: "celsius",
+            },
+          },
+        },
+      ],
+    },
+    {
+      role: "tool",
+      tool_call_id: "call_demo",
+      name: "get_weather",
+      content: "{\"temperature\":18,\"unit\":\"celsius\"}",
+    },
+  ]);
+});
+
 test("translates native Ollama stream chunks into OpenAI-compatible chunks", () => {
   const chunk = convertOllamaChunkToOpenAiChunk({
     model: "qwen-native",
