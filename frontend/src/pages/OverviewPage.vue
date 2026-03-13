@@ -108,9 +108,8 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
                 @click="store.openRequestDetail(connection.id)"
               >
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="9"></circle>
-                  <path d="M12 10v6"></path>
-                  <path d="M12 7.25h.01"></path>
+                  <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
+                  <circle cx="12" cy="12" r="2.8"></circle>
                 </svg>
               </button>
               <button
@@ -199,9 +198,8 @@ function connectionHeadline(connection: ActiveConnectionSnapshot): string {
                 @click="store.openRequestDetail(connection.id)"
               >
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="9"></circle>
-                  <path d="M12 10v6"></path>
-                  <path d="M12 7.25h.01"></path>
+                  <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
+                  <circle cx="12" cy="12" r="2.8"></circle>
                 </svg>
               </button>
               <button

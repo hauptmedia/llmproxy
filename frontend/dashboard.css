@@ -558,11 +558,59 @@
   }
 
   .log-table {
-    table-layout: fixed;
+    table-layout: auto;
+    min-width: 1260px;
   }
 
-  .log-table th:last-child,
-  .log-table td:last-child {
+  .log-table-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-gutter: stable both-edges;
+  }
+
+  .log-table th,
+  .log-table td {
+    vertical-align: top;
+  }
+
+  .log-col-time {
+    width: 154px;
+  }
+
+  .log-col-outcome {
+    width: 132px;
+  }
+
+  .log-col-request {
+    width: 260px;
+  }
+
+  .log-col-model {
+    width: 186px;
+  }
+
+  .log-col-backend {
+    width: 186px;
+  }
+
+  .log-col-http {
+    width: 82px;
+  }
+
+  .log-col-queue,
+  .log-col-latency {
+    width: 102px;
+  }
+
+  .log-col-tokens {
+    width: 156px;
+  }
+
+  .log-col-note {
+    width: 260px;
+  }
+
+  .log-col-action {
     width: 74px;
   }
 
@@ -1013,6 +1061,10 @@
     @apply justify-between;
     grid-column: 1 / -1;
   }
+
+  .log-table {
+    min-width: 1180px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1065,5 +1117,9 @@
 
   .log-filters {
     grid-template-columns: 1fr;
+  }
+
+  .log-table {
+    min-width: 1080px;
   }
 }

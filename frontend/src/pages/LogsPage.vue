@@ -293,8 +293,21 @@ function noteSummary(entry: RequestLogEntry): string {
         </div>
       </div>
 
-      <div v-if="filteredEntries.length" class="table-wrap">
+      <div v-if="filteredEntries.length" class="table-wrap log-table-wrap">
         <table class="backend-table log-table">
+          <colgroup>
+            <col class="log-col-time">
+            <col class="log-col-outcome">
+            <col class="log-col-request">
+            <col class="log-col-model">
+            <col class="log-col-backend">
+            <col class="log-col-http">
+            <col class="log-col-queue">
+            <col class="log-col-latency">
+            <col class="log-col-tokens">
+            <col class="log-col-note">
+            <col class="log-col-action">
+          </colgroup>
           <thead>
             <tr>
               <th>Time</th>
@@ -370,9 +383,8 @@ function noteSummary(entry: RequestLogEntry): string {
                   @click="store.openRequestDetail(entry.id)"
                 >
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="9"></circle>
-                    <path d="M12 10v6"></path>
-                    <path d="M12 7.25h.01"></path>
+                    <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
+                    <circle cx="12" cy="12" r="2.8"></circle>
                   </svg>
                 </button>
               </td>

@@ -58,7 +58,7 @@ function renderMarkdownToHtml(markdown: unknown): string {
   const normalized = String(markdown ?? "").replace(/\r\n?/g, "\n").trim();
 
   if (!normalized) {
-    return '<div class="empty">No message content.</div>';
+    return "";
   }
 
   const lines = normalized.split("\n");
@@ -323,8 +323,14 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
     buildMessageRoleBadgeSpec(message, role),
   ];
 
-  if (typeof message?.name === "string" && message.name.length > 0) {
+  if (role === "tool" && typeof message?.name === "string" && message.name.length > 0) {
+    metaBits.push(badgeSpec(`tool ${message.name}`, "warn", "Tool name associated with this tool response."));
+  } else if (typeof message?.name === "string" && message.name.length > 0) {
     metaBits.push(badgeSpec(`name ${message.name}`, "warn", "Optional message name field."));
+  }
+
+  if (role === "tool" && typeof message?.tool_call_id === "string" && message.tool_call_id.length > 0) {
+    metaBits.push(badgeSpec(`call ${message.tool_call_id}`, "neutral", "Tool call id that this tool response belongs to."));
   }
 
   if (typeof options.finishReason === "string" && options.finishReason.length > 0) {
