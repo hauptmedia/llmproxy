@@ -136,7 +136,10 @@ export function useRequestDetail(state: DashboardState) {
   const requestSummaryBadges = computed(() => buildRequestSummaryBadges(state.requestDetail.detail?.entry));
   const requestParamBadges = computed(() => buildRequestParamBadges(requestBody.value));
   const requestToolsHtml = computed(() => renderToolsHtml(requestBody.value?.tools));
-  const requestResponseHtml = computed(() => renderResponseChoicesHtml(state.requestDetail.detail?.responseBody));
+  const requestResponseHtml = computed(() => renderResponseChoicesHtml(
+    state.requestDetail.detail?.responseBody,
+    Boolean(state.requestDetail.detail?.live),
+  ));
 
   return {
     closeRequestDetail,

@@ -1,9 +1,22 @@
 <script setup lang="ts">
 import CodeView from "../components/CodeView.vue";
 import MessageCard from "../components/MessageCard.vue";
+import type { DebugTranscriptEntry } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
 
 const store = useDashboardStore();
+
+function shouldCollapseDebugReasoning(entry: DebugTranscriptEntry, index: number): boolean {
+  const isActiveStreamingAssistantTurn =
+    store.state.debug.sending &&
+    entry.role === "assistant" &&
+    index === store.state.debug.transcript.length - 1 &&
+    typeof entry.reasoning_content === "string" &&
+    entry.reasoning_content.length > 0 &&
+    !(typeof entry.finish_reason === "string" && entry.finish_reason.length > 0);
+
+  return !isActiveStreamingAssistantTurn;
+}
 </script>
 
 <template>
@@ -130,7 +143,7 @@ const store = useDashboardStore();
               :message="entry"
               :index="Number(index) + (store.state.debug.systemPrompt.trim() ? 1 : 0)"
               :finish-reason="entry.finish_reason || ''"
-              :reasoning-collapsed="true"
+              :reasoning-collapsed="shouldCollapseDebugReasoning(entry, Number(index))"
             />
             <div
               v-if="!store.state.debug.systemPrompt.trim() && store.state.debug.transcript.length === 0"

@@ -715,7 +715,16 @@ export function renderToolsHtml(tools: unknown): string {
   );
 }
 
-export function renderResponseChoicesHtml(responseBody: unknown): string {
+function isStreamingReasoning(reasoningContent: unknown, finishReason: unknown, live: boolean): boolean {
+  return (
+    live &&
+    typeof reasoningContent === "string" &&
+    reasoningContent.length > 0 &&
+    !(typeof finishReason === "string" && finishReason.length > 0)
+  );
+}
+
+export function renderResponseChoicesHtml(responseBody: unknown, live = false): string {
   if (!isClientRecord(responseBody) || !Array.isArray(responseBody.choices) || responseBody.choices.length === 0) {
     return '<div class="empty">No structured response payload was stored for this request.</div>';
   }
@@ -727,6 +736,7 @@ export function renderResponseChoicesHtml(responseBody: unknown): string {
           heading: `choice ${index + 1}`,
           role: typeof choice.message.role === "string" ? choice.message.role : "assistant",
           finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
+          reasoningCollapsed: !isStreamingReasoning(choice.message.reasoning_content, choice.finish_reason, live),
         });
       }
 
