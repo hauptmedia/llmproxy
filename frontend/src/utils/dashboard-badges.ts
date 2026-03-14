@@ -547,6 +547,20 @@ export function buildRequestResponseMetricRows(
   const servedModel = resolveServedModelName(options?.responseBody, options?.requestBody, entry.model);
   const backendLabel = entry.backendName?.trim() || entry.backendId?.trim() || "";
 
+  items.push({
+    key: "Status",
+    value: describeRequestStatus(entry),
+    title: "Final request status recorded by llmproxy for this request.",
+  });
+
+  if (entry.finishReason) {
+    items.push({
+      key: "Finish reason",
+      value: entry.finishReason,
+      title: describeFinishReason(entry.finishReason),
+    });
+  }
+
   if (backendLabel) {
     items.push({
       key: "Backend",
@@ -670,6 +684,18 @@ function buildCompletionMetricValue(
     value: `${usedLabel} / ${limitLabel} tokens`,
     title: titleParts.join(" "),
   };
+}
+
+function describeRequestStatus(entry: RequestLogEntry): string {
+  if (entry.outcome === "success") {
+    return "success";
+  }
+
+  if (entry.outcome === "queued_timeout") {
+    return "queue timeout";
+  }
+
+  return entry.outcome;
 }
 
 function resolveUsedCompletionTokens(entry: RequestLogEntry, live: boolean): number | null {

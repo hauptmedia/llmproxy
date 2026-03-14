@@ -207,10 +207,12 @@ function renderToolDisclosureHtml(
           renderParameterIconHtml() +
           `<span>${escapeHtml(label)}</span>` +
         `</span>` +
-        `<span class="badge neutral">${count} ${count === 1 ? "item" : "items"}</span>` +
+        `<span class="badge neutral" title="${escapeHtml(`${count} ${count === 1 ? "parameter" : "parameters"}`)}">${count}</span>` +
       `</summary>` +
       `<div class="tool-disclosure-body">` +
-        bodyHtml +
+        `<div class="tool-parameter-panel">` +
+          bodyHtml +
+        `</div>` +
       `</div>` +
     `</details>`
   );

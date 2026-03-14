@@ -6,6 +6,7 @@ export type RequestFilterKey =
   | "issues"
   | "time"
   | "outcome"
+  | "finishReason"
   | "type"
   | "request"
   | "model"
@@ -24,6 +25,7 @@ export interface RequestTableFilters {
   issues: string;
   time: string;
   outcome: string;
+  finishReason: string;
   type: string;
   request: string;
   model: string;
@@ -92,7 +94,8 @@ export const requestTypeFilterOptions = [
 export const requestColumnTitles: Record<RequestFilterKey | "action", string> = {
   issues: "Whether llmproxy's built-in heuristic diagnostics flagged this stored request as likely problematic.",
   time: "When llmproxy first saw this request. Live rows update in place until they finish and move into retained history.",
-  outcome: "Current live state or final request result. Finished successful requests show their backend finish reason instead of a generic success label.",
+  outcome: "Current live state or final request status such as success, error, cancelled, or rejected.",
+  finishReason: "Backend finish reason for completed responses, for example stop, length, or tool_calls. Live or incomplete requests may not have one yet.",
   type: "Whether the client requested a streaming response or a regular JSON response.",
   request: "Short request identifier plus the proxied API route that was called. A yellow warning triangle marks requests where llmproxy's built-in heuristic diagnostics found a likely problem.",
   model: "Model that llmproxy actually routed this request to.",
@@ -110,6 +113,7 @@ export const requestSortLabels: Record<RequestSortKey, string> = {
   issues: "problem state",
   time: "time",
   outcome: "status",
+  finishReason: "finish reason",
   type: "request type",
   request: "request",
   model: "model",
@@ -127,6 +131,7 @@ export function createRequestTableFilters(): RequestTableFilters {
     issues: "all",
     time: "",
     outcome: "all",
+    finishReason: "all",
     type: "all",
     request: "",
     model: "all",
@@ -379,12 +384,8 @@ export function outcomeLabel(entry: RequestCatalogRow): string {
     return "streaming";
   }
 
-  if (entry.outcome === "success" && entry.finishReason) {
-    return entry.finishReason;
-  }
-
   if (entry.outcome === "success") {
-    return "completed";
+    return "success";
   }
 
   if (entry.outcome === "queued_timeout") {
@@ -407,12 +408,8 @@ export function outcomeTitle(entry: RequestCatalogRow): string {
     return "This live request is currently streaming or actively generating.";
   }
 
-  if (entry.outcome === "success" && entry.finishReason) {
-    return describeFinishReason(entry.finishReason);
-  }
-
   if (entry.outcome === "success") {
-    return "The request completed successfully, but the backend did not report a finish reason.";
+    return "The request completed successfully.";
   }
 
   if (entry.outcome === "queued_timeout") {
@@ -449,6 +446,22 @@ export function tokenRateSummary(entry: RequestCatalogRow): string {
   return formatTokenRate(entry.completionTokensPerSecond) || "-";
 }
 
+export function finishReasonSummary(entry: RequestCatalogRow): string {
+  return entry.finishReason || "-";
+}
+
+export function finishReasonTitle(entry: RequestCatalogRow): string {
+  if (entry.finishReason) {
+    return describeFinishReason(entry.finishReason);
+  }
+
+  if (entry.live) {
+    return "No finish reason is available yet because this request has not reached a final backend response state.";
+  }
+
+  return "The backend did not report a finish reason for this request.";
+}
+
 export function compareRequestEntries(left: RequestCatalogRow, right: RequestCatalogRow, key: RequestSortKey): number {
   if (key === "time") {
     return compareNumberValues(Date.parse(left.time), Date.parse(right.time));
@@ -476,6 +489,10 @@ export function compareRequestEntries(left: RequestCatalogRow, right: RequestCat
 
   if (key === "outcome") {
     return compareTextValues(outcomeLabel(left), outcomeLabel(right));
+  }
+
+  if (key === "finishReason") {
+    return compareTextValues(left.finishReason ?? "", right.finishReason ?? "");
   }
 
   if (key === "type") {
@@ -537,25 +554,6 @@ export function buildOutcomeOptions(entries: RequestCatalogRow[]): Array<{ value
 
   options.push({ value: "success", label: "Successful" });
 
-  const finishReasons = Array.from(
-    new Set(
-      entries
-        .filter((entry) => entry.outcome === "success" && typeof entry.finishReason === "string" && entry.finishReason.length > 0)
-        .map((entry) => entry.finishReason as string),
-    ),
-  ).sort((left, right) => left.localeCompare(right));
-
-  for (const finishReason of finishReasons) {
-    options.push({
-      value: finishOutcomeKey(finishReason),
-      label: `Finish: ${finishReason}`,
-    });
-  }
-
-  if (entries.some((entry) => entry.outcome === "success" && !entry.finishReason)) {
-    options.push({ value: "completed", label: "Completed" });
-  }
-
   options.push(
     { value: "error", label: "Failed" },
     { value: "cancelled", label: "Cancelled" },
@@ -564,6 +562,22 @@ export function buildOutcomeOptions(entries: RequestCatalogRow[]): Array<{ value
   );
 
   return options;
+}
+
+export function buildFinishReasonOptions(entries: RequestCatalogRow[]): Array<{ value: string; label: string }> {
+  const finishReasons = Array.from(
+    new Set(
+      entries
+        .map((entry) => entry.finishReason)
+        .filter((value): value is string => Boolean(value && value.trim().length > 0)),
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+
+  return [
+    { value: "all", label: "All finish reasons" },
+    { value: "none", label: "None" },
+    ...finishReasons.map((finishReason) => ({ value: finishReason, label: finishReason })),
+  ];
 }
 
 function buildNamedOptions(
@@ -612,6 +626,14 @@ export function filterRequestEntries(
     }
 
     if (!matchesOutcomeFilter(entry, filters.outcome)) {
+      return false;
+    }
+
+    if (filters.finishReason === "none" && entry.finishReason) {
+      return false;
+    }
+
+    if (filters.finishReason !== "all" && filters.finishReason !== "none" && (entry.finishReason ?? "") !== filters.finishReason) {
       return false;
     }
 
@@ -687,6 +709,7 @@ export function hasActiveRequestFilters(filters: RequestTableFilters): boolean {
     filters.issues !== "all" ||
     filters.time.trim().length > 0 ||
     filters.outcome !== "all" ||
+    filters.finishReason !== "all" ||
     filters.type !== "all" ||
     filters.request.trim().length > 0 ||
     filters.model !== "all" ||
@@ -716,6 +739,10 @@ export function isRequestFilterActive(filters: RequestTableFilters, filterKey: R
 
   if (filterKey === "outcome") {
     return filters.outcome !== "all";
+  }
+
+  if (filterKey === "finishReason") {
+    return filters.finishReason !== "all";
   }
 
   if (filterKey === "type") {
@@ -774,6 +801,11 @@ export function clearRequestFilter(filters: RequestTableFilters, filterKey: Requ
 
   if (filterKey === "outcome") {
     filters.outcome = "all";
+    return;
+  }
+
+  if (filterKey === "finishReason") {
+    filters.finishReason = "all";
     return;
   }
 

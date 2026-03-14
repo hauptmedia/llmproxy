@@ -3,12 +3,15 @@ import { useRoute, useRouter } from "vue-router";
 import { useDashboardStore } from "./useDashboardStore";
 import {
   buildBackendOptions,
+  buildFinishReasonOptions,
   buildModelOptions,
   buildOutcomeOptions,
   clearRequestFilter,
   createRequestTableFilters,
   diagnosticIssueTitle,
   filterRequestEntries,
+  finishReasonSummary,
+  finishReasonTitle,
   formatLogDate,
   formatLogTime,
   hasDiagnosticIssue,
@@ -54,6 +57,7 @@ export function useRequestsTable() {
   const tableEntries = computed<RequestCatalogRow[]>(() => buildRequestCatalog(store.state.snapshot));
   const hasActiveFilters = computed(() => hasActiveRequestFilters(filters));
   const outcomeOptions = computed(() => buildOutcomeOptions(tableEntries.value));
+  const finishReasonOptions = computed(() => buildFinishReasonOptions(tableEntries.value));
   const modelOptions = computed(() => buildModelOptions(tableEntries.value));
   const backendOptions = computed(() => buildBackendOptions(tableEntries.value));
   const issueEntriesCount = computed(() => tableEntries.value.filter((entry) => hasDiagnosticIssue(entry)).length);
@@ -186,6 +190,9 @@ export function useRequestsTable() {
     columnTitles: requestColumnTitles,
     diagnosticIssueTitle,
     filterIconPath: requestFilterIconPath,
+    finishReasonOptions,
+    finishReasonSummary,
+    finishReasonTitle,
     filters,
     filteredEntries,
     formatLogDate,

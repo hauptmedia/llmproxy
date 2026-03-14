@@ -452,35 +452,7 @@ function buildFacts(
   effectiveTokenLimit: number | undefined,
   outputText: string,
 ): DiagnosticFact[] {
-  const facts: DiagnosticFact[] = [
-    {
-      label: "Status",
-      value: entry.outcome,
-    },
-  ];
-
-  if (entry.finishReason) {
-    facts.push({
-      label: "Finish reason",
-      value: entry.finishReason,
-    });
-  }
-
-  if (entry.backendName) {
-    facts.push({
-      label: "Backend",
-      value: entry.backendName,
-    });
-  }
-
-  if (entry.completionTokens !== undefined) {
-    facts.push({
-      label: "Completion tokens",
-      value: effectiveTokenLimit !== undefined
-        ? `${entry.completionTokens} / ${effectiveTokenLimit}`
-        : `${entry.completionTokens}`,
-    });
-  }
+  const facts: DiagnosticFact[] = [];
 
   if (requestTokenLimit !== undefined) {
     facts.push({

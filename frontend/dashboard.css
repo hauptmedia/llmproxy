@@ -1383,6 +1383,10 @@
     width: 144px;
   }
 
+  .log-col-finish-reason {
+    width: 138px;
+  }
+
   .log-col-type {
     width: 86px;
   }
@@ -2106,6 +2110,31 @@
     @apply border-t border-amber-900/10 px-3 py-3;
   }
 
+  .tool-parameter-panel {
+    @apply pl-3;
+    border-left: 2px solid rgba(180, 83, 9, 0.18);
+  }
+
+  .tool-parameter-panel .tool-parameter-list {
+    gap: 0.45rem;
+  }
+
+  .tool-parameter-panel .tool-parameter-row {
+    @apply px-0 py-1.5;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .tool-parameter-panel .tool-parameter-description {
+    @apply mt-0.5 text-[13px] leading-relaxed;
+  }
+
+  .tool-parameter-panel .tool-parameter-note {
+    @apply mt-1 text-[11px];
+  }
+
   .tool-invocation-table-wrap {
     @apply rounded-2xl bg-white/72;
   }
@@ -2223,7 +2252,7 @@
 
   .request-detail-grid {
     @apply grid flex-1 gap-[18px];
-    grid-template-columns: minmax(360px, 0.88fr) minmax(420px, 1.12fr);
+    grid-template-columns: minmax(320px, 0.8fr) minmax(420px, 1.2fr);
     grid-template-rows: minmax(0, 1fr);
     align-items: stretch;
     min-height: 0;

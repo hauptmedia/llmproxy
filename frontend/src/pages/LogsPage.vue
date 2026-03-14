@@ -10,6 +10,9 @@ const {
   columnTitles,
   diagnosticIssueTitle,
   filterIconPath,
+  finishReasonOptions,
+  finishReasonSummary,
+  finishReasonTitle,
   filters,
   filteredEntries,
   formatLogDate,
@@ -77,6 +80,7 @@ const {
             <col class="log-col-issue">
             <col class="log-col-time">
             <col class="log-col-outcome">
+            <col class="log-col-finish-reason">
             <col class="log-col-type">
             <col class="log-col-request">
             <col class="log-col-model">
@@ -155,6 +159,28 @@ const {
                     </select>
                     <div class="table-filter-actions">
                       <button type="button" class="button secondary small" @click="clearFilter('outcome')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th :title="columnTitles.finishReason">
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('finishReason') }" :title="sortTitle('finishReason')" @click="toggleSort('finishReason')">
+                      <span class="log-header-label">Finish reason</span>
+                    </button>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('finishReason') }" title="Filter finish reason" @click.stop="toggleFilter('finishReason')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('finishReason')" class="table-filter-popover" @click.stop>
+                    <select v-model="filters.finishReason" class="table-filter-select">
+                      <option v-for="option in finishReasonOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('finishReason')">Clear</button>
                     </div>
                   </div>
                 </div>
@@ -426,6 +452,9 @@ const {
                 >
                   {{ outcomeLabel(entry) }}
                 </span>
+              </td>
+              <td class="log-cell-tight">
+                <div class="log-primary" :title="finishReasonTitle(entry)">{{ finishReasonSummary(entry) }}</div>
               </td>
               <td class="log-cell-tight">
                 <div class="log-primary">{{ entry.requestType || "-" }}</div>

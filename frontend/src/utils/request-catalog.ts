@@ -128,12 +128,12 @@ export function buildRequestCatalog(
 }
 
 export function normalizeRequestStatus(entry: RequestLogEntry): string {
-  if (entry.outcome === "success" && entry.finishReason) {
-    return entry.finishReason;
-  }
-
   if (entry.outcome === "queued_timeout") {
     return "queue timeout";
+  }
+
+  if (entry.outcome === "success") {
+    return "success";
   }
 
   return entry.outcome;
