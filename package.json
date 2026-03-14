@@ -27,6 +27,7 @@
     "vue-tsc": "^3.2.5"
   },
   "dependencies": {
+    "ace-builds": "^1.43.6",
     "vue-router": "^4.6.4"
   }
 }

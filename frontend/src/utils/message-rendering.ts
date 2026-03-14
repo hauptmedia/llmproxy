@@ -265,7 +265,7 @@ function renderReasoningPanel(reasoningContent: unknown, collapsed: boolean): st
       )}">` +
         `<span aria-hidden="true">🧠</span>` +
         `<span>Reasoning</span>` +
-        `<span class="reasoning-chevron" aria-hidden="true">▶</span>` +
+        `<span class="reasoning-chevron" aria-hidden="true">▼</span>` +
       `</summary>` +
       `<div class="reasoning-content">` +
         renderMessageStringHtml(reasoningContent) +

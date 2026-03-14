@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { useRouter } from "vue-router";
-import CodeView from "./CodeView.vue";
 import ConversationSurface from "./ConversationSurface.vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
+import JsonAceViewer from "./JsonAceViewer.vue";
 import MessageCard from "./MessageCard.vue";
 import ToolDefinitionsView from "./ToolDefinitionsView.vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
 
+type RawPayloadKind = "request" | "response";
+
 const store = useDashboardStore();
-const router = useRouter();
-const showRawRequest = ref(false);
-const showRawResponse = ref(false);
+const activeInspectorTab = ref<"request" | "response" | "tools">("request");
+const activeRawPayload = ref<{
+  kind: RawPayloadKind;
+  title: string;
+  value: unknown;
+} | null>(null);
 let previousDocumentOverflow = "";
 let previousBodyOverflow = "";
 let scrollLockApplied = false;
@@ -50,11 +54,19 @@ const requestConversationSignature = computed(() => [
   store.requestResponseHtml,
 ].join("|"));
 
+const rawPayloadDialogTitle = computed(() => {
+  if (!activeRawPayload.value) {
+    return "";
+  }
+
+  return `${store.requestDetailTitle} · ${activeRawPayload.value.kind === "request" ? "Raw Request Data" : "Raw Response Data"}`;
+});
+
 watch(
   () => [store.state.requestDetail.open, store.state.requestDetail.requestId],
   () => {
-    showRawRequest.value = false;
-    showRawResponse.value = false;
+    activeInspectorTab.value = "request";
+    activeRawPayload.value = null;
   },
 );
 
@@ -70,20 +82,67 @@ onBeforeUnmount(() => {
   setBackgroundScrollLocked(false);
 });
 
-async function openDiagnosticsForCurrentRequest(): Promise<void> {
-  const requestId = store.state.requestDetail.requestId;
-  if (!requestId) {
+function getRawPayloadValue(kind: RawPayloadKind): unknown {
+  const detail = store.state.requestDetail.detail as {
+    requestBody?: unknown;
+    responseBody?: unknown;
+  } | null;
+  if (!detail) {
+    return undefined;
+  }
+
+  return kind === "request" ? detail.requestBody : detail.responseBody;
+}
+
+function hasRawPayload(kind: RawPayloadKind): boolean {
+  const value = getRawPayloadValue(kind);
+  return value !== undefined && value !== null && value !== "";
+}
+
+function openRawPayloadInspector(kind: RawPayloadKind): void {
+  const value = getRawPayloadValue(kind);
+  if (value === undefined || value === null || value === "") {
     return;
   }
 
-  store.closeRequestDetail();
-  await router.push({
-    name: "diagnostics",
-    query: {
-      requestId,
-    },
-  });
+  activeRawPayload.value = {
+    kind,
+    title: kind === "request" ? "Raw Request" : "Raw Response",
+    value,
+  };
 }
+
+function closeRawPayloadInspector(): void {
+  activeRawPayload.value = null;
+}
+
+function serializePayloadForClipboard(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
+  const value = getRawPayloadValue(kind);
+  if (value === undefined || value === null || value === "") {
+    return;
+  }
+
+  const label = kind === "request" ? "Raw request" : "Raw response";
+  try {
+    await navigator.clipboard.writeText(serializePayloadForClipboard(value));
+    store.showToast("Request debugger", `${label} copied to clipboard.`, "good", 2600);
+  } catch (error) {
+    store.showToast("Request debugger", error instanceof Error ? error.message : String(error));
+  }
+}
+
 </script>
 
 <template>
@@ -134,31 +193,10 @@ async function openDiagnosticsForCurrentRequest(): Promise<void> {
             :aria-label="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection' : 'End this active connection'"
             :title="store.isRequestCancelling(store.state.requestDetail.requestId) ? 'Ending the active connection...' : 'End this active connection after confirmation.'"
             @click="store.cancelActiveRequest(store.state.requestDetail.requestId)"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 3.5v7"></path>
-                <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
-              </svg>
-            </button>
-          <button
-            v-if="store.state.requestDetail.requestId"
-            class="icon-button compact"
-            type="button"
-            title="Open this request in diagnostics"
-            aria-label="Open this request in diagnostics"
-            @click="openDiagnosticsForCurrentRequest()"
           >
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9.25 4.25h5.5"></path>
-              <path d="M10.5 7V4.5"></path>
-              <path d="M13.5 7V4.5"></path>
-              <path d="M8.2 10a3.8 3.8 0 1 1 7.6 0v4.15a3.8 3.8 0 0 1-7.6 0z"></path>
-              <path d="M3.75 12h3.5"></path>
-              <path d="M16.75 12h3.5"></path>
-              <path d="M5.25 7.75 8 9.5"></path>
-              <path d="M18.75 7.75 16 9.5"></path>
-              <path d="M5.25 16.25 8 14.5"></path>
-              <path d="M18.75 16.25 16 14.5"></path>
+              <path d="M12 3.5v7"></path>
+              <path d="M7.05 6.05a7 7 0 1 0 9.9 0"></path>
             </svg>
           </button>
           <DialogCloseButton
@@ -178,9 +216,69 @@ async function openDiagnosticsForCurrentRequest(): Promise<void> {
       </div>
       <div v-else class="request-detail-grid">
         <div class="request-detail-card">
+          <div class="request-detail-tab-bar" role="tablist" aria-label="Request detail sections">
+            <button
+              type="button"
+              class="request-detail-tab-button"
+              :class="{ active: activeInspectorTab === 'request' }"
+              role="tab"
+              :aria-selected="activeInspectorTab === 'request'"
+              @click="activeInspectorTab = 'request'"
+            >
+              <span>Request</span>
+              <span
+                class="request-detail-tab-help"
+                title="Top-level request fields. Open the raw request payload from the action inside this tab."
+                aria-hidden="true"
+              >
+                ?
+              </span>
+            </button>
+            <button
+              type="button"
+              class="request-detail-tab-button"
+              :class="{ active: activeInspectorTab === 'response' }"
+              role="tab"
+              :aria-selected="activeInspectorTab === 'response'"
+              @click="activeInspectorTab = 'response'"
+            >
+              <span>Response</span>
+              <span
+                class="request-detail-tab-help"
+                title="Response metrics. Open the raw response payload from the action inside this tab."
+                aria-hidden="true"
+              >
+                ?
+              </span>
+            </button>
+            <button
+              type="button"
+              class="request-detail-tab-button"
+              :class="{ active: activeInspectorTab === 'tools' }"
+              role="tab"
+              :aria-selected="activeInspectorTab === 'tools'"
+              @click="activeInspectorTab = 'tools'"
+            >
+              Provided Tools
+            </button>
+          </div>
           <div class="detail-card-viewport">
-            <section class="request-detail-section">
-              <h3>Request Parameters</h3>
+            <section v-if="activeInspectorTab === 'request'" class="request-detail-section">
+              <div v-if="hasRawPayload('request')" class="mb-3 flex justify-start">
+                <button
+                  class="button secondary small raw-payload-launch"
+                  type="button"
+                  title="Open the stored raw request payload in a full-screen inspector"
+                  aria-label="Open the stored raw request payload in a full-screen inspector"
+                  @click="openRawPayloadInspector('request')"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1.75 12s3.6-6.25 10.25-6.25S22.25 12 22.25 12s-3.6 6.25-10.25 6.25S1.75 12 1.75 12Z"></path>
+                    <circle cx="12" cy="12" r="3.1"></circle>
+                  </svg>
+                  <span>Show raw request data</span>
+                </button>
+              </div>
               <div v-if="store.requestParamRows.length" class="detail-table-wrap">
                 <table class="detail-table">
                   <thead>
@@ -200,8 +298,22 @@ async function openDiagnosticsForCurrentRequest(): Promise<void> {
               <div v-else class="empty">No additional top-level request fields were stored.</div>
             </section>
 
-            <section class="request-detail-section">
-              <h3>Response Metrics</h3>
+            <section v-else-if="activeInspectorTab === 'response'" class="request-detail-section">
+              <div v-if="hasRawPayload('response')" class="mb-3 flex justify-start">
+                <button
+                  class="button secondary small raw-payload-launch"
+                  type="button"
+                  title="Open the stored raw response payload in a full-screen inspector"
+                  aria-label="Open the stored raw response payload in a full-screen inspector"
+                  @click="openRawPayloadInspector('response')"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1.75 12s3.6-6.25 10.25-6.25S22.25 12 22.25 12s-3.6 6.25-10.25 6.25S1.75 12 1.75 12Z"></path>
+                    <circle cx="12" cy="12" r="3.1"></circle>
+                  </svg>
+                  <span>Show raw response data</span>
+                </button>
+              </div>
               <div v-if="store.requestResponseMetricRows.length" class="detail-table-wrap">
                 <table class="detail-table">
                   <thead>
@@ -221,51 +333,13 @@ async function openDiagnosticsForCurrentRequest(): Promise<void> {
               <div v-else class="empty">No response metrics have been recorded yet.</div>
             </section>
 
-            <section class="request-detail-section">
-              <h3>Provided Tools</h3>
+            <section v-else class="request-detail-section">
               <ToolDefinitionsView :tools="store.state.requestDetail.detail?.requestBody && (store.state.requestDetail.detail.requestBody as Record<string, unknown>).tools" />
-            </section>
-
-            <section class="request-detail-section">
-              <div class="mb-3 flex items-center justify-between gap-3">
-                <h3 class="mb-0">Raw Request</h3>
-                <button
-                  class="button secondary small"
-                  type="button"
-                  @click="showRawRequest = !showRawRequest"
-                >
-                  {{ showRawRequest ? "Hide Raw Request" : "Show Raw Request" }}
-                </button>
-              </div>
-              <CodeView
-                v-if="showRawRequest"
-                :value="store.state.requestDetail.detail && store.state.requestDetail.detail.requestBody"
-                placeholder="No raw request payload was stored."
-              />
-            </section>
-
-            <section class="request-detail-section">
-              <div class="mb-3 flex items-center justify-between gap-3">
-                <h3 class="mb-0">Raw Response</h3>
-                <button
-                  class="button secondary small"
-                  type="button"
-                  @click="showRawResponse = !showRawResponse"
-                >
-                  {{ showRawResponse ? "Hide Raw Response" : "Show Raw Response" }}
-                </button>
-              </div>
-              <CodeView
-                v-if="showRawResponse"
-                :value="store.state.requestDetail.detail && store.state.requestDetail.detail.responseBody"
-                placeholder="No raw response payload was stored."
-              />
             </section>
           </div>
         </div>
 
         <ConversationSurface
-          title="Conversation"
           :reset-key="store.state.requestDetail.requestId"
           :scroll-signature="requestConversationSignature"
           follow-mode="latest-turn-start"
@@ -287,6 +361,53 @@ async function openDiagnosticsForCurrentRequest(): Promise<void> {
             <div class="detail-stack" v-html="store.requestResponseHtml"></div>
           </section>
         </ConversationSurface>
+      </div>
+    </div>
+
+    <div
+      v-if="activeRawPayload"
+      class="raw-payload-overlay"
+      @click.self="closeRawPayloadInspector()"
+    >
+      <div
+        class="raw-payload-dialog"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="`${activeRawPayload.kind}-payload-title`"
+      >
+        <div class="panel-header">
+          <div>
+            <h2 :id="`${activeRawPayload.kind}-payload-title`" class="panel-title">{{ rawPayloadDialogTitle }}</h2>
+            <p class="hint m-0 mt-1.5">{{ store.requestDetailSubtitle }}</p>
+          </div>
+          <div class="request-actions">
+            <button
+              class="icon-button compact"
+              type="button"
+              :title="`Copy ${activeRawPayload.title.toLowerCase()} to clipboard`"
+              :aria-label="`Copy ${activeRawPayload.title.toLowerCase()} to clipboard`"
+              @click="copyRawPayload(activeRawPayload.kind)"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+            <DialogCloseButton
+              compact
+              :title="`Close ${activeRawPayload.title.toLowerCase()} inspector`"
+              :aria-label="`Close ${activeRawPayload.title.toLowerCase()} inspector`"
+              @click="closeRawPayloadInspector()"
+            />
+          </div>
+        </div>
+
+        <div class="raw-payload-body">
+          <JsonAceViewer
+            :value="activeRawPayload.value"
+            :placeholder="`No ${activeRawPayload.title.toLowerCase()} was stored.`"
+          />
+        </div>
       </div>
     </div>
   </div>
