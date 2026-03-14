@@ -98,12 +98,16 @@ export function assetContentType(pathname: string): string {
     return "text/css; charset=utf-8";
   }
 
-  if (extension === ".js") {
+  if (extension === ".js" || extension === ".mjs" || extension === ".cjs") {
     return "text/javascript; charset=utf-8";
   }
 
   if (extension === ".json" || extension === ".map") {
     return "application/json; charset=utf-8";
+  }
+
+  if (extension === ".svg") {
+    return "image/svg+xml";
   }
 
   return "application/octet-stream";

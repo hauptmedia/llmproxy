@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderDashboardHtml } from "./dashboard";
-import { resolveDashboardLandingPage } from "./server-dashboard-paths";
+import { assetContentType, resolveDashboardLandingPage } from "./server-dashboard-paths";
 import { ProxySnapshot } from "./types";
 
 const snapshot: ProxySnapshot = {
@@ -100,4 +100,10 @@ test("dashboard landing page defaults to overview when backends are configured",
       },
     ],
   }), "overview");
+});
+
+test("dashboard asset content types cover module chunks and svg assets", () => {
+  assert.equal(assetContentType("dashboard-app.js"), "text/javascript; charset=utf-8");
+  assert.equal(assetContentType("ace-D2hiqOZL.mjs"), "text/javascript; charset=utf-8");
+  assert.equal(assetContentType("llmproxy-logo.svg"), "image/svg+xml");
 });
