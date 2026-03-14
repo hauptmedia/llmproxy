@@ -112,14 +112,14 @@
     max-height: 100dvh;
     margin-bottom: 0;
     padding-bottom: 12px;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .shell.shell-chat .shell-content {
     @apply flex;
     flex: 1 1 auto;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .panel,
@@ -1927,6 +1927,35 @@
     margin-inline: auto;
   }
 
+  .chat-initial-layout {
+    @apply flex h-full min-h-0 flex-col;
+  }
+
+  .chat-initial-suggestions {
+    @apply grid min-h-0 flex-1 gap-5;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .chat-initial-layout .chat-suggestion-section {
+    @apply flex min-h-0 flex-col;
+  }
+
+  .chat-initial-layout .chat-suggestion-grid {
+    @apply min-h-0 flex-1;
+  }
+
+  .chat-initial-layout .diagnostics-actions {
+    @apply h-full items-stretch;
+  }
+
+  .chat-initial-layout .diagnostics-action-grid {
+    @apply h-full;
+  }
+
+  .chat-initial-layout .diagnostics-action-card {
+    @apply h-full;
+  }
+
   .chat-initial-footer {
     @apply grid gap-3;
   }
@@ -1991,6 +2020,13 @@
     max-width: min(74%, 46rem);
   }
 
+  .conversation-bubble-transcript .message-card-host.role-assistant .turn.tool-call-only:has(.compact-bubble-panel-tool[open]) {
+    display: flex;
+    width: min(84vw, 54rem);
+    min-width: min(84vw, 54rem);
+    max-width: min(84vw, 54rem);
+  }
+
   .conversation-bubble-transcript .message-card-host.role-system .turn {
     --bubble-bg: rgba(249, 245, 255, 0.98);
     --bubble-border: rgba(124, 58, 237, 0.12);
@@ -2010,6 +2046,13 @@
     width: max-content;
     min-width: max-content;
     max-width: min(74%, 46rem);
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-tool .turn.tool-response-only:has(.compact-bubble-panel-tool[open]) {
+    display: flex;
+    width: min(84vw, 54rem);
+    min-width: min(84vw, 54rem);
+    max-width: min(84vw, 54rem);
   }
 
   .conversation-bubble-transcript .message-card-host.role-system .turn,
@@ -2301,7 +2344,8 @@
   }
 
 .compact-bubble-panel-tool {
-  background: rgba(255, 247, 237, 0.78);
+  background: rgba(242, 247, 244, 0.9);
+  border-color: rgba(63, 95, 74, 0.16);
 }
 
   .conversation-bubble-transcript .compact-bubble-panel {
@@ -2337,7 +2381,8 @@
   }
 
 .compact-bubble-panel-tool > .compact-bubble-summary {
-  color: #9a3412;
+  color: #3f5f4a;
+  font-weight: 500;
 }
 
   .conversation-bubble-transcript .compact-bubble-summary {
@@ -2363,6 +2408,22 @@
   }
 
   .conversation-bubble-transcript .compact-bubble-panel-tool:not([open]) > .compact-bubble-summary {
+    width: max-content;
+    min-width: max-content;
+    max-width: 100%;
+    flex-wrap: nowrap;
+  }
+
+  .conversation-bubble-transcript .compact-bubble-panel-tool.compact-bubble-static-tool {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: max-content;
+    min-width: max-content;
+    max-width: calc(100% - 0.35rem);
+  }
+
+  .conversation-bubble-transcript .compact-bubble-panel-tool.compact-bubble-static-tool > .compact-bubble-summary {
     width: max-content;
     min-width: max-content;
     max-width: 100%;
@@ -2408,7 +2469,8 @@
   }
 
   .compact-bubble-panel-tool .compact-bubble-icon {
-    @apply inline-flex items-center justify-center text-orange-900;
+    @apply inline-flex items-center justify-center;
+    color: #3f5f4a;
     width: 1.1rem;
     height: 1.1rem;
     flex: 0 0 auto;
@@ -2447,6 +2509,10 @@
     display: none;
   }
 
+  .compact-bubble-summary-static {
+    cursor: default;
+  }
+
   .compact-bubble-chevron {
     @apply ml-auto transition duration-150;
     position: relative;
@@ -2476,6 +2542,9 @@
 
   .compact-bubble-content {
     padding: 0 0.78rem 0.78rem;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .compact-bubble-content > :first-child {
@@ -2484,26 +2553,35 @@
 
   .tool-response-json-ace {
     min-width: 0;
+    width: 100%;
   }
 
   .tool-response-json-ace-host {
-    min-height: 220px;
-    border: 1px solid rgba(120, 53, 15, 0.12);
+    width: 100%;
+    height: 320px;
+    min-height: 320px;
+    border: 1px solid rgba(63, 95, 74, 0.16);
     border-radius: 1rem;
-    background: rgba(255, 255, 255, 0.9);
+    background: linear-gradient(180deg, rgba(248, 251, 249, 0.96), rgba(240, 245, 242, 0.92));
     overflow: hidden;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.78),
+      0 1px 3px rgba(63, 95, 74, 0.05);
   }
 
+  .tool-response-json-ace-host.ace_editor,
   .tool-response-json-ace-host .ace_editor,
   .tool-response-json-ace-host .ace_scroller,
   .tool-response-json-ace-host .ace_content {
     font-family: "IBM Plex Mono", "Consolas", monospace;
   }
 
+  .tool-response-json-ace-host.ace_editor .ace_gutter,
   .tool-response-json-ace-host .ace_gutter {
-    background: rgba(245, 245, 244, 0.92);
+    background: rgba(233, 240, 236, 0.96);
   }
 
+  .tool-response-json-ace-host.ace_editor .ace_fold-widget,
   .tool-response-json-ace-host .ace_fold-widget {
     cursor: pointer;
   }

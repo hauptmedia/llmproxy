@@ -3,7 +3,7 @@ import { buildModelIdentityBadge, describeFinishReason, badgeSpec } from "./dash
 import { formatUiValue, prettyJson } from "./formatters";
 import { isClientRecord } from "./guards";
 import { escapeHtml, renderCodeBlockHtml, renderCodeInnerBlock } from "./code-rendering";
-import { serializeJsonAceValue } from "./json-ace";
+import { encodeJsonAcePayload, serializeJsonAceValue } from "./json-ace";
 
 function renderMarkdownInline(markdown: unknown): string {
   const placeholders: Array<{ token: string; html: string }> = [];
@@ -411,7 +411,7 @@ function renderReasoningPanelLive(reasoningContent: unknown, collapsed: boolean,
   );
 }
 
-function renderToolResponseContentHtml(content: unknown): string {
+function renderInlineJsonAceHtml(content: unknown): string {
   if (content === null || content === undefined || content === "") {
     return "";
   }
@@ -423,14 +423,14 @@ function renderToolResponseContentHtml(content: unknown): string {
 
   return (
     `<div class="tool-response-json-ace" data-json-ace="true">` +
-      `<script type="application/json">${escapeHtml(serialized)}</script>` +
+      `<script type="application/json">${encodeJsonAcePayload(serialized)}</script>` +
       `<div class="tool-response-json-ace-host"></div>` +
     `</div>`
   );
 }
 
 function renderToolResponsePanel(content: unknown, collapsed: boolean): string {
-  const bodyHtml = renderToolResponseContentHtml(content);
+  const bodyHtml = renderInlineJsonAceHtml(content);
   if (!bodyHtml) {
     return "";
   }
@@ -474,6 +474,15 @@ type CompactBubbleDisclosureOptions = {
   extraRootClasses?: string[];
 };
 
+type CompactBubbleStaticOptions = {
+  kindClass: string;
+  iconClass: string;
+  iconHtml: string;
+  labelText?: string;
+  labelTitle?: string;
+  extraRootClasses?: string[];
+};
+
 function renderCompactBubbleDisclosure(options: CompactBubbleDisclosureOptions): string {
   if (!options.bodyHtml) {
     return "";
@@ -502,6 +511,28 @@ function renderCompactBubbleDisclosure(options: CompactBubbleDisclosureOptions):
         options.bodyHtml +
       `</div>` +
     `</details>`
+  );
+}
+
+function renderCompactBubbleStatic(options: CompactBubbleStaticOptions): string {
+  const rootClasses = [
+    "compact-bubble-panel",
+    options.kindClass,
+    "compact-bubble-static",
+    ...(options.extraRootClasses ?? []),
+  ].filter(Boolean).join(" ");
+
+  return (
+    `<div class="${escapeHtml(rootClasses)}">` +
+      `<div class="compact-bubble-summary compact-bubble-summary-static">` +
+        `<span class="compact-bubble-icon ${escapeHtml(options.iconClass)}" aria-hidden="true">` +
+          options.iconHtml +
+        `</span>` +
+        (options.labelText
+          ? `<span class="compact-bubble-label"${options.labelTitle ? ` title="${escapeHtml(options.labelTitle)}"` : ""}>${escapeHtml(options.labelText)}</span>`
+          : "") +
+      `</div>` +
+    `</div>`
   );
 }
 
@@ -549,7 +580,7 @@ function renderToolReturnIconHtml(): string {
 }
 
 function renderToolResponseBubble(content: unknown, collapsed: boolean, toolName: string, toolCallId: string): string {
-  const bodyHtml = renderToolResponseContentHtml(content);
+  const bodyHtml = renderInlineJsonAceHtml(content);
   return renderCompactBubbleDisclosure({
     kindClass: "compact-bubble-panel-tool",
     contentClass: "tool-response-content",
@@ -989,7 +1020,9 @@ function renderFunctionInvocationHtml(
   ].filter(Boolean).join("\n");
   const argumentsValue = parseStructuredArguments(payload.arguments);
   const argumentRows = renderInvocationArgumentListHtml(argumentsValue);
+  const rawArgumentsHtml = renderInlineJsonAceHtml(argumentsValue);
   const bodyParts: string[] = [];
+  const hasArgumentsContent = Boolean(argumentRows || rawArgumentsHtml);
 
   if (options.note) {
     bodyParts.push(`<div class="tool-parameter-note">${escapeHtml(options.note)}</div>`);
@@ -1003,6 +1036,21 @@ function renderFunctionInvocationHtml(
     );
   } else {
     bodyParts.push(`<div class="tool-parameter-note">This call did not include any arguments.</div>`);
+  }
+
+  if (rawArgumentsHtml) {
+    bodyParts.push(rawArgumentsHtml);
+  }
+
+  if (!hasArgumentsContent) {
+    return renderCompactBubbleStatic({
+      kindClass: "compact-bubble-panel-tool",
+      iconClass: "tool-response-icon",
+      iconHtml: renderToolCallIconHtml(),
+      labelText: name,
+      labelTitle: hoverDetails || undefined,
+      extraRootClasses: ["compact-bubble-static-tool"],
+    });
   }
 
   return renderCompactBubbleDisclosure({

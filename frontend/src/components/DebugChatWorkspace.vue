@@ -292,37 +292,40 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
             bubble-layout
             class="chat-transcript"
           />
+          <div v-else class="chat-initial-layout">
+            <div class="chat-initial-suggestions">
+              <div class="chat-suggestion-section">
+                <div class="diagnostics-section-label">System prompt ideas</div>
+                <SuggestionActionCards
+                  class="chat-suggestion-grid"
+                  :items="systemPromptSuggestionItems"
+                  @select="applySystemPromptSuggestion"
+                />
+              </div>
+
+              <div class="chat-suggestion-section">
+                <div class="diagnostics-section-label">Message ideas</div>
+                <SuggestionActionCards
+                  class="chat-suggestion-grid"
+                  :items="firstMessageSuggestionItems"
+                  @select="applyFirstMessageSuggestion"
+                />
+              </div>
+            </div>
+          </div>
 
           <template #footer>
             <div v-if="!hasTranscript" class="chat-initial-footer">
-            <div class="chat-suggestion-section">
-              <div class="diagnostics-section-label">System prompt ideas</div>
-              <SuggestionActionCards
-                class="chat-suggestion-grid"
-                :items="systemPromptSuggestionItems"
-                @select="applySystemPromptSuggestion"
-              />
-            </div>
+              <textarea
+                id="debug-system-prompt"
+                v-model="store.state.debug.systemPrompt"
+                class="chat-editor-textarea"
+                placeholder="Optional high-level instruction (System Prompt) for the model."
+              ></textarea>
 
-            <div class="chat-suggestion-section">
-              <div class="diagnostics-section-label">Message ideas</div>
-              <SuggestionActionCards
-                class="chat-suggestion-grid"
-                :items="firstMessageSuggestionItems"
-                @select="applyFirstMessageSuggestion"
-              />
-            </div>
-
-            <textarea
-              id="debug-system-prompt"
-              v-model="store.state.debug.systemPrompt"
-              class="chat-editor-textarea"
-              placeholder="Optional high-level instruction (System Prompt) for the model."
-            ></textarea>
-
-            <ChatComposer
-              :prompt="store.state.debug.prompt"
-              :model="store.state.debug.model"
+              <ChatComposer
+                :prompt="store.state.debug.prompt"
+                :model="store.state.debug.model"
                 :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
                 :mcp-server-enabled="mcpServerEnabled"
                 :params="store.state.debug.params"

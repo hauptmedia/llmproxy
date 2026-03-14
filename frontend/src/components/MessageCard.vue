@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type { UiBadge } from "../types/dashboard";
 import { renderMessageHtml } from "../utils/message-rendering";
 import type { JsonAceController } from "../utils/json-ace";
-import { createJsonAceEditor } from "../utils/json-ace";
+import { createJsonAceEditor, decodeJsonAcePayload } from "../utils/json-ace";
 
 interface MessageLike extends Record<string, unknown> {
   role?: string;
@@ -37,13 +37,27 @@ function destroyInlineJsonEditors(): void {
   }
 }
 
+function resizeInlineJsonEditors(): void {
+  for (const controller of inlineJsonEditors) {
+    controller.resize();
+  }
+}
+
 function handleReasoningToggle(event: Event): void {
   const target = event.target;
-  if (!(target instanceof HTMLDetailsElement) || !target.classList.contains("compact-bubble-panel-reasoning")) {
+  if (!(target instanceof HTMLDetailsElement)) {
     return;
   }
 
-  reasoningExpanded.value = target.open;
+  if (target.classList.contains("compact-bubble-panel-reasoning")) {
+    reasoningExpanded.value = target.open;
+  }
+
+  if (target.classList.contains("compact-bubble-panel-tool")) {
+    window.requestAnimationFrame(() => {
+      resizeInlineJsonEditors();
+    });
+  }
 }
 
 async function syncInlineJsonEditors(): Promise<void> {
@@ -65,10 +79,8 @@ async function syncInlineJsonEditors(): Promise<void> {
 
     try {
       const controller = await createJsonAceEditor(host, {
-        value: payload.textContent ?? "",
+        value: decodeJsonAcePayload(payload.textContent ?? ""),
         readOnly: true,
-        minLines: 8,
-        maxLines: 18,
         scrollPastEnd: 0,
         padding: 10,
       });

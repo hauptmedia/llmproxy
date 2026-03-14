@@ -37,6 +37,18 @@ export function serializeJsonAceValue(value: unknown, placeholder = ""): string 
   return prettyJson(value);
 }
 
+export function encodeJsonAcePayload(value: string): string {
+  return encodeURIComponent(value);
+}
+
+export function decodeJsonAcePayload(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export async function loadAce(): Promise<AceModule> {
   if (!aceLoader) {
     aceLoader = (async () => {
