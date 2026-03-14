@@ -1,5 +1,5 @@
 import { computed } from "vue";
-import type { DashboardState, RequestLogDetail } from "../types/dashboard";
+import type { ConversationTranscriptItem, DashboardState, RequestLogDetail } from "../types/dashboard";
 import {
   buildConnectionTransportBadges,
   buildRequestParamRows,
@@ -9,7 +9,6 @@ import {
 import { formatDate, shortId } from "../utils/formatters";
 import { isClientRecord } from "../utils/guards";
 import { readErrorResponse } from "../utils/http";
-import { renderResponseChoicesHtml } from "../utils/message-rendering";
 import { formatClientIp } from "../utils/client-ip";
 
 export function useRequestDetail(
@@ -208,11 +207,59 @@ export function useRequestDetail(
     requestBody.value,
     state.requestDetail.detail?.entry.requestType,
   ));
-  const requestResponseHtml = computed(() => renderResponseChoicesHtml(
-    state.requestDetail.detail?.responseBody,
-    Boolean(state.requestDetail.detail?.live),
-    state.requestDetail.detail?.entry.model ?? "",
-  ));
+  const requestConversationItems = computed<ConversationTranscriptItem[]>(() => {
+    const requestItems: ConversationTranscriptItem[] = requestMessages.value.map((message, index) => ({
+      key: `request:${index}:${typeof message?.role === "string" ? message.role : "unknown"}`,
+      message: isClientRecord(message) ? message as Record<string, unknown> : { role: "unknown", content: message },
+      index,
+      reasoningCollapsed: true,
+    }));
+
+    const responseBody = state.requestDetail.detail?.responseBody;
+    const responseRecord = isClientRecord(responseBody) ? responseBody as Record<string, unknown> : null;
+    const choices = Array.isArray(responseRecord?.choices) ? responseRecord.choices : null;
+    if (!responseRecord || !choices || choices.length === 0) {
+      return requestItems;
+    }
+
+    const resolvedModel =
+      typeof responseRecord.model === "string" && responseRecord.model.trim().length > 0
+        ? responseRecord.model.trim()
+        : (state.requestDetail.detail?.entry.model ?? "");
+
+    const responseItems = choices.flatMap((choice: unknown, choiceIndex: number): ConversationTranscriptItem[] => {
+      if (isClientRecord(choice) && isClientRecord(choice.message)) {
+        return [{
+          key: `response:${choiceIndex}:message`,
+          message: {
+            ...choice.message,
+            ...(resolvedModel ? { model: resolvedModel } : {}),
+          } as Record<string, unknown>,
+          index: requestItems.length + choiceIndex,
+          finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
+          reasoningCollapsed: true,
+        }];
+      }
+
+      if (isClientRecord(choice) && typeof choice.text === "string") {
+        return [{
+          key: `response:${choiceIndex}:text`,
+          message: {
+            role: "assistant",
+            content: choice.text,
+            ...(resolvedModel ? { model: resolvedModel } : {}),
+          },
+          index: requestItems.length + choiceIndex,
+          finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
+          reasoningCollapsed: true,
+        }];
+      }
+
+      return [];
+    });
+
+    return [...requestItems, ...responseItems];
+  });
 
   return {
     closeRequestDetail,
@@ -221,10 +268,9 @@ export function useRequestDetail(
     requestDetailSubtitle,
     requestDetailTitle,
     requestLiveTransportBadges,
-    requestMessages,
+    requestConversationItems,
     requestParamRows,
     requestResponseMetricRows,
-    requestResponseHtml,
     requestStateBadge,
     scheduleOpenDetailRefresh,
     stopRequestDetailRefresh,

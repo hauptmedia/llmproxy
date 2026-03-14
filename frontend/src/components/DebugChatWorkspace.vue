@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import ChatComposer from "./ChatComposer.vue";
+import ConversationTranscript from "./ConversationTranscript.vue";
 import ConversationSurface from "./ConversationSurface.vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
-import MessageCard from "./MessageCard.vue";
-import type { DebugTranscriptEntry, UiBadge } from "../types/dashboard";
+import type { ConversationTranscriptItem, DebugTranscriptEntry, UiBadge } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import { hasVisibleMessageContent } from "../utils/message-rendering";
 
@@ -54,15 +54,9 @@ function handleChatPromptKeydown(event: KeyboardEvent): void {
 }
 
 function shouldCollapseDebugReasoning(entry: DebugTranscriptEntry, index: number): boolean {
-  const isActiveStreamingAssistantTurn =
-    store.state.debug.sending &&
-    entry.role === "assistant" &&
-    index === store.state.debug.transcript.length - 1 &&
-    typeof entry.reasoning_content === "string" &&
-    entry.reasoning_content.length > 0 &&
-    !(typeof entry.finish_reason === "string" && entry.finish_reason.length > 0);
-
-  return !isActiveStreamingAssistantTurn;
+  void entry;
+  void index;
+  return true;
 }
 
 function hasRenderableAssistantPayload(entry: DebugTranscriptEntry): boolean {
@@ -129,14 +123,49 @@ function getTranscriptEntrySignature(entry: DebugTranscriptEntry): string {
 }
 
 const chatConversationSignature = computed<string>(() => {
-  const transcript = store.state.debug.transcript as DebugTranscriptEntry[];
+  const transcript = store.state.debug.transcript as unknown as DebugTranscriptEntry[];
+  const transcriptBits: string[] = [];
+  for (let index = 0; index < transcript.length; index += 1) {
+    transcriptBits.push(getTranscriptEntrySignature(transcript[index] as DebugTranscriptEntry));
+  }
 
   return [
     hasTranscript.value ? "ready" : "initial",
     trimmedSystemPrompt.value,
     store.state.debug.sending ? "sending" : "idle",
-    transcript.map((entry) => getTranscriptEntrySignature(entry)).join("|"),
+    transcriptBits.join("|"),
   ].join("|");
+});
+
+const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
+  const transcript = store.state.debug.transcript as unknown as DebugTranscriptEntry[];
+  const items: ConversationTranscriptItem[] = [];
+
+  if (hasTranscript.value && trimmedSystemPrompt.value) {
+    items.push({
+      key: "system-prompt",
+      message: { role: "system", content: trimmedSystemPrompt.value },
+      index: 0,
+      reasoningCollapsed: true,
+    });
+  }
+
+  const offset = items.length;
+  const transcriptItems: ConversationTranscriptItem[] = [];
+
+  for (let index = 0; index < transcript.length; index += 1) {
+    const entry = transcript[index] as DebugTranscriptEntry;
+    transcriptItems.push({
+      key: `${index}:${entry.role}:${entry.backend || ""}`,
+      message: getPendingAssistantCopy(entry, index),
+      index: index + offset,
+      finishReason: entry.finish_reason || "",
+      reasoningCollapsed: shouldCollapseDebugReasoning(entry, index),
+      extraBadges: getPendingAssistantBadges(entry, index),
+    });
+  }
+
+  return [...items, ...transcriptItems];
 });
 
 </script>
@@ -196,7 +225,7 @@ const chatConversationSignature = computed<string>(() => {
           follow-mode="latest-turn-start"
           :follow-anchor-active="store.state.debug.sending"
         >
-          <div class="transcript chat-transcript">
+          <div v-if="!hasTranscript" class="transcript chat-transcript">
             <div v-if="!hasTranscript" class="turn system chat-editor-turn">
               <textarea
                 id="debug-system-prompt"
@@ -205,13 +234,6 @@ const chatConversationSignature = computed<string>(() => {
                 placeholder="Optional high-level instruction (System Prompt) for the model."
               ></textarea>
             </div>
-
-            <MessageCard
-              v-else-if="trimmedSystemPrompt"
-              :message="{ role: 'system', content: trimmedSystemPrompt }"
-              :index="0"
-              :reasoning-collapsed="true"
-            />
 
             <ChatComposer
               v-if="!hasTranscript"
@@ -238,16 +260,15 @@ const chatConversationSignature = computed<string>(() => {
               @keydown-prompt="handleChatPromptKeydown"
             />
 
-            <MessageCard
-              v-for="(entry, index) in store.state.debug.transcript"
-              :key="index + ':' + entry.role + ':' + (entry.backend || '')"
-              :message="getPendingAssistantCopy(entry, Number(index))"
-              :index="Number(index) + (trimmedSystemPrompt ? 1 : 0)"
-              :finish-reason="entry.finish_reason || ''"
-              :reasoning-collapsed="shouldCollapseDebugReasoning(entry, Number(index))"
-              :extra-badges="getPendingAssistantBadges(entry, Number(index))"
-            />
           </div>
+
+          <ConversationTranscript
+            v-else
+            :items="debugTranscriptItems"
+            empty-text=""
+            bubble-layout
+            class="chat-transcript"
+          />
 
           <template #footer>
             <ChatComposer

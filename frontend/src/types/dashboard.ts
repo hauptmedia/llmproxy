@@ -339,6 +339,15 @@ export interface RenderMessageOptions {
   extraBadges?: UiBadge[];
 }
 
+export interface ConversationTranscriptItem {
+  key: string | number;
+  message: Record<string, unknown>;
+  index: number;
+  finishReason?: string;
+  reasoningCollapsed?: boolean;
+  extraBadges?: UiBadge[];
+}
+
 export interface ModelDetailField {
   label: string;
   value: string;

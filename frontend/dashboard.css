@@ -1803,6 +1803,46 @@
     @apply gap-4;
   }
 
+  .conversation-bubble-transcript .message-card-host {
+    display: flex;
+    width: 100%;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-user {
+    justify-content: flex-end;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-assistant,
+  .conversation-bubble-transcript .message-card-host.role-tool,
+  .conversation-bubble-transcript .message-card-host.role-system,
+  .conversation-bubble-transcript .message-card-host.role-developer,
+  .conversation-bubble-transcript .message-card-host.role-unknown {
+    justify-content: flex-start;
+  }
+
+  .conversation-bubble-transcript .message-card-host .turn {
+    width: auto;
+    max-width: min(82%, 52rem);
+    box-shadow: 0 14px 28px rgba(120, 53, 15, 0.08);
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-user .turn {
+    border-top-right-radius: 1rem;
+    background-image: linear-gradient(180deg, rgba(255, 244, 214, 0.98), rgba(255, 251, 239, 0.92));
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-assistant .turn {
+    border-top-left-radius: 1rem;
+    background-image: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.92));
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-system .turn,
+  .conversation-bubble-transcript .message-card-host.role-tool .turn,
+  .conversation-bubble-transcript .message-card-host.role-developer .turn,
+  .conversation-bubble-transcript .message-card-host.role-unknown .turn {
+    max-width: min(88%, 56rem);
+  }
+
   .chat-editor-turn {
     @apply grid gap-3;
   }
@@ -1823,7 +1863,7 @@
   }
 
   .chat-composer-inline {
-    @apply rounded-none border-0 border-t border-amber-900/10 bg-transparent px-0 pb-0 pt-4;
+    @apply rounded-none border-0 bg-transparent px-0 pb-0 pt-0;
     padding-right: 2px;
     padding-bottom: 2px;
   }
@@ -1920,12 +1960,37 @@
     list-style: none;
   }
 
+  .reasoning-icon {
+    @apply relative inline-flex items-center justify-center text-amber-900;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex: 0 0 auto;
+  }
+
+  .reasoning-icon svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    display: block;
+  }
+
+  .reasoning-panel.reasoning-live .reasoning-icon::after {
+    content: "";
+    position: absolute;
+    inset: -0.2rem;
+    border-radius: 999px;
+    border: 1px solid rgba(217, 119, 6, 0.38);
+    animation: brand-sonar 1.8s ease-out infinite;
+    pointer-events: none;
+  }
+
   .reasoning-summary::-webkit-details-marker {
     display: none;
   }
 
   .reasoning-chevron {
     @apply ml-auto transition duration-150;
+    font-size: 0.76rem;
+    line-height: 1;
     transform: rotate(180deg);
   }
 

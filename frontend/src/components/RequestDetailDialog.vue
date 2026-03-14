@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import ConversationTranscript from "./ConversationTranscript.vue";
 import ConversationSurface from "./ConversationSurface.vue";
 import DiagnosticActionsView from "./DiagnosticActionsView.vue";
 import DiagnosticReportView from "./DiagnosticReportView.vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
 import JsonAceViewer from "./JsonAceViewer.vue";
-import MessageCard from "./MessageCard.vue";
 import ToolDefinitionsView from "./ToolDefinitionsView.vue";
 import type { DiagnosticReport } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
@@ -57,8 +57,8 @@ function setBackgroundScrollLocked(locked: boolean): void {
 const requestConversationSignature = computed(() => [
   store.state.requestDetail.open ? "open" : "closed",
   store.state.requestDetail.requestId,
-  store.requestMessages.length,
-  store.requestResponseHtml,
+  store.requestConversationItems.length,
+  store.requestConversationItems.map((item) => `${item.index}:${item.finishReason || ""}`).join("|"),
 ].join("|"));
 
 const rawPayloadDialogTitle = computed(() => {
@@ -284,13 +284,7 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
         </div>
       </div>
 
-      <div v-if="store.state.requestDetail.loading && !store.state.requestDetail.detail" class="empty">
-        Loading request details...
-      </div>
-      <div v-else-if="store.state.requestDetail.error && !store.state.requestDetail.detail" class="empty">
-        {{ store.state.requestDetail.error }}
-      </div>
-      <div v-else class="request-detail-grid">
+      <div class="request-detail-grid">
         <div class="request-detail-card">
           <div class="request-detail-tab-bar" role="tablist" aria-label="Request detail sections">
             <button
@@ -436,19 +430,11 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
           :follow-anchor-active="Boolean(store.state.requestDetail.detail?.live)"
         >
           <section class="request-detail-section">
-            <div v-if="store.requestMessages.length" class="transcript">
-              <MessageCard
-                v-for="(message, index) in store.requestMessages"
-                :key="index + ':' + (message.role || 'unknown')"
-                :message="message"
-                :index="Number(index)"
-              />
-            </div>
-            <div v-else class="empty">No OpenAI messages were stored for this request.</div>
-          </section>
-
-          <section class="request-detail-section request-detail-response-section">
-            <div class="detail-stack" v-html="store.requestResponseHtml"></div>
+            <ConversationTranscript
+              :items="store.requestConversationItems"
+              empty-text="No OpenAI messages were stored for this request."
+              bubble-layout
+            />
           </section>
         </ConversationSurface>
       </div>

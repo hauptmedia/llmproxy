@@ -1,0 +1,27 @@
+<script setup lang="ts">
+import MessageCard from "./MessageCard.vue";
+import type { ConversationTranscriptItem } from "../types/dashboard";
+
+withDefaults(defineProps<{
+  items: ConversationTranscriptItem[];
+  emptyText: string;
+  bubbleLayout?: boolean;
+}>(), {
+  bubbleLayout: false,
+});
+</script>
+
+<template>
+  <div v-if="items.length" class="transcript" :class="{ 'conversation-bubble-transcript': bubbleLayout }">
+    <MessageCard
+      v-for="item in items"
+      :key="item.key"
+      :message="item.message"
+      :index="item.index"
+      :finish-reason="item.finishReason || ''"
+      :reasoning-collapsed="item.reasoningCollapsed ?? true"
+      :extra-badges="item.extraBadges || []"
+    />
+  </div>
+  <div v-else class="empty">{{ emptyText }}</div>
+</template>

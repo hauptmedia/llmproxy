@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { UiBadge } from "../types/dashboard";
 import { renderMessageHtml } from "../utils/message-rendering";
 
@@ -21,14 +21,45 @@ const props = withDefaults(defineProps<{
   extraBadges: () => [],
 });
 
+const hostEl = ref<HTMLElement | null>(null);
+const reasoningExpanded = ref(false);
+
+function handleReasoningToggle(event: Event): void {
+  const target = event.target;
+  if (!(target instanceof HTMLDetailsElement) || !target.classList.contains("reasoning-panel")) {
+    return;
+  }
+
+  reasoningExpanded.value = target.open;
+}
+
 const html = computed(() => renderMessageHtml(props.message, props.index, {
   heading: props.heading || undefined,
   finishReason: props.finishReason || "",
-  reasoningCollapsed: props.reasoningCollapsed,
+  reasoningCollapsed: reasoningExpanded.value ? false : props.reasoningCollapsed,
   extraBadges: props.extraBadges,
 }));
+
+const hostClass = computed(() => {
+  const role = typeof props.message.role === "string" && props.message.role.trim().length > 0
+    ? props.message.role.trim().toLowerCase()
+    : "unknown";
+
+  return [
+    "message-card-host",
+    `role-${role}`,
+  ];
+});
+
+onMounted(() => {
+  hostEl.value?.addEventListener("toggle", handleReasoningToggle, true);
+});
+
+onBeforeUnmount(() => {
+  hostEl.value?.removeEventListener("toggle", handleReasoningToggle, true);
+});
 </script>
 
 <template>
-  <div class="message-card-host" v-html="html"></div>
+  <div ref="hostEl" :class="hostClass" v-html="html"></div>
 </template>

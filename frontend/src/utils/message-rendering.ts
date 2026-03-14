@@ -382,6 +382,37 @@ function renderReasoningPanel(reasoningContent: unknown, collapsed: boolean): st
   );
 }
 
+function renderReasoningPanelLive(reasoningContent: unknown, collapsed: boolean, live: boolean): string {
+  if (typeof reasoningContent !== "string" || reasoningContent.length === 0) {
+    return "";
+  }
+
+  return (
+    `<details class="reasoning-panel${live ? " reasoning-live" : ""}"${collapsed ? "" : " open"}>` +
+      `<summary class="reasoning-summary" title="${escapeHtml(
+        collapsed
+          ? "Model reasoning captured for this message. Expand it to inspect the reasoning output."
+          : "Model reasoning captured for this message. Collapse it to focus on the final content.",
+      )}">` +
+        `<span class="reasoning-icon" aria-hidden="true">` +
+          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
+            `<path d="M9 7.5a3 3 0 0 1 5.2-2.05A3.2 3.2 0 0 1 19 8.1c0 1.08-.44 2.06-1.16 2.77.75.58 1.23 1.49 1.23 2.51A3.12 3.12 0 0 1 15.95 16.5H15.5a2.5 2.5 0 0 1-4.78.72A2.8 2.8 0 0 1 8.5 18a3 3 0 0 1-2.96-3.43 3.02 3.02 0 0 1-1.54-2.63c0-1.03.5-1.94 1.27-2.52A3.17 3.17 0 0 1 5 8.1a3.2 3.2 0 0 1 4-3.09"></path>` +
+            `<path d="M10.5 8.75v6.5"></path>` +
+            `<path d="M13.5 8.75v6.5"></path>` +
+            `<path d="M8.5 10.5h2"></path>` +
+            `<path d="M13.5 10.5h2"></path>` +
+          `</svg>` +
+        `</span>` +
+        `<span>Reasoning</span>` +
+        `<span class="reasoning-chevron" aria-hidden="true">â–¼</span>` +
+      `</summary>` +
+      `<div class="reasoning-content">` +
+        renderMessageStringHtml(reasoningContent) +
+      `</div>` +
+    `</details>`
+  );
+}
+
 function renderMessageContentHtml(content: unknown): string {
   if (typeof content === "string") {
     return renderMessageStringHtml(content);
@@ -427,6 +458,10 @@ function renderMessageContentHtml(content: unknown): string {
 
 export function renderMessageHtml(message: Record<string, any>, index: number, options: RenderMessageOptions = {}): string {
   const role = typeof message?.role === "string" ? message.role : (options.role ?? "unknown");
+  const reasoningLive =
+    typeof message?.reasoning_content === "string" &&
+    message.reasoning_content.length > 0 &&
+    !(typeof options.finishReason === "string" && options.finishReason.length > 0);
   const metaBits: UiBadge[] = [
     buildMessageRoleBadgeSpec(message, role),
   ];
@@ -465,7 +500,7 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
           )).join("") +
         `</div>` +
       `</div>` +
-      renderReasoningPanel(message?.reasoning_content, options.reasoningCollapsed ?? true) +
+      renderReasoningPanelLive(message?.reasoning_content, options.reasoningCollapsed ?? true, reasoningLive) +
       ((hasVisibleMessageContent(message?.content) || !message?.reasoning_content)
         ? renderMessageContentHtml(message?.content)
         : "") +
@@ -881,58 +916,6 @@ export function renderToolsHtml(tools: unknown): string {
       }).join("") +
     `</div>`
   );
-}
-
-function isStreamingReasoning(reasoningContent: unknown, finishReason: unknown, live: boolean): boolean {
-  return (
-    live &&
-    typeof reasoningContent === "string" &&
-    reasoningContent.length > 0 &&
-    !(typeof finishReason === "string" && finishReason.length > 0)
-  );
-}
-
-export function renderResponseChoicesHtml(responseBody: unknown, live = false, responseModel = ""): string {
-  if (!isClientRecord(responseBody) || !Array.isArray(responseBody.choices) || responseBody.choices.length === 0) {
-    return '<div class="empty">No structured response payload was stored for this request.</div>';
-  }
-
-  const resolvedModel =
-    typeof responseBody.model === "string" && responseBody.model.trim().length > 0
-      ? responseBody.model.trim()
-      : responseModel;
-
-  return responseBody.choices
-    .map((choice: Record<string, any>, index: number) => {
-      if (isClientRecord(choice) && isClientRecord(choice.message)) {
-        const messageWithModel = {
-          ...choice.message,
-          ...(resolvedModel ? { model: resolvedModel } : {}),
-        };
-
-        return renderMessageHtml(messageWithModel, index, {
-          heading: `choice ${index + 1}`,
-          role: typeof choice.message.role === "string" ? choice.message.role : "assistant",
-          finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
-          reasoningCollapsed: !isStreamingReasoning(choice.message.reasoning_content, choice.finish_reason, live),
-        });
-      }
-
-      if (isClientRecord(choice) && typeof choice.text === "string") {
-        return renderMessageHtml({
-          role: "assistant",
-          content: choice.text,
-          ...(resolvedModel ? { model: resolvedModel } : {}),
-        }, index, {
-          heading: `choice ${index + 1}`,
-          role: "assistant",
-          finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
-        });
-      }
-
-      return renderDetailBlock(`Choice ${index + 1}`, choice);
-    })
-    .join("");
 }
 
 export function renderTextValue(value: unknown): string {
