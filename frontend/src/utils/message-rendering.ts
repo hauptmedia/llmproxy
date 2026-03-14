@@ -682,7 +682,9 @@ function renderFunctionToolHtml(tool: Record<string, any>, index: number): strin
   );
 
   const summaryBadges = [
-    schema?.additionalProperties === false ? `<span class="badge warn">no extra fields</span>` : "",
+    schema?.additionalProperties !== false
+      ? `<span class="badge neutral" title="${escapeHtml("Additional undeclared fields are allowed in this tool's arguments object. The model may send keys that are not listed in the declared parameter schema.")}">extra fields allowed</span>`
+      : "",
     typeof fn?.strict === "boolean" ? `<span class="badge ${fn.strict ? "good" : "neutral"}">${fn.strict ? "strict" : "non-strict"}</span>` : "",
   ].filter(Boolean).join("");
 

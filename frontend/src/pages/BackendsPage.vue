@@ -2,12 +2,25 @@
 import { computed } from "vue";
 import BackendEditorDialog from "../components/BackendEditorDialog.vue";
 import BackendTable from "../components/BackendTable.vue";
+import ToolDefinitionsView from "../components/ToolDefinitionsView.vue";
 import { useDiagnosticsCapabilities } from "../composables/useDiagnosticsCapabilities";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import { formatDuration } from "../utils/formatters";
 
 const store = useDashboardStore();
 const { endpointUrl, loadingCapabilities, mcpServerEnabled, toolDefinitions } = useDiagnosticsCapabilities();
+const mcpToolDefinitionsForRenderer = computed(() => toolDefinitions.value.map((tool) => ({
+  type: "function",
+  function: {
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.inputSchema ?? {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+  },
+})));
 const currentBackendConfig = computed(() => {
   const backendId = store.state.backendEditor.originalId || store.state.backendEditor.fields.id;
   return backendId ? store.state.backendConfigs[backendId] ?? null : null;
@@ -113,18 +126,18 @@ const serverConfigRows = computed(() => {
           <h2 class="panel-title">MCP server</h2>
         </div>
       </div>
-      <div class="detail-table-wrap">
-        <div class="detail-table-key" title="JSON-RPC MCP endpoint exposed by llmproxy diagnostics.">Endpoint</div>
-        <div class="detail-table-value mono" title="JSON-RPC MCP endpoint exposed by llmproxy diagnostics.">{{ endpointUrl }}</div>
+      <div
+        class="mcp-endpoint-card"
+        title="JSON-RPC MCP endpoint exposed by llmproxy diagnostics."
+      >
+        <div class="mcp-endpoint-label">Endpoint</div>
+        <div class="mcp-endpoint-value mono">{{ endpointUrl }}</div>
       </div>
       <div class="diagnostics-tools">
         <div class="diagnostics-section-label">Available MCP tools</div>
         <div class="diagnostics-tools-list">
           <template v-if="toolDefinitions.length">
-            <div v-for="tool in toolDefinitions" :key="tool.name" class="diagnostics-tool-row">
-              <div class="diagnostics-tool-name mono">{{ tool.name }}</div>
-              <div class="diagnostics-tool-description">{{ tool.description }}</div>
-            </div>
+            <ToolDefinitionsView :tools="mcpToolDefinitionsForRenderer" />
           </template>
           <div v-else-if="mcpServerEnabled === false" class="empty">
             Diagnostics MCP server is disabled in config.

@@ -282,7 +282,6 @@ function createDashboardStoreInternal() {
     requestMessages: requestDetail.requestMessages,
     requestResponseMetricRows: requestDetail.requestResponseMetricRows,
     requestParamRows: requestDetail.requestParamRows,
-    requestToolsHtml: requestDetail.requestToolsHtml,
     requestResponseHtml: requestDetail.requestResponseHtml,
     badgeClass,
     connectionCardBadges: buildConnectionCardBadges,

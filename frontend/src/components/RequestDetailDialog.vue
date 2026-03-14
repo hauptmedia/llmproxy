@@ -5,6 +5,7 @@ import CodeView from "./CodeView.vue";
 import ConversationSurface from "./ConversationSurface.vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
 import MessageCard from "./MessageCard.vue";
+import ToolDefinitionsView from "./ToolDefinitionsView.vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
 
 const store = useDashboardStore();
@@ -222,7 +223,7 @@ async function openDiagnosticsForCurrentRequest(): Promise<void> {
 
             <section class="request-detail-section">
               <h3>Provided Tools</h3>
-              <div class="detail-stack" v-html="store.requestToolsHtml"></div>
+              <ToolDefinitionsView :tools="store.state.requestDetail.detail?.requestBody && (store.state.requestDetail.detail.requestBody as Record<string, unknown>).tools" />
             </section>
 
             <section class="request-detail-section">

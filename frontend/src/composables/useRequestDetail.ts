@@ -9,7 +9,7 @@ import {
 import { formatDate, shortId } from "../utils/formatters";
 import { isClientRecord } from "../utils/guards";
 import { readErrorResponse } from "../utils/http";
-import { renderResponseChoicesHtml, renderToolsHtml } from "../utils/message-rendering";
+import { renderResponseChoicesHtml } from "../utils/message-rendering";
 import { formatClientIp } from "../utils/client-ip";
 
 export function useRequestDetail(
@@ -178,7 +178,6 @@ export function useRequestDetail(
     live: Boolean(state.requestDetail.detail?.live),
   }));
   const requestParamRows = computed(() => buildRequestParamRows(requestBody.value));
-  const requestToolsHtml = computed(() => renderToolsHtml(requestBody.value?.tools));
   const requestResponseHtml = computed(() => renderResponseChoicesHtml(
     state.requestDetail.detail?.responseBody,
     Boolean(state.requestDetail.detail?.live),
@@ -197,7 +196,6 @@ export function useRequestDetail(
     requestResponseMetricRows,
     requestResponseHtml,
     requestStateBadge,
-    requestToolsHtml,
     scheduleOpenDetailRefresh,
     stopRequestDetailRefresh,
   };

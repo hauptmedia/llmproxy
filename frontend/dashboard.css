@@ -540,6 +540,19 @@
     @apply space-y-3;
   }
 
+  .mcp-endpoint-card {
+    @apply rounded-[1.15rem] border border-amber-900/10 bg-stone-50/80 px-4 py-3;
+  }
+
+  .mcp-endpoint-label {
+    @apply text-xs font-semibold uppercase tracking-[0.08em] text-stone-500;
+  }
+
+  .mcp-endpoint-value {
+    @apply mt-2 text-sm leading-relaxed text-stone-900;
+    word-break: break-word;
+  }
+
   .diagnostics-tool-row {
     @apply rounded-[1.15rem] border border-amber-900/10 bg-stone-50/80 px-4 py-3;
   }
