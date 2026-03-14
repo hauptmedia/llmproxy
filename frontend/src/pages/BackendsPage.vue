@@ -2,10 +2,12 @@
 import { computed } from "vue";
 import BackendEditorDialog from "../components/BackendEditorDialog.vue";
 import BackendTable from "../components/BackendTable.vue";
+import { useDiagnosticsCapabilities } from "../composables/useDiagnosticsCapabilities";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import { formatDuration } from "../utils/formatters";
 
 const store = useDashboardStore();
+const { endpointUrl, loadingCapabilities, toolDefinitions } = useDiagnosticsCapabilities();
 const currentBackendConfig = computed(() => {
   const backendId = store.state.backendEditor.originalId || store.state.backendEditor.fields.id;
   return backendId ? store.state.backendConfigs[backendId] ?? null : null;
@@ -55,6 +57,14 @@ const serverConfigRows = computed(() => {
     },
   ];
 });
+
+const mcpServerRows = computed(() => [
+  {
+    key: "Endpoint",
+    value: endpointUrl,
+    title: "JSON-RPC MCP endpoint exposed by llmproxy diagnostics.",
+  },
+]);
 </script>
 
 <template>
@@ -97,6 +107,44 @@ const serverConfigRows = computed(() => {
         </table>
       </div>
       <div v-else class="empty">Loading llmproxy config...</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">MCP server</h2>
+        </div>
+      </div>
+      <div class="detail-table-wrap">
+        <table class="detail-table">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in mcpServerRows" :key="row.key">
+              <td :title="row.title" class="detail-table-key">{{ row.key }}</td>
+              <td :title="row.title" class="detail-table-value mono">{{ row.value }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="diagnostics-tools">
+        <div class="diagnostics-section-label">Available MCP tools</div>
+        <div class="diagnostics-tools-list">
+          <template v-if="toolDefinitions.length">
+            <div v-for="tool in toolDefinitions" :key="tool.name" class="diagnostics-tool-row">
+              <div class="diagnostics-tool-name mono">{{ tool.name }}</div>
+              <div class="diagnostics-tool-description">{{ tool.description }}</div>
+            </div>
+          </template>
+          <div v-else class="empty">
+            {{ loadingCapabilities ? "Loading MCP tools..." : "No MCP tool metadata loaded yet." }}
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="panel">

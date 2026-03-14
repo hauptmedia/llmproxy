@@ -1,18 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useDiagnosticsCapabilities } from "../composables/useDiagnosticsCapabilities";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import type {
-  DiagnosticPromptDefinition,
   DiagnosticPromptPayload,
   DiagnosticsReportPayload,
-  DiagnosticsToolDefinition,
 } from "../types/dashboard";
-import {
-  getDiagnosticPrompt,
-  listDiagnosticPrompts,
-  listDiagnosticsTools,
-} from "../utils/diagnostics-mcp";
+import { getDiagnosticPrompt } from "../utils/diagnostics-mcp";
 import { formatDuration } from "../utils/formatters";
 import { readErrorResponse } from "../utils/http";
 import { buildDiagnosticsRequestOptions } from "../utils/request-catalog";
@@ -20,16 +15,13 @@ import { buildDiagnosticsRequestOptions } from "../utils/request-catalog";
 const store = useDashboardStore();
 const route = useRoute();
 const router = useRouter();
+const { promptDefinitions } = useDiagnosticsCapabilities();
 const selectedRequestId = ref("");
 const loadingReport = ref(false);
-const loadingCapabilities = ref(false);
 const loadingPrompt = ref(false);
 const diagnosticsPayload = ref<DiagnosticsReportPayload | null>(null);
-const promptDefinitions = ref<DiagnosticPromptDefinition[]>([]);
 const promptPayload = ref<DiagnosticPromptPayload | null>(null);
 const selectedPromptName = ref("");
-const toolDefinitions = ref<DiagnosticsToolDefinition[]>([]);
-const endpointUrl = `${window.location.origin}/api/diagnostics/mcp`;
 
 const availableRequests = computed(() => buildDiagnosticsRequestOptions(store.state.snapshot, store.shortId));
 
@@ -122,23 +114,6 @@ watch(
   },
   { immediate: true },
 );
-
-onMounted(() => {
-  void loadCapabilities();
-});
-
-async function loadCapabilities(): Promise<void> {
-  loadingCapabilities.value = true;
-
-  try {
-    toolDefinitions.value = await listDiagnosticsTools();
-    promptDefinitions.value = await listDiagnosticPrompts();
-  } catch (error) {
-    store.showToast("Diagnostics", error instanceof Error ? error.message : String(error));
-  } finally {
-    loadingCapabilities.value = false;
-  }
-}
 
 async function loadDiagnosticsReport(requestId: string): Promise<void> {
   loadingReport.value = true;
@@ -286,23 +261,6 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
         </div>
       </div>
 
-      <div class="diagnostics-meta-grid">
-        <div class="diagnostics-meta-card">
-          <div class="diagnostics-meta-label">MCP endpoint</div>
-          <div class="diagnostics-meta-value mono">{{ endpointUrl }}</div>
-        </div>
-        <div class="diagnostics-meta-card">
-          <div class="diagnostics-meta-label">Tools</div>
-          <div class="diagnostics-meta-value">
-            <template v-if="toolDefinitions.length">
-              {{ toolDefinitions.map((tool) => tool.name).join(", ") }}
-            </template>
-            <template v-else>
-              {{ loadingCapabilities ? "Loading..." : "No MCP tool metadata loaded yet." }}
-            </template>
-          </div>
-        </div>
-      </div>
     </div>
 
     <div v-if="selectedReport && selectedRequest" class="diagnostics-grid">
@@ -410,16 +368,6 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
             </div>
             <div class="diagnostics-action-description">{{ prompt.description }}</div>
           </button>
-        </div>
-
-        <div class="diagnostics-tools">
-          <div class="diagnostics-section-label">Available MCP tools</div>
-          <div class="diagnostics-tools-list">
-            <div v-for="tool in toolDefinitions" :key="tool.name" class="diagnostics-tool-row">
-              <div class="diagnostics-tool-name mono">{{ tool.name }}</div>
-              <div class="diagnostics-tool-description">{{ tool.description }}</div>
-            </div>
-          </div>
         </div>
 
         <div class="diagnostics-prompt-preview">
