@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
 import ConversationSurface from "../components/ConversationSurface.vue";
 import ChatComposer from "../components/ChatComposer.vue";
 import MessageCard from "../components/MessageCard.vue";
@@ -8,6 +9,7 @@ import { useDashboardStore } from "../composables/useDashboardStore";
 import { hasVisibleMessageContent } from "../utils/message-rendering";
 
 const store = useDashboardStore();
+const router = useRouter();
 const hasTranscript = computed(() => store.state.debug.transcript.length > 0);
 const trimmedSystemPrompt = computed(() => store.state.debug.systemPrompt.trim());
 const showAdvancedParameters = ref(false);
@@ -103,6 +105,19 @@ const chatConversationSignature = computed(() => [
     entry.backend ?? "",
   ].join(":")).join("|"),
 ].join("|"));
+
+async function openLastDebugRequestInDiagnostics(): Promise<void> {
+  if (!store.state.debug.lastRequestId) {
+    return;
+  }
+
+  await router.push({
+    name: "diagnostics",
+    query: {
+      requestId: store.state.debug.lastRequestId,
+    },
+  });
+}
 </script>
 
 <template>
@@ -115,6 +130,27 @@ const chatConversationSignature = computed(() => [
               <h2 class="panel-title">Conversation</h2>
             </div>
             <div class="conversation-surface-actions">
+              <button
+                v-if="store.state.debug.lastRequestId"
+                class="icon-button compact"
+                type="button"
+                aria-label="Open the last debug request in diagnostics"
+                title="Open the last debug request in diagnostics."
+                @click="openLastDebugRequestInDiagnostics()"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.25 4.25h5.5"></path>
+                  <path d="M10.5 7V4.5"></path>
+                  <path d="M13.5 7V4.5"></path>
+                  <path d="M8.2 10a3.8 3.8 0 1 1 7.6 0v4.15a3.8 3.8 0 0 1-7.6 0z"></path>
+                  <path d="M3.75 12h3.5"></path>
+                  <path d="M16.75 12h3.5"></path>
+                  <path d="M5.25 7.75 8 9.5"></path>
+                  <path d="M18.75 7.75 16 9.5"></path>
+                  <path d="M5.25 16.25 8 14.5"></path>
+                  <path d="M18.75 16.25 16 14.5"></path>
+                </svg>
+              </button>
               <button
                 v-if="store.state.debug.lastRequestId"
                 class="icon-button compact"

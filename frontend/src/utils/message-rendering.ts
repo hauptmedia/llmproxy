@@ -808,9 +808,14 @@ export function renderResponseChoicesHtml(responseBody: unknown, live = false, r
       }
 
       if (isClientRecord(choice) && typeof choice.text === "string") {
-        return renderDetailBlock(`Choice ${index + 1}`, {
-          finish_reason: choice.finish_reason ?? null,
-          text: choice.text,
+        return renderMessageHtml({
+          role: "assistant",
+          content: choice.text,
+          ...(resolvedModel ? { model: resolvedModel } : {}),
+        }, index, {
+          heading: `choice ${index + 1}`,
+          role: "assistant",
+          finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
         });
       }
 
