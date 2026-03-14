@@ -351,24 +351,26 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
               <div v-else class="empty">No additional top-level request fields were stored.</div>
               <div v-if="hasRawPayload('request')" class="mt-3 flex justify-start">
                 <button
-                  class="button secondary small raw-payload-launch"
+                  class="context-action-button"
                   type="button"
                   title="Open the stored raw request payload in a full-screen inspector"
                   aria-label="Open the stored raw request payload in a full-screen inspector"
                   @click="openRawPayloadInspector('request')"
                 >
-                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9 6.5V5.25a3 3 0 0 1 6 0V6.5"></path>
-                    <path d="M8.5 8h7A1.5 1.5 0 0 1 17 9.5v4.9a5 5 0 0 1-10 0V9.5A1.5 1.5 0 0 1 8.5 8Z"></path>
-                    <path d="M12 3.5v1.75"></path>
-                    <path d="M7 11.75H4.75"></path>
-                    <path d="M19.25 11.75H17"></path>
-                    <path d="M7.2 9.35 5.25 7.8"></path>
-                    <path d="M16.8 9.35 18.75 7.8"></path>
-                    <path d="M7.2 15.65 5.25 17.2"></path>
-                    <path d="M16.8 15.65 18.75 17.2"></path>
-                  </svg>
-                  <span>Show raw request data</span>
+                  <span class="context-action-button-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M9 6.5V5.25a3 3 0 0 1 6 0V6.5"></path>
+                      <path d="M8.5 8h7A1.5 1.5 0 0 1 17 9.5v4.9a5 5 0 0 1-10 0V9.5A1.5 1.5 0 0 1 8.5 8Z"></path>
+                      <path d="M12 3.5v1.75"></path>
+                      <path d="M7 11.75H4.75"></path>
+                      <path d="M19.25 11.75H17"></path>
+                      <path d="M7.2 9.35 5.25 7.8"></path>
+                      <path d="M16.8 9.35 18.75 7.8"></path>
+                      <path d="M7.2 15.65 5.25 17.2"></path>
+                      <path d="M16.8 15.65 18.75 17.2"></path>
+                    </svg>
+                  </span>
+                  <span class="context-action-button-label">Show raw request data</span>
                 </button>
               </div>
             </section>
@@ -395,24 +397,26 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
               <div v-else class="empty">No response metrics have been recorded yet.</div>
               <div v-if="hasRawPayload('response')" class="mt-3 flex justify-start">
                 <button
-                  class="button secondary small raw-payload-launch"
+                  class="context-action-button"
                   type="button"
                   title="Open the stored raw response payload in a full-screen inspector"
                   aria-label="Open the stored raw response payload in a full-screen inspector"
                   @click="openRawPayloadInspector('response')"
                 >
-                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9 6.5V5.25a3 3 0 0 1 6 0V6.5"></path>
-                    <path d="M8.5 8h7A1.5 1.5 0 0 1 17 9.5v4.9a5 5 0 0 1-10 0V9.5A1.5 1.5 0 0 1 8.5 8Z"></path>
-                    <path d="M12 3.5v1.75"></path>
-                    <path d="M7 11.75H4.75"></path>
-                    <path d="M19.25 11.75H17"></path>
-                    <path d="M7.2 9.35 5.25 7.8"></path>
-                    <path d="M16.8 9.35 18.75 7.8"></path>
-                    <path d="M7.2 15.65 5.25 17.2"></path>
-                    <path d="M16.8 15.65 18.75 17.2"></path>
-                  </svg>
-                  <span>Show raw response data</span>
+                  <span class="context-action-button-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M9 6.5V5.25a3 3 0 0 1 6 0V6.5"></path>
+                      <path d="M8.5 8h7A1.5 1.5 0 0 1 17 9.5v4.9a5 5 0 0 1-10 0V9.5A1.5 1.5 0 0 1 8.5 8Z"></path>
+                      <path d="M12 3.5v1.75"></path>
+                      <path d="M7 11.75H4.75"></path>
+                      <path d="M19.25 11.75H17"></path>
+                      <path d="M7.2 9.35 5.25 7.8"></path>
+                      <path d="M16.8 9.35 18.75 7.8"></path>
+                      <path d="M7.2 15.65 5.25 17.2"></path>
+                      <path d="M16.8 15.65 18.75 17.2"></path>
+                    </svg>
+                  </span>
+                  <span class="context-action-button-label">Show raw response data</span>
                 </button>
               </div>
             </section>
@@ -438,12 +442,13 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
         </div>
 
         <ConversationSurface
+          card-class="request-detail-card request-detail-conversation-shell"
           :reset-key="store.state.requestDetail.requestId"
           :scroll-signature="requestConversationSignature"
           follow-mode="latest-turn-start"
           :follow-anchor-active="Boolean(store.state.requestDetail.detail?.live)"
         >
-          <section class="request-detail-section">
+          <section class="request-detail-section request-detail-conversation-panel">
             <ConversationTranscript
               :items="store.requestConversationItems"
               empty-text="No OpenAI messages were stored for this request."

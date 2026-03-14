@@ -719,12 +719,16 @@
   overflow: visible;
 }
 
-.chat-page-section > .chat-panel {
-  width: min(1020px, calc(100vw - 32px));
+.chat-page-section > .chat-panel,
+.request-detail-conversation-shell {
+  width: min(1020px, calc(100vw - 32px), 100%);
   height: 100%;
   min-height: 0;
-  margin-inline: auto;
   overflow: visible;
+}
+
+.chat-page-section > .chat-panel {
+  margin-inline: auto;
 }
 
   .summary-grid {
@@ -1051,9 +1055,9 @@
     @apply border-b-0;
   }
 
-  .detail-table-key {
-    @apply w-40 text-sm font-semibold text-stone-900;
-  }
+.detail-table-key {
+  @apply w-36 text-sm font-semibold text-stone-900;
+}
 
   .detail-table-value {
     @apply text-sm leading-relaxed break-words text-stone-700;
@@ -1768,6 +1772,65 @@
     @apply opacity-60;
   }
 
+  .request-actions .icon-button,
+  .conversation-surface-actions .icon-button,
+  .config-panel-header .icon-button,
+  .config-section-head .icon-button {
+    color: #57534e;
+    border-color: rgba(120, 53, 15, 0.12);
+    background: linear-gradient(180deg, rgba(255, 253, 250, 0.98), rgba(255, 246, 237, 0.94));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.84),
+      0 3px 10px rgba(120, 53, 15, 0.08);
+  }
+
+  .request-actions .icon-button:hover:not(:disabled),
+  .conversation-surface-actions .icon-button:hover:not(:disabled),
+  .config-panel-header .icon-button:hover:not(:disabled),
+  .config-section-head .icon-button:hover:not(:disabled) {
+    color: #7c2d12;
+    border-color: rgba(180, 83, 9, 0.18);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 249, 242, 0.96));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.88),
+      0 6px 16px rgba(120, 53, 15, 0.1);
+  }
+
+  .request-actions .icon-button.active,
+  .conversation-surface-actions .icon-button.active,
+  .config-panel-header .icon-button.active,
+  .config-section-head .icon-button.active {
+    color: #9a3412;
+    border-color: rgba(180, 83, 9, 0.22);
+    background: linear-gradient(180deg, rgba(255, 248, 239, 0.98), rgba(255, 240, 226, 0.94));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.82),
+      0 4px 12px rgba(180, 83, 9, 0.09);
+  }
+
+  .request-actions .icon-button.danger,
+  .conversation-surface-actions .icon-button.danger,
+  .config-panel-header .icon-button.danger,
+  .config-section-head .icon-button.danger {
+    color: #b91c1c;
+    border-color: rgba(185, 28, 28, 0.18);
+    background: linear-gradient(180deg, rgba(255, 248, 248, 0.98), rgba(254, 242, 242, 0.94));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.84),
+      0 4px 12px rgba(153, 27, 27, 0.07);
+  }
+
+  .request-actions .icon-button.danger:hover:not(:disabled),
+  .conversation-surface-actions .icon-button.danger:hover:not(:disabled),
+  .config-panel-header .icon-button.danger:hover:not(:disabled),
+  .config-section-head .icon-button.danger:hover:not(:disabled) {
+    background: linear-gradient(180deg, rgba(255, 251, 251, 0.99), rgba(254, 226, 226, 0.96));
+    border-color: rgba(185, 28, 28, 0.22);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.88),
+      0 6px 16px rgba(153, 27, 27, 0.08);
+  }
+
   .debug-grid {
     @apply grid gap-[18px];
     grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
@@ -1934,6 +1997,11 @@
     @apply flex h-full min-h-0 flex-col;
   }
 
+  .conversation-viewport > .chat-initial-layout {
+    align-self: stretch;
+    min-height: 100%;
+  }
+
   .chat-initial-suggestions {
     @apply grid min-h-0 flex-1 gap-5;
     grid-template-rows: repeat(2, minmax(0, 1fr));
@@ -1946,21 +2014,18 @@
 
   .chat-initial-layout .chat-suggestion-grid {
     @apply min-h-0 flex-1 overflow-auto;
-    container-type: size;
   }
 
   .chat-initial-layout .diagnostics-actions {
-    @apply min-h-0 content-start items-start;
-  }
-
-  @container (max-height: 150px) {
-    .diagnostics-action-description {
-      display: none;
-    }
+    @apply items-start content-start;
   }
 
   .chat-initial-layout .diagnostics-action-card {
     min-height: 0;
+  }
+
+  .chat-initial-layout-compact .diagnostics-action-description {
+    display: none;
   }
 
   .chat-initial-footer {
@@ -3111,6 +3176,18 @@
     min-height: 0;
   }
 
+  .request-detail-conversation-shell {
+    justify-self: center;
+    align-self: stretch;
+  }
+
+  .request-detail-conversation-panel {
+    @apply flex min-h-full flex-col rounded-3xl border border-amber-900/10 bg-white/92 p-4 shadow-sm;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.82),
+      0 12px 28px rgba(120, 53, 15, 0.06);
+  }
+
   .request-detail-tab-bar {
     @apply mb-4 flex items-center gap-2 overflow-x-auto;
     flex: 0 0 auto;
@@ -3132,15 +3209,61 @@
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
   }
 
-  .raw-payload-launch {
-    @apply inline-flex items-center gap-2 text-sm font-semibold;
+  .context-action-button {
+    @apply inline-flex items-center gap-2.5 border text-left text-sm font-medium;
     width: auto;
+    min-height: 38px;
+    padding: 0.42rem 0.92rem 0.42rem 0.46rem;
+    border-radius: 999px;
+    color: #7c2d12;
+    border-color: rgba(180, 83, 9, 0.14);
+    background: linear-gradient(180deg, rgba(255, 251, 247, 0.98), rgba(255, 245, 236, 0.94));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.82),
+      0 3px 10px rgba(120, 53, 15, 0.06);
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      box-shadow 150ms ease,
+      color 150ms ease;
   }
 
-  .raw-payload-launch svg {
+  .context-action-button:hover:not(:disabled) {
+    border-color: rgba(180, 83, 9, 0.2);
+    background: linear-gradient(180deg, rgba(255, 253, 249, 0.99), rgba(255, 247, 239, 0.96));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.84),
+      0 5px 14px rgba(120, 53, 15, 0.08);
+  }
+
+  .context-action-button:disabled {
+    @apply opacity-60;
+    box-shadow: none;
+  }
+
+  .context-action-button-icon {
+    @apply inline-flex items-center justify-center rounded-full border;
+    width: 1.9rem;
+    height: 1.9rem;
+    flex: 0 0 auto;
+    color: #9a3412;
+    border-color: rgba(180, 83, 9, 0.14);
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.84),
+      0 2px 8px rgba(120, 53, 15, 0.06);
+  }
+
+  .context-action-button-icon svg {
     width: 16px;
     height: 16px;
+    display: block;
     flex: 0 0 auto;
+  }
+
+  .context-action-button-label {
+    line-height: 1.15;
+    color: inherit;
   }
 
   .detail-table-key-label {

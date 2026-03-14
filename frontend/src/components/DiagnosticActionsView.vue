@@ -123,17 +123,19 @@ async function openPromptInChat(): Promise<void> {
 
     <div class="mt-3 flex justify-start">
       <button
-        class="button secondary small raw-payload-launch"
+        class="context-action-button"
         type="button"
         :disabled="loadingPrompt || !promptPayload || promptPayload.messages.length === 0"
         :title="loadingPrompt ? 'Preparing analyzer prompt...' : 'Start a new chat session from the selected analyzer action.'"
         :aria-label="loadingPrompt ? 'Preparing analyzer prompt' : 'Start a new chat session from the selected analyzer action'"
         @click="openPromptInChat"
       >
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M5.5 7.5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H11l-3.5 3v-3H7.5a2 2 0 0 1-2-2z"></path>
-        </svg>
-        <span>{{ loadingPrompt ? "Preparing chat..." : "Begin troubleshooting" }}</span>
+        <span class="context-action-button-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5.5 7.5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H11l-3.5 3v-3H7.5a2 2 0 0 1-2-2z"></path>
+          </svg>
+        </span>
+        <span class="context-action-button-label">{{ loadingPrompt ? "Preparing chat..." : "Begin troubleshooting" }}</span>
       </button>
     </div>
   </section>

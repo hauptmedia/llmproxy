@@ -7,6 +7,7 @@ const props = withDefaults(defineProps<{
   viewportClass?: string;
   resetKey?: string | number;
   scrollSignature?: string | number;
+  scrollTarget?: "top" | "bottom";
   followMode?: "bottom" | "latest-turn-start";
   followAnchorSelector?: string;
   followAnchorActive?: boolean;
@@ -16,6 +17,7 @@ const props = withDefaults(defineProps<{
   viewportClass: "",
   resetKey: "",
   scrollSignature: "",
+  scrollTarget: "bottom",
   followMode: "bottom",
   followAnchorSelector: ".turn.assistant",
   followAnchorActive: false,
@@ -63,6 +65,16 @@ function scrollConversationToBottom(): void {
   }
 
   viewport.scrollTop = viewport.scrollHeight;
+  lastObservedScrollTop = viewport.scrollTop;
+}
+
+function scrollConversationToTop(): void {
+  const viewport = conversationViewport.value;
+  if (!viewport) {
+    return;
+  }
+
+  viewport.scrollTop = 0;
   lastObservedScrollTop = viewport.scrollTop;
 }
 
@@ -130,6 +142,11 @@ function scheduleConversationScrollToBottom(): void {
     }
 
     window.requestAnimationFrame(() => {
+      if (props.scrollTarget === "top") {
+        scrollConversationToTop();
+        return;
+      }
+
       if (props.followMode === "latest-turn-start" && props.followAnchorActive) {
         if (scrollConversationToAnchorIfPossible()) {
           return;

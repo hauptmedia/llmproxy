@@ -289,6 +289,7 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
           viewport-class="chat-conversation-viewport"
           :reset-key="hasTranscript ? 'ready' : 'initial'"
           :scroll-signature="chatConversationSignature"
+          :scroll-target="hasTranscript ? 'bottom' : 'top'"
           follow-mode="latest-turn-start"
           :follow-anchor-active="store.state.debug.sending"
         >
@@ -299,7 +300,11 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
             bubble-layout
             class="chat-transcript"
           />
-          <div v-else class="chat-initial-layout">
+          <div
+            v-else
+            class="chat-initial-layout"
+            :class="{ 'chat-initial-layout-compact': showAdvancedParameters }"
+          >
             <div class="chat-initial-suggestions">
               <div class="chat-suggestion-section">
                 <div class="diagnostics-section-label">System prompt ideas</div>
