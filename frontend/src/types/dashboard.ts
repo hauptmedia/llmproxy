@@ -1,4 +1,4 @@
-export type DashboardPage = "overview" | "logs" | "chat" | "config";
+export type DashboardPage = "overview" | "logs" | "chat" | "diagnostics" | "config";
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 export interface EditableServerConfig {
@@ -254,6 +254,7 @@ export interface DebugState {
   model: string;
   systemPrompt: string;
   prompt: string;
+  enableDiagnosticTools: boolean;
   stream: boolean;
   sending: boolean;
   abortController: AbortController | null;
@@ -350,4 +351,73 @@ export interface ModelSpec {
   text: string;
   className: string;
   detail?: ModelDetailView;
+}
+
+export interface DiagnosticFinding {
+  code: string;
+  severity: "info" | "warn" | "bad";
+  title: string;
+  summary: string;
+  evidence: string[];
+  troubleshooting: string[];
+}
+
+export interface DiagnosticFact {
+  label: string;
+  value: string;
+}
+
+export interface DiagnosticReport {
+  requestId: string;
+  generatedAt: string;
+  live: boolean;
+  status: RequestLogEntry["outcome"];
+  summary: string;
+  resolvedModel?: string;
+  backendName?: string;
+  finishReason?: string;
+  requestTokenLimit?: number;
+  modelTokenLimit?: number;
+  effectiveTokenLimit?: number;
+  completionTokens?: number;
+  outputPreview: string;
+  findings: DiagnosticFinding[];
+  recommendedPrompts: string[];
+  facts: DiagnosticFact[];
+  signals: {
+    maxTokensReached: boolean;
+    repetitionDetected: boolean;
+    requestRejected: boolean;
+    upstreamError: boolean;
+  };
+}
+
+export interface DiagnosticPromptDefinition {
+  name: string;
+  title: string;
+  description: string;
+  arguments: Array<{
+    name: string;
+    description: string;
+    required: boolean;
+  }>;
+}
+
+export interface DiagnosticPromptMessage {
+  role: "system" | "user";
+  content: {
+    type: "text";
+    text: string;
+  };
+}
+
+export interface DiagnosticPromptPayload {
+  name: string;
+  description: string;
+  messages: DiagnosticPromptMessage[];
+}
+
+export interface DiagnosticsReportPayload {
+  detail: RequestLogDetail;
+  report: DiagnosticReport;
 }

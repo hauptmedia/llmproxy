@@ -490,20 +490,26 @@ function renderToolParameterHtml(
 }
 
 function parseStructuredArguments(value: unknown): unknown {
-  if (typeof value !== "string") {
-    return value;
+  let current = value;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (typeof current !== "string") {
+      return current;
+    }
+
+    const trimmed = current.trim();
+    if (!trimmed) {
+      return current;
+    }
+
+    try {
+      current = JSON.parse(trimmed);
+    } catch {
+      return current;
+    }
   }
 
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return value;
-  }
-
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return value;
-  }
+  return current;
 }
 
 function valueTypeLabel(value: unknown): string {
@@ -575,6 +581,48 @@ function renderInvocationNodeHtml(name: string, value: unknown): string {
   );
 }
 
+function renderInvocationTableValueHtml(value: unknown): string {
+  if (typeof value === "string") {
+    return renderMessageStringHtml(value);
+  }
+
+  if (typeof value === "number" || typeof value === "boolean" || value === null) {
+    return `<div class="tool-parameter-description mono">${escapeHtml(formatUiValue(value) || "null")}</div>`;
+  }
+
+  if (Array.isArray(value) || isClientRecord(value)) {
+    return renderInvocationValueHtml(value);
+  }
+
+  return `<div class="tool-parameter-description">${escapeHtml(formatUiValue(value) || "n/a")}</div>`;
+}
+
+function renderInvocationArgumentListHtml(value: unknown): string {
+  if (isClientRecord(value)) {
+    const entries = Object.entries(value);
+    if (entries.length === 0) {
+      return '<div class="tool-parameter-note">No arguments were provided.</div>';
+    }
+
+    return (
+      `<div class="detail-table-wrap tool-invocation-table-wrap">` +
+        `<table class="detail-table tool-invocation-table">` +
+          `<tbody>` +
+            entries.map(([key, item]) => (
+              `<tr>` +
+                `<td class="detail-table-key">${escapeHtml(key)}</td>` +
+                `<td class="detail-table-value">${renderInvocationTableValueHtml(item)}</td>` +
+              `</tr>`
+            )).join("") +
+          `</tbody>` +
+        `</table>` +
+      `</div>`
+    );
+  }
+
+  return renderInvocationNodeHtml("value", value);
+}
+
 function renderFunctionInvocationHtml(
   label: string,
   payload: Record<string, any>,
@@ -589,9 +637,7 @@ function renderFunctionInvocationHtml(
     options.type && options.type !== "function" ? `<span class="badge neutral">${escapeHtml(options.type)}</span>` : "",
   ].filter(Boolean).join("");
   const argumentsValue = parseStructuredArguments(payload.arguments);
-  const argumentRows = isClientRecord(argumentsValue)
-    ? Object.entries(argumentsValue).map(([key, value]) => renderInvocationNodeHtml(key, value)).join("")
-    : renderInvocationNodeHtml("value", argumentsValue);
+  const argumentRows = renderInvocationArgumentListHtml(argumentsValue);
 
   return (
     `<article class="tool-definition-card">` +
@@ -603,6 +649,7 @@ function renderFunctionInvocationHtml(
         (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
       `</div>` +
       `<div class="tool-parameter-list">` +
+        `<div class="tool-definition-subtitle">Arguments</div>` +
         argumentRows +
       `</div>` +
     `</article>`

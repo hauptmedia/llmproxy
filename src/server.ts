@@ -11,6 +11,7 @@ import {
   splitJsonLines,
 } from "./backend-connectors";
 import { renderDashboardHtml } from "./dashboard";
+import { buildDiagnosticReport } from "./diagnostics";
 import { LoadBalancer } from "./load-balancer";
 import {
   RESTART_REQUIRED_SERVER_FIELDS,
@@ -39,6 +40,7 @@ import {
   resolveRequestedCompletionLimit,
   selectProxyStatus,
 } from "./server-request-utils";
+import { handleDiagnosticsMcpRequest } from "./server-diagnostics-mcp";
 import {
   ActiveConnectionKind,
   ActiveConnectionPhase,
@@ -259,6 +261,16 @@ export class LlmProxyServer {
       return;
     }
 
+    if (method === "GET" && url.pathname.startsWith("/api/diagnostics/requests/")) {
+      this.handleDiagnosticsReport(response, url.pathname);
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/diagnostics/mcp") {
+      await this.handleDiagnosticsMcp(request, response);
+      return;
+    }
+
     if (method === "GET" && url.pathname === "/api/backends") {
       await this.handleBackendList(response);
       return;
@@ -361,7 +373,7 @@ export class LlmProxyServer {
       return;
     }
 
-    const detail = this.buildActiveRequestDetail(requestId) ?? this.loadBalancer.getRequestLogDetail(requestId);
+    const detail = this.getRequestDetail(requestId);
 
     if (!detail) {
       sendJson(response, 404, proxyError(`Recent request "${requestId}" was not found.`));
@@ -386,6 +398,57 @@ export class LlmProxyServer {
 
     connection.cancel("Request cancelled from dashboard.");
     sendJson(response, 202, { ok: true, requestId });
+  }
+
+  private handleDiagnosticsReport(response: ServerResponse, pathname: string): void {
+    const prefix = "/api/diagnostics/requests/";
+    if (!pathname.startsWith(prefix)) {
+      sendJson(response, 404, proxyError("Diagnostics request was not found."));
+      return;
+    }
+
+    const requestId = decodeURIComponent(pathname.slice(prefix.length));
+    if (!requestId) {
+      sendJson(response, 404, proxyError("Diagnostics request was not found."));
+      return;
+    }
+
+    const detail = this.getRequestDetail(requestId);
+    if (!detail) {
+      sendJson(response, 404, proxyError(`Recent request "${requestId}" was not found.`));
+      return;
+    }
+
+    sendJson(response, 200, {
+      detail,
+      report: buildDiagnosticReport(detail, this.getSnapshot()),
+    });
+  }
+
+  private async handleDiagnosticsMcp(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const body = await readRequestBody(request);
+    const parsed = tryParseJsonBuffer(body, request.headers["content-type"]);
+
+    if (!parsed) {
+      sendJson(response, 400, {
+        jsonrpc: "2.0",
+        id: null,
+        error: {
+          code: -32600,
+          message: "Expected a JSON-RPC 2.0 JSON body.",
+        },
+      });
+      return;
+    }
+
+    sendJson(
+      response,
+      200,
+      handleDiagnosticsMcpRequest(parsed, {
+        snapshot: this.getSnapshot(),
+        getRequestDetail: (requestId) => this.getRequestDetail(requestId),
+      }),
+    );
   }
 
   private async handleDashboardAsset(response: ServerResponse, assetPath: string): Promise<void> {
@@ -1231,6 +1294,10 @@ export class LlmProxyServer {
       requestBody: connection.requestBody,
       responseBody: connection.responseBody,
     };
+  }
+
+  private getRequestDetail(requestId: string): RequestLogDetail | undefined {
+    return this.buildActiveRequestDetail(requestId) ?? this.loadBalancer.getRequestLogDetail(requestId);
   }
 
   private sendSynthesizedJson(

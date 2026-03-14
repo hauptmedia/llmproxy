@@ -14,6 +14,7 @@ interface AdvancedParamHelp {
 defineProps<{
   prompt: string;
   model: string;
+  enableDiagnosticTools: boolean;
   params: DebugParams;
   models: KnownModel[];
   sending: boolean;
@@ -29,6 +30,7 @@ defineProps<{
 const emit = defineEmits<{
   (event: "update:prompt", value: string): void;
   (event: "update:model", value: string): void;
+  (event: "update:enableDiagnosticTools", value: boolean): void;
   (event: "submit"): void;
   (event: "toggle-advanced"): void;
   (event: "keydown-prompt", value: KeyboardEvent): void;
@@ -90,6 +92,21 @@ const emit = defineEmits<{
             <path d="M14 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
           </svg>
         </button>
+        <label
+          class="chat-composer-tool-toggle"
+          :for="`${modelId}-diagnostic-tools`"
+          title="When enabled, chat requests include the diagnostics MCP tools and automatically execute their tool calls during the conversation."
+        >
+          <input
+            :id="`${modelId}-diagnostic-tools`"
+            type="checkbox"
+            :checked="enableDiagnosticTools"
+            aria-label="Enable diagnostics MCP tools for this chat"
+            title="When enabled, chat requests include the diagnostics MCP tools and automatically execute their tool calls during the conversation."
+            @change="emit('update:enableDiagnosticTools', ($event.target as HTMLInputElement).checked)"
+          >
+          <span>Enable diagnostic tools</span>
+        </label>
       </div>
       <div class="chat-composer-primary-actions">
         <button class="button" type="submit" :disabled="sending">

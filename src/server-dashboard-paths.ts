@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 export interface DashboardRoute {
-  page: "overview" | "chat" | "logs" | "config";
+  page: "overview" | "chat" | "logs" | "diagnostics" | "config";
 }
 
 export function normalizeDashboardPath(pathname: string): string {
@@ -35,6 +35,10 @@ export function matchDashboardRoute(pathname: string, dashboardPath: string): Da
 
   if (normalizedPathname === `${dashboardPath}/config`) {
     return { page: "config" };
+  }
+
+  if (normalizedPathname === `${dashboardPath}/diagnostics`) {
+    return { page: "diagnostics" };
   }
 
   return undefined;

@@ -3,8 +3,9 @@ import { computed, ref } from "vue";
 import ConversationSurface from "../components/ConversationSurface.vue";
 import ChatComposer from "../components/ChatComposer.vue";
 import MessageCard from "../components/MessageCard.vue";
-import type { DebugTranscriptEntry } from "../types/dashboard";
+import type { DebugTranscriptEntry, UiBadge } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
+import { hasVisibleMessageContent } from "../utils/message-rendering";
 
 const store = useDashboardStore();
 const hasTranscript = computed(() => store.state.debug.transcript.length > 0);
@@ -41,6 +42,53 @@ function shouldCollapseDebugReasoning(entry: DebugTranscriptEntry, index: number
     !(typeof entry.finish_reason === "string" && entry.finish_reason.length > 0);
 
   return !isActiveStreamingAssistantTurn;
+}
+
+function hasRenderableAssistantPayload(entry: DebugTranscriptEntry): boolean {
+  return (
+    hasVisibleMessageContent(entry.content) ||
+    (typeof entry.reasoning_content === "string" && entry.reasoning_content.length > 0) ||
+    (typeof entry.refusal === "string" && entry.refusal.length > 0) ||
+    typeof entry.function_call === "object" ||
+    (Array.isArray(entry.tool_calls) && entry.tool_calls.length > 0) ||
+    typeof entry.audio === "object"
+  );
+}
+
+function isPendingAssistantEntry(entry: DebugTranscriptEntry, index: number): boolean {
+  return (
+    store.state.debug.sending &&
+    entry.role === "assistant" &&
+    index === store.state.debug.transcript.length - 1 &&
+    !hasRenderableAssistantPayload(entry)
+  );
+}
+
+function getPendingAssistantCopy(entry: DebugTranscriptEntry, index: number): Record<string, unknown> {
+  if (!isPendingAssistantEntry(entry, index)) {
+    return { ...entry };
+  }
+
+  const waitingMessage = store.state.debug.status.startsWith("Running ")
+    ? "Running diagnostic tools and waiting for the next model response..."
+    : "Waiting for model response...";
+
+  return {
+    ...entry,
+    content: waitingMessage,
+  };
+}
+
+function getPendingAssistantBadges(entry: DebugTranscriptEntry, index: number): UiBadge[] {
+  if (!isPendingAssistantEntry(entry, index)) {
+    return [];
+  }
+
+  return [{
+    text: "waiting",
+    tone: "neutral",
+    title: "The assistant request is still in progress. Response content will appear here as soon as the first streamed data arrives.",
+  }];
 }
 
 const chatConversationSignature = computed(() => [
@@ -128,6 +176,7 @@ const chatConversationSignature = computed(() => [
               class="turn user chat-editor-turn"
               :prompt="store.state.debug.prompt"
               :model="store.state.debug.model"
+              :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
               :params="store.state.debug.params"
               :models="store.state.models"
               :sending="store.state.debug.sending"
@@ -140,6 +189,7 @@ const chatConversationSignature = computed(() => [
               :advanced-param-help="advancedParamHelp"
               @update:prompt="store.state.debug.prompt = $event"
               @update:model="store.state.debug.model = $event"
+              @update:enable-diagnostic-tools="store.state.debug.enableDiagnosticTools = $event"
               @submit="store.sendDebugChat()"
               @toggle-advanced="showAdvancedParameters = !showAdvancedParameters"
               @keydown-prompt="handleChatPromptKeydown"
@@ -148,10 +198,11 @@ const chatConversationSignature = computed(() => [
             <MessageCard
               v-for="(entry, index) in store.state.debug.transcript"
               :key="index + ':' + entry.role + ':' + (entry.backend || '')"
-              :message="entry"
+              :message="getPendingAssistantCopy(entry, Number(index))"
               :index="Number(index) + (trimmedSystemPrompt ? 1 : 0)"
               :finish-reason="entry.finish_reason || ''"
               :reasoning-collapsed="shouldCollapseDebugReasoning(entry, Number(index))"
+              :extra-badges="getPendingAssistantBadges(entry, Number(index))"
             />
           </div>
 
@@ -160,6 +211,7 @@ const chatConversationSignature = computed(() => [
               v-if="hasTranscript && !store.state.debug.sending"
               :prompt="store.state.debug.prompt"
               :model="store.state.debug.model"
+              :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
               :params="store.state.debug.params"
               :models="store.state.models"
               :sending="store.state.debug.sending"
@@ -172,6 +224,7 @@ const chatConversationSignature = computed(() => [
               :advanced-param-help="advancedParamHelp"
               @update:prompt="store.state.debug.prompt = $event"
               @update:model="store.state.debug.model = $event"
+              @update:enable-diagnostic-tools="store.state.debug.enableDiagnosticTools = $event"
               @submit="store.sendDebugChat()"
               @toggle-advanced="showAdvancedParameters = !showAdvancedParameters"
               @keydown-prompt="handleChatPromptKeydown"

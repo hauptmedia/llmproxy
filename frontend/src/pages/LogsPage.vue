@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDashboardStore } from "../composables/useDashboardStore";
@@ -18,6 +18,7 @@ type FilterKey =
   | "queue"
   | "latency"
   | "tokens"
+  | "maxTokens"
   | "rate"
   | "note";
 type SortKey = Exclude<FilterKey, never>;
@@ -78,6 +79,8 @@ const filters = reactive({
   latencyValue: "",
   tokensComparator: "any",
   tokensValue: "",
+  maxTokensComparator: "any",
+  maxTokensValue: "",
   rateComparator: "any",
   rateValue: "",
   note: "",
@@ -95,6 +98,8 @@ const hasActiveFilters = computed(() => (
   filters.latencyValue.trim().length > 0 ||
   filters.tokensComparator !== "any" ||
   filters.tokensValue.trim().length > 0 ||
+  filters.maxTokensComparator !== "any" ||
+  filters.maxTokensValue.trim().length > 0 ||
   filters.rateComparator !== "any" ||
   filters.rateValue.trim().length > 0 ||
   filters.note.trim().length > 0
@@ -130,7 +135,8 @@ const columnTitles: Record<FilterKey | "action", string> = {
   backend: "Backend that currently handles or finally handled the request.",
   queue: "Time the request spent waiting for a free backend slot before execution began, or the current wait time while it is still queued.",
   latency: "Total end-to-end request duration so far for live rows, or final duration for retained history.",
-  tokens: "Generated completion tokens for this request, shown against the effective completion-token limit when llmproxy can resolve one from the request or backend model metadata.",
+  tokens: "Generated completion tokens for this request.",
+  maxTokens: "Effective completion-token limit for this request, resolved from request parameters or backend model metadata when available. Unbounded cases display as infinity.",
   rate: "Generation speed in tokens per second, when available from live or final metrics.",
   note: "Error text or other noteworthy final detail recorded for this request.",
   action: "Open the request debugger for this entry when detailed request data is available.",
@@ -271,6 +277,10 @@ const filteredEntries = computed(() => {
       return false;
     }
 
+    if (!matchesNumeric(entry.effectiveCompletionTokenLimit, filters.maxTokensComparator, filters.maxTokensValue)) {
+      return false;
+    }
+
     if (!matchesNumeric(entry.completionTokensPerSecond, filters.rateComparator, filters.rateValue)) {
       return false;
     }
@@ -396,7 +406,20 @@ function sortIndicator(candidate: SortKey): string {
 }
 
 function sortTitle(candidate: SortKey): string {
-  const label = candidate === "rate" ? "tok/s" : candidate;
+  const labelMap: Record<SortKey, string> = {
+    time: "time",
+    outcome: "status",
+    request: "request",
+    model: "model",
+    backend: "backend",
+    queue: "queued",
+    latency: "latency",
+    tokens: "tokens",
+    maxTokens: "max tokens",
+    rate: "tok/s",
+    note: "note",
+  };
+  const label = labelMap[candidate];
   if (sortKey.value !== candidate || !sortDirection.value) {
     return `Sort by ${label}.`;
   }
@@ -443,6 +466,10 @@ function isFilterActive(filterKey: FilterKey): boolean {
     return filters.tokensComparator !== "any" && filters.tokensValue.trim().length > 0;
   }
 
+  if (filterKey === "maxTokens") {
+    return filters.maxTokensComparator !== "any" && filters.maxTokensValue.trim().length > 0;
+  }
+
   if (filterKey === "rate") {
     return filters.rateComparator !== "any" && filters.rateValue.trim().length > 0;
   }
@@ -466,6 +493,8 @@ function resetFilters(): void {
   filters.latencyValue = "";
   filters.tokensComparator = "any";
   filters.tokensValue = "";
+  filters.maxTokensComparator = "any";
+  filters.maxTokensValue = "";
   filters.rateComparator = "any";
   filters.rateValue = "";
   filters.note = "";
@@ -513,6 +542,12 @@ function clearFilter(filterKey: FilterKey): void {
   if (filterKey === "tokens") {
     filters.tokensComparator = "any";
     filters.tokensValue = "";
+    return;
+  }
+
+  if (filterKey === "maxTokens") {
+    filters.maxTokensComparator = "any";
+    filters.maxTokensValue = "";
     return;
   }
 
@@ -612,6 +647,10 @@ function compareEntries(left: RecentRequestRow, right: RecentRequestRow, key: So
 
   if (key === "tokens") {
     return compareNullableNumbers(entryTokenCount(left), entryTokenCount(right));
+  }
+
+  if (key === "maxTokens") {
+    return compareNullableNumbers(left.effectiveCompletionTokenLimit, right.effectiveCompletionTokenLimit);
   }
 
   if (key === "rate") {
@@ -811,18 +850,21 @@ function logOutcomeKey(entry: RecentRequestRow): string {
 
 function tokenCountSummary(entry: RecentRequestRow): string {
   const tokenCount = entryTokenCount(entry);
-  const tokenLimit = entry.effectiveCompletionTokenLimit;
 
-  if (tokenCount === null && tokenLimit == null) {
+  if (tokenCount === null) {
     return "-";
   }
 
-  const usedLabel = new Intl.NumberFormat("en-US").format(tokenCount ?? 0);
-  const limitLabel =
-    typeof tokenLimit === "number"
-      ? new Intl.NumberFormat("en-US").format(tokenLimit)
-      : "∞";
-  return `${usedLabel} / ${limitLabel} tok`;
+  const usedLabel = new Intl.NumberFormat("en-US").format(tokenCount);
+  return `${usedLabel} tok`;
+}
+
+function maxTokensSummary(entry: RecentRequestRow): string {
+  if (typeof entry.effectiveCompletionTokenLimit === "number") {
+    return `${new Intl.NumberFormat("en-US").format(entry.effectiveCompletionTokenLimit)} tok`;
+  }
+
+  return "∞";
 }
 
 function tokenRateSummary(entry: RecentRequestRow): string {
@@ -957,6 +999,7 @@ onBeforeUnmount(() => {
           <col class="log-col-queue">
           <col class="log-col-latency">
           <col class="log-col-tokens">
+            <col class="log-col-max-tokens">
             <col class="log-col-token-rate">
             <col class="log-col-note">
             <col class="log-col-action">
@@ -1155,6 +1198,32 @@ onBeforeUnmount(() => {
               <th>
                 <div class="log-header-filter">
                   <div class="log-header-cell">
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('maxTokens') }" :title="sortTitle('maxTokens')" @click="toggleSort('maxTokens')">
+                      <span class="log-header-label" :title="columnTitles.maxTokens">Max tokens</span>
+                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('maxTokens') }}</span>
+                    </button>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('maxTokens') }" title="Filter max tokens" @click.stop="toggleFilter('maxTokens')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('maxTokens')" class="table-filter-popover" @click.stop>
+                    <div class="table-filter-number">
+                      <select v-model="filters.maxTokensComparator" class="table-filter-select">
+                        <option v-for="option in numericComparatorOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                      <input v-model="filters.maxTokensValue" class="table-filter-input" type="number" min="0" step="1" placeholder="tok">
+                    </div>
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('maxTokens')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th>
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('rate') }" :title="sortTitle('rate')" @click="toggleSort('rate')">
                       <span class="log-header-label" :title="columnTitles.rate">tok/s</span>
                       <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('rate') }}</span>
@@ -1241,6 +1310,9 @@ onBeforeUnmount(() => {
               </td>
               <td class="log-cell-tight">
                 <div class="log-primary">{{ tokenCountSummary(entry) }}</div>
+              </td>
+              <td class="log-cell-tight">
+                <div class="log-primary">{{ maxTokensSummary(entry) }}</div>
               </td>
               <td class="log-cell-tight">
                 <div class="log-primary">{{ tokenRateSummary(entry) }}</div>

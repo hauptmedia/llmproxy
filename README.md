@@ -13,8 +13,9 @@ Prerequisite: Node.js 18+ should be available on your system `PATH` or configure
 - Load balancing across multiple backends with configurable `maxConcurrency`
 - Queueing when local backends are fully utilized
 - Vue-based single page dashboard served by the backend under `/dashboard`, refactored into Vue single-file components and built with Vite plus Tailwind CSS
-- Dashboard page with health status and live active connections, plus dedicated subpages for chat debugging, requests, and configuration management
+- Dashboard page with health status and live active connections, plus dedicated subpages for chat debugging, request inspection, diagnostics, and configuration management
 - Built-in chat debugger with model selection, live token metrics, sampler parameters, and direct jump-to-request debugging
+- Built-in diagnostics area with MCP-compatible tools/prompts for request troubleshooting
 - Aggregated `/v1/models`
 - Connector-aware health checks and model discovery for OpenAI-compatible backends and native Ollama backends
 
@@ -37,7 +38,9 @@ After that:
 
 - Proxy API: `http://localhost:4100/v1/...`
 - Dashboard: `http://localhost:4100/dashboard`
+- Requests: `http://localhost:4100/dashboard/logs`
 - Chat: `http://localhost:4100/dashboard/chat`
+- Diagnostics: `http://localhost:4100/dashboard/diagnostics`
 - Config: `http://localhost:4100/dashboard/config`
 
 The backend serves the built Vue dashboard app directly on the `/dashboard` routes, so frontend and backend stay separated while deployment still stays simple.
@@ -59,7 +62,9 @@ That mode does three things for you:
 You still open the dashboard through the backend URL:
 
 - Dashboard: `http://localhost:4100/dashboard`
+- Requests: `http://localhost:4100/dashboard/logs`
 - Chat: `http://localhost:4100/dashboard/chat`
+- Diagnostics: `http://localhost:4100/dashboard/diagnostics`
 - Config: `http://localhost:4100/dashboard/config`
 
 In dev mode, those routes load the dashboard code from the Vite dev server automatically, so UI changes show up immediately without rebuilding manually.
@@ -114,3 +119,6 @@ For a short architecture overview of connectors, routing, retention, and config 
 - The proxy is intentionally limited to the completion routes listed above; other `/v1/*` routes return `501`.
 - The `Active Connections` dashboard section shows live `chat.completions` requests in real time, including queue state, streaming mode, token counts, and `tok/s`.
 - The `Chat` page lets you send debug requests to `/v1/chat/completions`, inspect the conversation, and jump straight into the stored request debugger for the last request.
+- The `Diagnostics` page exposes MCP-compatible tools and prompts under `/api/diagnostics/mcp` so LLMs can inspect retained requests, fetch stored request details, and run built-in diagnosis heuristics.
+- Built-in diagnostics currently include signals such as `finish_reason=length`, effective completion-token-limit hits, endless repetition patterns, rejected requests before backend assignment, and upstream/backend failures.
+- `GET /api/diagnostics/requests/:id` returns a precomputed diagnostics report plus the stored request detail for one retained request.

@@ -87,3 +87,21 @@ At the moment:
 
 - backend edits apply immediately after saving
 - some main server fields such as `host`, `port`, and `dashboardPath` are saved immediately but still require restart
+
+## Diagnostics And MCP
+
+`llmproxy` also exposes a diagnostics layer for retained requests.
+
+Two entry points exist:
+
+- `GET /api/diagnostics/requests/:id` for a ready-made heuristics report plus the stored request/response payloads
+- `POST /api/diagnostics/mcp` for MCP-style JSON-RPC calls such as `initialize`, `tools/list`, `tools/call`, `prompts/list`, and `prompts/get`
+
+The built-in diagnostics engine currently looks for signals such as:
+
+- `finish_reason=length` or effective completion-token-limit exhaustion
+- endless repetition / degenerate looping in the assistant output
+- rejected requests that never reached a backend
+- backend/upstream failures after routing
+
+The diagnostics page in the dashboard uses the same retained request data and exposes ready-made prompt playbooks so an external LLM can produce a higher-level diagnosis on top of the structured heuristics output.

@@ -81,6 +81,7 @@ function createInitialState(): DashboardState {
       model: "auto",
       systemPrompt: "",
       prompt: "Say hello briefly and mention the model you are using.",
+      enableDiagnosticTools: true,
       stream: true,
       sending: false,
       abortController: null,
@@ -302,6 +303,7 @@ function createDashboardStoreInternal() {
     sendDebugChat: debugChat.sendDebugChat,
     stopDebugChat: debugChat.stopDebugChat,
     clearDebugChat: debugChat.clearDebugChat,
+    prepareDebugChatDraft: debugChat.prepareDebugChatDraft,
     openLastDebugRequest: () => {
       if (!state.debug.lastRequestId) {
         return;
@@ -312,6 +314,7 @@ function createDashboardStoreInternal() {
     shortId,
     recentRequestBadges: buildRecentRequestBadges,
     recentRequestMetrics: buildRecentRequestMetrics,
+    showToast,
     dismissToast,
     start,
     stop,

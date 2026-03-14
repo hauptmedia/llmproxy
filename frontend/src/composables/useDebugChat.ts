@@ -89,6 +89,7 @@ export function useDebugChat(
   onErrorToast: (title: string, message: string) => void,
 ) {
   let metricsTicker: number | undefined;
+  let cachedDiagnosticTools: Array<Record<string, unknown>> | null = null;
 
   function cloneDebugToolCall(value: unknown): unknown {
     if (!isClientRecord(value)) {
@@ -538,6 +539,235 @@ export function useDebugChat(
     return currentAssistantTurn;
   }
 
+  async function loadDiagnosticChatTools(): Promise<Array<Record<string, unknown>>> {
+    if (cachedDiagnosticTools) {
+      return cachedDiagnosticTools.map((tool) => ({ ...tool }));
+    }
+
+    const response = await fetch("/api/diagnostics/mcp", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "tools/list",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await readErrorResponse(response));
+    }
+
+    const payload = await response.json() as {
+      result?: {
+        tools?: unknown[];
+      };
+      error?: {
+        message?: string;
+      };
+    };
+
+    if (payload.error?.message) {
+      throw new Error(payload.error.message);
+    }
+
+    const tools = Array.isArray(payload.result?.tools)
+      ? payload.result.tools
+        .filter((tool): tool is Record<string, unknown> => isClientRecord(tool))
+        .map((tool) => ({
+          type: "function",
+          function: {
+            name: typeof tool.name === "string" ? tool.name : "unnamed_tool",
+            description: typeof tool.description === "string" ? tool.description : "",
+            parameters: isClientRecord(tool.inputSchema)
+              ? tool.inputSchema
+              : {
+                type: "object",
+                properties: {},
+                additionalProperties: false,
+              },
+          },
+        }))
+      : [];
+
+    if (tools.length === 0) {
+      throw new Error("Diagnostics MCP endpoint did not return any tools.");
+    }
+
+    cachedDiagnosticTools = tools;
+    return tools.map((tool) => ({ ...tool }));
+  }
+
+  async function callDiagnosticChatTool(
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const response = await fetch("/api/diagnostics/mcp", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "tools/call",
+        params: {
+          name,
+          arguments: args,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await readErrorResponse(response));
+    }
+
+    const payload = await response.json() as {
+      result?: Record<string, unknown>;
+      error?: {
+        message?: string;
+      };
+    };
+
+    if (payload.error?.message) {
+      throw new Error(payload.error.message);
+    }
+
+    return payload.result ?? {};
+  }
+
+  function extractDebugToolCalls(entry: DebugTranscriptEntry): Array<{
+    id: string;
+    name: string;
+    args: Record<string, unknown>;
+  }> {
+    if (!Array.isArray(entry.tool_calls)) {
+      return [];
+    }
+
+    const calls: Array<{
+      id: string;
+      name: string;
+      args: Record<string, unknown>;
+    }> = [];
+
+    for (const toolCall of entry.tool_calls) {
+      if (!isClientRecord(toolCall)) {
+        continue;
+      }
+
+      const toolCallRecord = toolCall as Record<string, unknown>;
+      if (!isClientRecord(toolCallRecord.function)) {
+        continue;
+      }
+
+      const functionRecord = toolCallRecord.function as Record<string, unknown>;
+      if (typeof functionRecord.name !== "string") {
+        continue;
+      }
+
+      const parsedArgs = parseDebugToolArguments(functionRecord.arguments);
+      calls.push({
+        id: typeof toolCallRecord.id === "string" && toolCallRecord.id.length > 0
+          ? toolCallRecord.id
+          : `${functionRecord.name}_${calls.length}`,
+        name: functionRecord.name,
+        args: parsedArgs,
+      });
+    }
+
+    return calls;
+  }
+
+  function parseDebugToolArguments(value: unknown): Record<string, unknown> {
+    if (isClientRecord(value)) {
+      return { ...value };
+    }
+
+    if (typeof value !== "string") {
+      return {};
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return {};
+    }
+
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!isClientRecord(parsed)) {
+      throw new Error("Tool arguments must resolve to a JSON object.");
+    }
+
+    return parsed;
+  }
+
+  async function executeDebugToolCalls(toolCalls: Array<{
+    id: string;
+    name: string;
+    args: Record<string, unknown>;
+  }>): Promise<DebugTranscriptEntry[]> {
+    const responses: DebugTranscriptEntry[] = [];
+
+    for (const toolCall of toolCalls) {
+      try {
+        const result = await callDiagnosticChatTool(toolCall.name, toolCall.args);
+        responses.push({
+          role: "tool",
+          name: toolCall.name,
+          tool_call_id: toolCall.id,
+          content: prettyJson(result.structuredContent ?? result),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        responses.push({
+          role: "tool",
+          name: toolCall.name,
+          tool_call_id: toolCall.id,
+          content: prettyJson({
+            error: {
+              message,
+            },
+          }),
+        });
+      }
+    }
+
+    return responses;
+  }
+
+  async function runSingleDebugAssistantRequest(
+    payload: Record<string, unknown>,
+    assistantTurn: DebugTranscriptEntry,
+    requestId: string,
+  ): Promise<DebugTranscriptEntry> {
+    const response = await fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-llmproxy-request-id": requestId,
+      },
+      body: JSON.stringify(payload),
+      signal: state.debug.abortController?.signal,
+    });
+
+    state.debug.backend = response.headers.get("x-llmproxy-backend") || "";
+    state.debug.lastRequestId = requestId;
+    state.debug.status = `HTTP ${response.status}`;
+    assistantTurn.backend = state.debug.backend;
+
+    if (!response.ok) {
+      throw new Error(await readErrorResponse(response));
+    }
+
+    if (payload.stream === true) {
+      return await consumeStreamingResponse(response, assistantTurn);
+    }
+
+    return applyNonStreamingResponse(await response.json(), assistantTurn);
+  }
+
   async function sendDebugChat(): Promise<void> {
     if (state.debug.sending) {
       return;
@@ -577,25 +807,17 @@ export function useDebugChat(
       });
     }
 
-    const payload = {
-      model: state.debug.model,
-      messages: [
-        ...(state.debug.systemPrompt.trim()
-          ? [{
-              role: "system",
-              content: state.debug.systemPrompt.trim(),
-            }]
-          : []),
-        ...history,
-      ],
-      stream: true,
-      temperature: state.debug.params.temperature,
-      top_p: state.debug.params.top_p,
-      top_k: Math.round(state.debug.params.top_k),
-      min_p: state.debug.params.min_p,
-      repeat_penalty: state.debug.params.repeat_penalty,
-      max_tokens: Math.max(1, Math.round(state.debug.params.max_tokens)),
-    };
+    let diagnosticTools: Array<Record<string, unknown>> | undefined;
+    if (state.debug.enableDiagnosticTools) {
+      try {
+        diagnosticTools = await loadDiagnosticChatTools();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        state.debug.error = message;
+        onErrorToast("Diagnostics tools", message);
+        return;
+      }
+    }
 
     const userTurn: DebugTranscriptEntry | null = prompt
       ? {
@@ -635,36 +857,84 @@ export function useDebugChat(
     resetDebugMetrics();
     state.debug.metrics.startedAt = Date.now();
     state.debug.lastRequestId = requestId;
-    state.debug.rawRequest = prettyJson(payload);
+    state.debug.rawRequest = "";
     state.debug.rawResponse = "";
     state.debug.prompt = "";
     state.debug.abortController = new AbortController();
     startDebugMetricsTicker();
 
     try {
-      const response = await fetch("/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-llmproxy-request-id": requestId,
-        },
-        body: JSON.stringify(payload),
-        signal: state.debug.abortController.signal,
-      });
+      let currentAssistantTurn = assistantTurn;
+      let currentRequestId = requestId;
 
-      state.debug.backend = response.headers.get("x-llmproxy-backend") || "";
-      state.debug.lastRequestId = requestId;
-      state.debug.status = `HTTP ${response.status}`;
-      assistantTurn.backend = state.debug.backend;
+      for (let round = 0; round < 6; round += 1) {
+        const currentPayload = {
+          model: state.debug.model,
+          messages: [
+            ...(state.debug.systemPrompt.trim()
+              ? [{
+                  role: "system",
+                  content: state.debug.systemPrompt.trim(),
+                }]
+              : []),
+            ...history,
+          ],
+          stream: true,
+          temperature: state.debug.params.temperature,
+          top_p: state.debug.params.top_p,
+          top_k: Math.round(state.debug.params.top_k),
+          min_p: state.debug.params.min_p,
+          repeat_penalty: state.debug.params.repeat_penalty,
+          max_tokens: Math.max(1, Math.round(state.debug.params.max_tokens)),
+          ...(diagnosticTools ? { tools: diagnosticTools } : {}),
+        };
 
-      if (!response.ok) {
-        throw new Error(await readErrorResponse(response));
-      }
+        state.debug.lastRequestId = currentRequestId;
+        state.debug.rawRequest = prettyJson(currentPayload);
+        currentAssistantTurn = await runSingleDebugAssistantRequest(currentPayload, currentAssistantTurn, currentRequestId);
+        assistantTurn = currentAssistantTurn;
 
-      if (payload.stream) {
-        assistantTurn = await consumeStreamingResponse(response, assistantTurn);
-      } else {
-        assistantTurn = applyNonStreamingResponse(await response.json(), assistantTurn);
+        const assistantHistoryMessage = buildDebugHistoryMessage(currentAssistantTurn);
+        if (assistantHistoryMessage) {
+          history.push(assistantHistoryMessage);
+        }
+
+        if (!state.debug.enableDiagnosticTools) {
+          break;
+        }
+
+        const toolCalls = extractDebugToolCalls(currentAssistantTurn);
+        if (toolCalls.length === 0) {
+          break;
+        }
+
+        state.debug.status = `Running ${toolCalls.length} diagnostic tool call${toolCalls.length === 1 ? "" : "s"}...`;
+        const toolTurns = await executeDebugToolCalls(toolCalls);
+
+        for (const toolTurn of toolTurns) {
+          state.debug.transcript.push(toolTurn);
+          const toolHistoryMessage = buildDebugHistoryMessage(toolTurn);
+          if (toolHistoryMessage) {
+            history.push(toolHistoryMessage);
+          }
+        }
+
+        if (round === 5) {
+          onErrorToast("Diagnostics tools", "Maximum diagnostic tool rounds reached.");
+          break;
+        }
+
+        currentAssistantTurn = {
+          role: "assistant",
+          content: "",
+          reasoning_content: "",
+          backend: "",
+          finish_reason: "",
+        };
+        state.debug.transcript.push(currentAssistantTurn);
+        currentAssistantTurn = state.debug.transcript[state.debug.transcript.length - 1] as DebugTranscriptEntry;
+        assistantTurn = currentAssistantTurn;
+        currentRequestId = createClientDebugRequestId();
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -708,8 +978,27 @@ export function useDebugChat(
     resetDebugMetrics();
   }
 
+  function prepareDebugChatDraft(systemPrompt: string, prompt: string): void {
+    stopDebugMetricsTicker();
+    state.debug.abortController?.abort(new Error("Chat session reset from diagnostics."));
+    state.debug.sending = false;
+    state.debug.abortController = null;
+    state.debug.transcript = [];
+    state.debug.rawRequest = "";
+    state.debug.rawResponse = "";
+    state.debug.status = "";
+    state.debug.usage = "";
+    state.debug.error = "";
+    state.debug.backend = "";
+    state.debug.lastRequestId = "";
+    state.debug.systemPrompt = systemPrompt.trim();
+    state.debug.prompt = prompt;
+    resetDebugMetrics();
+  }
+
   return {
     clearDebugChat,
+    prepareDebugChatDraft,
     sendDebugChat,
     stopDebugChat,
     stopDebugMetricsTicker,
