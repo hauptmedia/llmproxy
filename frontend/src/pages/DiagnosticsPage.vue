@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import type {
   DiagnosticPromptDefinition,
@@ -18,6 +18,7 @@ import { readErrorResponse } from "../utils/http";
 import { buildDiagnosticsRequestOptions } from "../utils/request-catalog";
 
 const store = useDashboardStore();
+const route = useRoute();
 const router = useRouter();
 const selectedRequestId = ref("");
 const loadingReport = ref(false);
@@ -53,6 +54,11 @@ const promptButtons = computed(() => {
   });
 });
 
+function normalizeSelectedRequestId(value: unknown): string {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  return typeof rawValue === "string" ? rawValue.trim() : "";
+}
+
 watch(
   availableRequests,
   (requests) => {
@@ -60,6 +66,14 @@ watch(
       selectedRequestId.value = "";
       diagnosticsPayload.value = null;
       promptPayload.value = null;
+      return;
+    }
+
+    const requestedByRoute = normalizeSelectedRequestId(route.query.requestId);
+    if (requestedByRoute && requests.some((request) => request.id === requestedByRoute)) {
+      if (selectedRequestId.value !== requestedByRoute) {
+        selectedRequestId.value = requestedByRoute;
+      }
       return;
     }
 
@@ -71,8 +85,35 @@ watch(
 );
 
 watch(
+  () => route.query.requestId,
+  (queryValue) => {
+    const normalized = normalizeSelectedRequestId(queryValue);
+    if (!normalized || normalized === selectedRequestId.value) {
+      return;
+    }
+
+    if (availableRequests.value.some((request) => request.id === normalized)) {
+      selectedRequestId.value = normalized;
+    }
+  },
+  { immediate: true },
+);
+
+watch(
   selectedRequestId,
   (requestId, previousRequestId) => {
+    const normalizedRouteRequestId = normalizeSelectedRequestId(route.query.requestId);
+    if (requestId !== normalizedRouteRequestId) {
+      const nextQuery = { ...route.query };
+      if (requestId) {
+        nextQuery.requestId = requestId;
+      } else {
+        delete nextQuery.requestId;
+      }
+
+      void router.replace({ query: nextQuery });
+    }
+
     if (!requestId || requestId === previousRequestId) {
       return;
     }
