@@ -96,6 +96,11 @@ function renderMarkdownToHtml(markdown: unknown): string {
       }
 
       const codeValue = codeLines.join("\n");
+      if (language === "json") {
+        blocks.push(renderInlineJsonAceHtml(codeValue, "inline-json-ace markdown-json-ace"));
+        continue;
+      }
+
       const rendered = renderCodeInnerBlock(codeValue);
       const codeClass = "turn-content" + (rendered.isJson || language === "json" ? " json-view" : "");
       blocks.push(`<pre class="${escapeHtml(codeClass)}"><code>${rendered.html}</code></pre>`);
@@ -411,7 +416,7 @@ function renderReasoningPanelLive(reasoningContent: unknown, collapsed: boolean,
   );
 }
 
-function renderInlineJsonAceHtml(content: unknown): string {
+function renderInlineJsonAceHtml(content: unknown, wrapperClass = "inline-json-ace"): string {
   if (content === null || content === undefined || content === "") {
     return "";
   }
@@ -422,9 +427,9 @@ function renderInlineJsonAceHtml(content: unknown): string {
   }
 
   return (
-    `<div class="tool-response-json-ace" data-json-ace="true">` +
+    `<div class="${escapeHtml(wrapperClass)}" data-json-ace="true">` +
       `<script type="application/json">${encodeJsonAcePayload(serialized)}</script>` +
-      `<div class="tool-response-json-ace-host"></div>` +
+      `<div class="inline-json-ace-host"></div>` +
     `</div>`
   );
 }

@@ -68,10 +68,10 @@ async function syncInlineJsonEditors(): Promise<void> {
     return;
   }
 
-  const containers = hostEl.value.querySelectorAll<HTMLElement>(".tool-response-json-ace");
+  const containers = hostEl.value.querySelectorAll<HTMLElement>('[data-json-ace="true"]');
 
   for (const container of containers) {
-    const host = container.querySelector<HTMLElement>(".tool-response-json-ace-host");
+    const host = container.querySelector<HTMLElement>(".inline-json-ace-host");
     const payload = container.querySelector<HTMLScriptElement>('script[type="application/json"]');
     if (!host || !payload) {
       continue;
@@ -86,7 +86,7 @@ async function syncInlineJsonEditors(): Promise<void> {
       });
       inlineJsonEditors.push(controller);
     } catch (error) {
-      console.error("Failed to initialize inline tool JSON viewer.", error);
+      console.error("Failed to initialize inline JSON viewer.", error);
     }
   }
 }

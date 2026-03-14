@@ -2373,7 +2373,7 @@
   }
 
   .conversation-bubble-transcript .turn.reasoning-only {
-    min-width: 5.6rem;
+    min-width: 6.17rem;
   }
 
   .conversation-bubble-transcript .message-card-host.role-tool .turn.tool-response-only {
@@ -2479,6 +2479,22 @@
 
   .conversation-bubble-transcript .compact-bubble-panel-reasoning > .compact-bubble-summary {
     min-width: 4.2rem;
+  }
+
+  .conversation-bubble-transcript .compact-bubble-panel-reasoning:not([open]) > .compact-bubble-summary {
+    display: inline-grid;
+    grid-auto-flow: column;
+    align-items: center;
+    justify-content: start;
+    gap: 0.38rem;
+    width: fit-content;
+    min-width: 0;
+    padding-inline: 0.82rem;
+  }
+
+  .conversation-bubble-transcript .compact-bubble-panel-reasoning:not([open]) > .compact-bubble-summary .compact-bubble-chevron {
+    margin-left: 0;
+    margin-right: 0;
   }
 
   .conversation-bubble-transcript .compact-bubble-panel-tool:not([open]) {
@@ -2634,12 +2650,16 @@
     margin-top: 0;
   }
 
-  .tool-response-json-ace {
+  .inline-json-ace {
     min-width: 0;
     width: 100%;
   }
 
-  .tool-response-json-ace-host {
+  .markdown-json-ace {
+    margin: 0 0 0.9em;
+  }
+
+  .inline-json-ace-host {
     width: 100%;
     height: 320px;
     min-height: 320px;
@@ -2652,20 +2672,20 @@
       0 1px 3px rgba(180, 83, 9, 0.05);
   }
 
-  .tool-response-json-ace-host.ace_editor,
-  .tool-response-json-ace-host .ace_editor,
-  .tool-response-json-ace-host .ace_scroller,
-  .tool-response-json-ace-host .ace_content {
+  .inline-json-ace-host.ace_editor,
+  .inline-json-ace-host .ace_editor,
+  .inline-json-ace-host .ace_scroller,
+  .inline-json-ace-host .ace_content {
     font-family: "IBM Plex Mono", "Consolas", monospace;
   }
 
-  .tool-response-json-ace-host.ace_editor .ace_gutter,
-  .tool-response-json-ace-host .ace_gutter {
+  .inline-json-ace-host.ace_editor .ace_gutter,
+  .inline-json-ace-host .ace_gutter {
     background: rgba(250, 237, 228, 0.96);
   }
 
-  .tool-response-json-ace-host.ace_editor .ace_fold-widget,
-  .tool-response-json-ace-host .ace_fold-widget {
+  .inline-json-ace-host.ace_editor .ace_fold-widget,
+  .inline-json-ace-host .ace_fold-widget {
     cursor: pointer;
   }
 
@@ -3022,7 +3042,7 @@
   }
 
   .debug-chat-overlay {
-    @apply fixed inset-0 z-50 grid place-items-center p-3;
+    @apply fixed inset-0 z-80 grid place-items-center p-3;
     background: rgba(28, 25, 23, 0.34);
     backdrop-filter: blur(8px);
   }
