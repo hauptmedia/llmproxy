@@ -220,18 +220,39 @@ export function buildRequestStateBadge(entry?: RequestLogEntry, live = false): U
   return buildRequestOutcomeBadge(entry);
 }
 
-export function buildRequestParamRows(requestBody: unknown): RequestFieldRow[] {
-  if (!isClientRecord(requestBody)) {
-    return [];
+export function buildRequestParamRows(
+  requestBody: unknown,
+  requestType?: "stream" | "json",
+): RequestFieldRow[] {
+  const derivedRequestType =
+    requestType ||
+    (isClientRecord(requestBody) && typeof requestBody.stream === "boolean"
+      ? (requestBody.stream ? "stream" : "json")
+      : undefined);
+
+  const items: RequestFieldRow[] = [];
+
+  if (derivedRequestType) {
+    items.push({
+      key: "type",
+      value: derivedRequestType,
+      title: "Whether the client requested a streaming response or a regular JSON response.",
+    });
   }
 
-  return Object.entries(requestBody)
-    .filter(([key, value]) => key !== "messages" && key !== "tools" && value !== undefined)
-    .map(([key, value]) => ({
-      key,
-      value: formatCompactValue(value),
-      title: `Top-level OpenAI request field "${key}".`,
-    }));
+  if (!isClientRecord(requestBody)) {
+    return items;
+  }
+
+  return items.concat(
+    Object.entries(requestBody)
+      .filter(([key, value]) => key !== "messages" && key !== "tools" && key !== "stream" && value !== undefined)
+      .map(([key, value]) => ({
+        key,
+        value: formatCompactValue(value),
+        title: `Top-level OpenAI request field "${key}".`,
+      })),
+  );
 }
 
 export function buildDebugMetaBadges(debug: DebugState, liveUsage: string): UiBadge[] {

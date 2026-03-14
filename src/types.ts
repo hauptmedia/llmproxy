@@ -151,6 +151,7 @@ export interface RequestLogEntry {
   method: string;
   path: string;
   clientIp?: string;
+  requestType?: "stream" | "json";
   model?: string;
   backendId?: string;
   backendName?: string;

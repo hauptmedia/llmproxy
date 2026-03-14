@@ -6,6 +6,7 @@ export type RequestFilterKey =
   | "issues"
   | "time"
   | "outcome"
+  | "type"
   | "request"
   | "model"
   | "backend"
@@ -23,6 +24,7 @@ export interface RequestTableFilters {
   issues: string;
   time: string;
   outcome: string;
+  type: string;
   request: string;
   model: string;
   backend: string;
@@ -81,10 +83,17 @@ export const requestIssueFilterOptions = [
   { value: "clean", label: "No issue" },
 ];
 
+export const requestTypeFilterOptions = [
+  { value: "all", label: "All types" },
+  { value: "stream", label: "Stream" },
+  { value: "json", label: "JSON" },
+];
+
 export const requestColumnTitles: Record<RequestFilterKey | "action", string> = {
   issues: "Whether llmproxy's built-in heuristic diagnostics flagged this stored request as likely problematic.",
   time: "When llmproxy first saw this request. Live rows update in place until they finish and move into retained history.",
   outcome: "Current live state or final request result. Finished successful requests show their backend finish reason instead of a generic success label.",
+  type: "Whether the client requested a streaming response or a regular JSON response.",
   request: "Short request identifier plus the proxied API route that was called. A yellow warning triangle marks requests where llmproxy's built-in heuristic diagnostics found a likely problem.",
   model: "Model that llmproxy actually routed this request to.",
   backend: "Backend that currently handles or finally handled the request.",
@@ -101,6 +110,7 @@ export const requestSortLabels: Record<RequestSortKey, string> = {
   issues: "problem state",
   time: "time",
   outcome: "status",
+  type: "request type",
   request: "request",
   model: "model",
   backend: "backend",
@@ -117,6 +127,7 @@ export function createRequestTableFilters(): RequestTableFilters {
     issues: "all",
     time: "",
     outcome: "all",
+    type: "all",
     request: "",
     model: "all",
     backend: "all",
@@ -467,6 +478,10 @@ export function compareRequestEntries(left: RequestCatalogRow, right: RequestCat
     return compareTextValues(outcomeLabel(left), outcomeLabel(right));
   }
 
+  if (key === "type") {
+    return compareTextValues(left.requestType ?? "", right.requestType ?? "");
+  }
+
   if (key === "request") {
     return compareTextValues(`${left.method} ${left.path} ${left.id}`, `${right.method} ${right.path} ${right.id}`);
   }
@@ -600,6 +615,10 @@ export function filterRequestEntries(
       return false;
     }
 
+    if (filters.type !== "all" && (entry.requestType ?? "") !== filters.type) {
+      return false;
+    }
+
     if (!matchesText(filters.request, [entry.id, shortId(entry.id), entry.method, entry.path, `${entry.method} ${entry.path}`])) {
       return false;
     }
@@ -668,6 +687,7 @@ export function hasActiveRequestFilters(filters: RequestTableFilters): boolean {
     filters.issues !== "all" ||
     filters.time.trim().length > 0 ||
     filters.outcome !== "all" ||
+    filters.type !== "all" ||
     filters.request.trim().length > 0 ||
     filters.model !== "all" ||
     filters.backend !== "all" ||
@@ -696,6 +716,10 @@ export function isRequestFilterActive(filters: RequestTableFilters, filterKey: R
 
   if (filterKey === "outcome") {
     return filters.outcome !== "all";
+  }
+
+  if (filterKey === "type") {
+    return filters.type !== "all";
   }
 
   if (filterKey === "request") {
@@ -750,6 +774,11 @@ export function clearRequestFilter(filters: RequestTableFilters, filterKey: Requ
 
   if (filterKey === "outcome") {
     filters.outcome = "all";
+    return;
+  }
+
+  if (filterKey === "type") {
+    filters.type = "all";
     return;
   }
 

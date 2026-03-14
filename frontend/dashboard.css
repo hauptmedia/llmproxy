@@ -1375,6 +1375,10 @@
     width: 144px;
   }
 
+  .log-col-type {
+    width: 86px;
+  }
+
   .log-col-request {
     width: 220px;
   }
@@ -2088,7 +2092,7 @@
   }
 
   .tool-definition-title {
-    @apply text-base font-semibold text-stone-950;
+    @apply inline-flex items-center gap-2 text-base font-semibold text-stone-950;
   }
 
   .tool-definition-subtitle {
@@ -2124,7 +2128,31 @@
   }
 
   .tool-parameter-name {
-    @apply text-sm font-semibold text-stone-950;
+    @apply inline-flex items-center gap-2 text-sm font-semibold text-stone-950;
+  }
+
+  .tool-inline-icon {
+    @apply inline-flex items-center justify-center rounded-full border border-amber-900/10;
+    width: 1.3rem;
+    height: 1.3rem;
+    flex: 0 0 auto;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  }
+
+  .tool-inline-icon svg {
+    width: 0.8rem;
+    height: 0.8rem;
+    display: block;
+  }
+
+  .tool-inline-icon-function {
+    color: #c2410c;
+    background: rgba(255, 247, 237, 0.96);
+  }
+
+  .tool-inline-icon-parameter {
+    color: #57534e;
+    background: rgba(245, 245, 244, 0.98);
   }
 
   .tool-parameter-description {
@@ -2293,12 +2321,6 @@
     min-height: 36px;
   }
 
-  .request-detail-tab-help {
-    @apply inline-flex items-center justify-center rounded-full border border-amber-900/12 bg-white/85 text-[11px] font-semibold leading-none text-stone-500;
-    width: 17px;
-    height: 17px;
-  }
-
   .request-detail-tab-button:hover {
     @apply border-amber-700/20 bg-amber-50/88 text-stone-900;
   }
@@ -2316,6 +2338,17 @@
   .raw-payload-launch svg {
     width: 16px;
     height: 16px;
+    flex: 0 0 auto;
+  }
+
+  .detail-table-key-label {
+    @apply inline-flex items-center gap-1.5;
+  }
+
+  .detail-table-help {
+    @apply inline-flex items-center justify-center rounded-full border border-amber-900/10 bg-white/85 text-[10px] font-semibold leading-none text-stone-500;
+    width: 15px;
+    height: 15px;
     flex: 0 0 auto;
   }
 

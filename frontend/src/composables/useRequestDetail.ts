@@ -177,7 +177,10 @@ export function useRequestDetail(
     backends: state.snapshot.backends,
     live: Boolean(state.requestDetail.detail?.live),
   }));
-  const requestParamRows = computed(() => buildRequestParamRows(requestBody.value));
+  const requestParamRows = computed(() => buildRequestParamRows(
+    requestBody.value,
+    state.requestDetail.detail?.entry.requestType,
+  ));
   const requestResponseHtml = computed(() => renderResponseChoicesHtml(
     state.requestDetail.detail?.responseBody,
     Boolean(state.requestDetail.detail?.live),

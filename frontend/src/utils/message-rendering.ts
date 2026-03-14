@@ -169,6 +169,34 @@ function renderDetailBlock(label: string, value: unknown): string {
   );
 }
 
+function renderFunctionIconHtml(): string {
+  return (
+    `<span class="tool-inline-icon tool-inline-icon-function" aria-hidden="true">` +
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
+        `<path d="M8 7.5h8"></path>` +
+        `<path d="M8 12h8"></path>` +
+        `<path d="M8 16.5h4.5"></path>` +
+        `<rect x="3.75" y="4" width="16.5" height="16" rx="3"></rect>` +
+      `</svg>` +
+    `</span>`
+  );
+}
+
+function renderParameterIconHtml(): string {
+  return (
+    `<span class="tool-inline-icon tool-inline-icon-parameter" aria-hidden="true">` +
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
+        `<path d="M9.5 6.75h8"></path>` +
+        `<path d="M9.5 12h8"></path>` +
+        `<path d="M9.5 17.25h5.5"></path>` +
+        `<circle cx="6" cy="6.75" r="1.25"></circle>` +
+        `<circle cx="6" cy="12" r="1.25"></circle>` +
+        `<circle cx="6" cy="17.25" r="1.25"></circle>` +
+      `</svg>` +
+    `</span>`
+  );
+}
+
 export function hasVisibleMessageContent(content: unknown): boolean {
   if (typeof content === "string") {
     return content.length > 0;
@@ -480,13 +508,13 @@ function renderToolParameterHtml(
       : "";
   const notes = schema ? schemaNotes(schema) : [];
 
-  return (
-    `<div class="tool-parameter-row">` +
-      `<div class="tool-parameter-head">` +
-        `<span class="tool-parameter-name">${escapeHtml(name)}</span>` +
-        `<span class="badge ${requiredNames.has(name) ? "good" : "neutral"}">${requiredNames.has(name) ? "required" : "optional"}</span>` +
-        `<span class="badge neutral">${escapeHtml(typeLabel)}</span>` +
-      `</div>` +
+    return (
+      `<div class="tool-parameter-row">` +
+        `<div class="tool-parameter-head">` +
+          `<span class="tool-parameter-name">${renderParameterIconHtml()}<span>${escapeHtml(name)}</span></span>` +
+          `<span class="badge ${requiredNames.has(name) ? "good" : "neutral"}">${requiredNames.has(name) ? "required" : "optional"}</span>` +
+          `<span class="badge neutral">${escapeHtml(typeLabel)}</span>` +
+        `</div>` +
       (description ? `<div class="tool-parameter-description">${escapeHtml(description)}</div>` : "") +
       (notes.length > 0 ? `<div class="tool-parameter-note">${escapeHtml(notes.join(" • "))}</div>` : "") +
     `</div>`
@@ -573,14 +601,14 @@ function renderInvocationValueHtml(value: unknown): string {
   return `<div class="tool-parameter-description">${escapeHtml(formatUiValue(value) || "n/a")}</div>`;
 }
 
-function renderInvocationNodeHtml(name: string, value: unknown): string {
-  return (
-    `<div class="tool-parameter-row">` +
-      `<div class="tool-parameter-head">` +
-        `<span class="tool-parameter-name">${escapeHtml(name)}</span>` +
-        `<span class="badge neutral">${escapeHtml(valueTypeLabel(value))}</span>` +
-      `</div>` +
-      renderInvocationValueHtml(value) +
+  function renderInvocationNodeHtml(name: string, value: unknown): string {
+    return (
+      `<div class="tool-parameter-row">` +
+        `<div class="tool-parameter-head">` +
+          `<span class="tool-parameter-name">${renderParameterIconHtml()}<span>${escapeHtml(name)}</span></span>` +
+          `<span class="badge neutral">${escapeHtml(valueTypeLabel(value))}</span>` +
+        `</div>` +
+        renderInvocationValueHtml(value) +
     `</div>`
   );
 }
@@ -643,14 +671,14 @@ function renderFunctionInvocationHtml(
   const argumentsValue = parseStructuredArguments(payload.arguments);
   const argumentRows = renderInvocationArgumentListHtml(argumentsValue);
 
-  return (
-    `<article class="tool-definition-card">` +
-      `<div class="tool-definition-head">` +
-        `<div>` +
-          `<div class="tool-definition-title">${escapeHtml(name)}</div>` +
-          (options.note ? `<div class="tool-definition-subtitle">${escapeHtml(options.note)}</div>` : "") +
-        `</div>` +
-        (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
+    return (
+      `<article class="tool-definition-card">` +
+        `<div class="tool-definition-head">` +
+          `<div>` +
+            `<div class="tool-definition-title">${renderFunctionIconHtml()}<span>${escapeHtml(name)}</span></div>` +
+            (options.note ? `<div class="tool-definition-subtitle">${escapeHtml(options.note)}</div>` : "") +
+          `</div>` +
+          (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
       `</div>` +
       `<div class="tool-parameter-list">` +
         `<div class="tool-definition-subtitle">Arguments</div>` +
@@ -688,14 +716,14 @@ function renderFunctionToolHtml(tool: Record<string, any>, index: number): strin
     typeof fn?.strict === "boolean" ? `<span class="badge ${fn.strict ? "good" : "neutral"}">${fn.strict ? "strict" : "non-strict"}</span>` : "",
   ].filter(Boolean).join("");
 
-  return (
-    `<article class="tool-definition-card">` +
-      `<div class="tool-definition-head">` +
-        `<div>` +
-          `<div class="tool-definition-title">${escapeHtml(name)}</div>` +
+    return (
+      `<article class="tool-definition-card">` +
+        `<div class="tool-definition-head">` +
+          `<div>` +
+            `<div class="tool-definition-title">${renderFunctionIconHtml()}<span>${escapeHtml(name)}</span></div>` +
+          `</div>` +
+          (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
         `</div>` +
-        (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
-      `</div>` +
       (description ? `<p class="tool-definition-description">${escapeHtml(description)}</p>` : "") +
       (properties.length > 0
         ? (
@@ -715,25 +743,25 @@ function renderGenericToolHtml(tool: Record<string, any>, index: number): string
       : `tool-${index + 1}`;
   const fields = Object.entries(tool).filter(([key]) => key !== "type");
 
-  return (
-    `<article class="tool-definition-card">` +
-      `<div class="tool-definition-head">` +
-        `<div>` +
-          `<div class="tool-definition-title">${escapeHtml(toolType)}</div>` +
-          `<div class="tool-definition-subtitle">Tool ${index + 1}</div>` +
+    return (
+      `<article class="tool-definition-card">` +
+        `<div class="tool-definition-head">` +
+          `<div>` +
+            `<div class="tool-definition-title">${renderFunctionIconHtml()}<span>${escapeHtml(toolType)}</span></div>` +
+            `<div class="tool-definition-subtitle">Tool ${index + 1}</div>` +
+          `</div>` +
+          `<div class="message-meta"><span class="badge neutral">${escapeHtml(toolType)}</span></div>` +
         `</div>` +
-        `<div class="message-meta"><span class="badge neutral">${escapeHtml(toolType)}</span></div>` +
-      `</div>` +
-      (fields.length > 0
-        ? (
-            `<div class="tool-parameter-list">` +
-              fields.map(([key, value]) => (
-                `<div class="tool-parameter-row">` +
-                  `<div class="tool-parameter-head">` +
-                    `<span class="tool-parameter-name">${escapeHtml(key)}</span>` +
-                  `</div>` +
-                  `<div class="tool-parameter-description">${escapeHtml(formatUiValue(value) || "n/a")}</div>` +
-                `</div>`
+        (fields.length > 0
+          ? (
+             `<div class="tool-parameter-list">` +
+                fields.map(([key, value]) => (
+                 `<div class="tool-parameter-row">` +
+                   `<div class="tool-parameter-head">` +
+                     `<span class="tool-parameter-name">${renderParameterIconHtml()}<span>${escapeHtml(key)}</span></span>` +
+                    `</div>` +
+                   `<div class="tool-parameter-description">${escapeHtml(formatUiValue(value) || "n/a")}</div>` +
+                  `</div>`
               )).join("") +
             `</div>`
           )
@@ -751,14 +779,14 @@ export function renderToolsHtml(tools: unknown): string {
     `<div class="tool-definition-list">` +
       tools.map((tool, index) => {
         if (!isClientRecord(tool)) {
-          return (
-            `<article class="tool-definition-card">` +
-              `<div class="tool-definition-head">` +
-                `<div>` +
-                  `<div class="tool-definition-title">Tool ${index + 1}</div>` +
-                  `<div class="tool-definition-subtitle">Stored tool payload</div>` +
+            return (
+             `<article class="tool-definition-card">` +
+               `<div class="tool-definition-head">` +
+                  `<div>` +
+                   `<div class="tool-definition-title">${renderFunctionIconHtml()}<span>Tool ${index + 1}</span></div>` +
+                   `<div class="tool-definition-subtitle">Stored tool payload</div>` +
+                  `</div>` +
                 `</div>` +
-              `</div>` +
               `<div class="tool-parameter-description">${escapeHtml(formatUiValue(tool) || "No readable tool payload was stored.")}</div>` +
             `</article>`
           );

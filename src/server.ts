@@ -1289,6 +1289,7 @@ export class LlmProxyServer {
         method: snapshot.method,
         path: snapshot.path,
         clientIp: snapshot.clientIp,
+        requestType: snapshot.clientStream ? "stream" : "json",
         model: snapshot.model,
         backendId: snapshot.backendId,
         backendName: snapshot.backendName,

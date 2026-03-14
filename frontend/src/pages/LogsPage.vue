@@ -33,6 +33,7 @@ const {
   sortTitle,
   sortedEntries,
   tableEntries,
+  typeOptions,
   toggleFilter,
   toggleSort,
   tokenCountSummary,
@@ -76,6 +77,7 @@ const {
             <col class="log-col-issue">
             <col class="log-col-time">
             <col class="log-col-outcome">
+            <col class="log-col-type">
             <col class="log-col-request">
             <col class="log-col-model">
             <col class="log-col-backend">
@@ -153,6 +155,28 @@ const {
                     </select>
                     <div class="table-filter-actions">
                       <button type="button" class="button secondary small" @click="clearFilter('outcome')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th :title="columnTitles.type">
+                <div class="log-header-filter">
+                  <div class="log-header-cell">
+                    <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('type') }" :title="sortTitle('type')" @click="toggleSort('type')">
+                      <span class="log-header-label">Type</span>
+                    </button>
+                    <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('type') }" title="Filter request type" @click.stop="toggleFilter('type')">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('type')" class="table-filter-popover" @click.stop>
+                    <select v-model="filters.type" class="table-filter-select">
+                      <option v-for="option in typeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('type')">Clear</button>
                     </div>
                   </div>
                 </div>
@@ -402,6 +426,9 @@ const {
                 >
                   {{ outcomeLabel(entry) }}
                 </span>
+              </td>
+              <td class="log-cell-tight">
+                <div class="log-primary">{{ entry.requestType || "-" }}</div>
               </td>
               <td>
                 <div class="log-primary mono">{{ store.shortId(entry.id) }}</div>

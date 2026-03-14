@@ -11,6 +11,7 @@ export interface RequestCatalogRow {
   time: string;
   method: string;
   path: string;
+  requestType?: "stream" | "json";
   model?: string;
   backendName?: string;
   backendId?: string;
@@ -50,6 +51,7 @@ export function normalizeRequestLogRow(entry: RequestLogEntry): RequestCatalogRo
     time: entry.time,
     method: entry.method,
     path: entry.path,
+    requestType: entry.requestType,
     model: entry.model,
     backendName: entry.backendName,
     backendId: entry.backendId,
@@ -80,6 +82,7 @@ export function normalizeActiveConnectionRow(connection: ActiveConnectionSnapsho
     time: connection.startedAt,
     method: connection.method,
     path: connection.path,
+    requestType: connection.clientStream ? "stream" : "json",
     model: connection.model,
     backendName: connection.backendName,
     backendId: connection.backendId,

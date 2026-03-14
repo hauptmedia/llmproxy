@@ -226,13 +226,6 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
               @click="activeInspectorTab = 'request'"
             >
               <span>Request</span>
-              <span
-                class="request-detail-tab-help"
-                title="Top-level request fields. Open the raw request payload from the action inside this tab."
-                aria-hidden="true"
-              >
-                ?
-              </span>
             </button>
             <button
               type="button"
@@ -243,13 +236,6 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
               @click="activeInspectorTab = 'response'"
             >
               <span>Response</span>
-              <span
-                class="request-detail-tab-help"
-                title="Response metrics. Open the raw response payload from the action inside this tab."
-                aria-hidden="true"
-              >
-                ?
-              </span>
             </button>
             <button
               type="button"
@@ -264,7 +250,35 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
           </div>
           <div class="detail-card-viewport">
             <section v-if="activeInspectorTab === 'request'" class="request-detail-section">
-              <div v-if="hasRawPayload('request')" class="mb-3 flex justify-start">
+              <div v-if="store.requestParamRows.length" class="detail-table-wrap">
+                <table class="detail-table">
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in store.requestParamRows" :key="row.key + row.value">
+                      <td class="detail-table-key">
+                        <span class="detail-table-key-label">
+                          <span>{{ row.key }}</span>
+                          <span
+                            class="detail-table-help"
+                            :title="row.title"
+                            aria-hidden="true"
+                          >
+                            ?
+                          </span>
+                        </span>
+                      </td>
+                      <td :title="row.title" class="detail-table-value mono">{{ row.value }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="empty">No additional top-level request fields were stored.</div>
+              <div v-if="hasRawPayload('request')" class="mt-3 flex justify-start">
                 <button
                   class="button secondary small raw-payload-launch"
                   type="button"
@@ -279,27 +293,38 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
                   <span>Show raw request data</span>
                 </button>
               </div>
-              <div v-if="store.requestParamRows.length" class="detail-table-wrap">
+            </section>
+
+            <section v-else-if="activeInspectorTab === 'response'" class="request-detail-section">
+              <div v-if="store.requestResponseMetricRows.length" class="detail-table-wrap">
                 <table class="detail-table">
                   <thead>
                     <tr>
-                      <th>Field</th>
+                      <th>Metric</th>
                       <th>Value</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="row in store.requestParamRows" :key="row.key + row.value">
-                      <td :title="row.title" class="detail-table-key">{{ row.key }}</td>
+                    <tr v-for="row in store.requestResponseMetricRows" :key="row.key + row.value">
+                      <td class="detail-table-key">
+                        <span class="detail-table-key-label">
+                          <span>{{ row.key }}</span>
+                          <span
+                            class="detail-table-help"
+                            :title="row.title"
+                            aria-hidden="true"
+                          >
+                            ?
+                          </span>
+                        </span>
+                      </td>
                       <td :title="row.title" class="detail-table-value mono">{{ row.value }}</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-              <div v-else class="empty">No additional top-level request fields were stored.</div>
-            </section>
-
-            <section v-else-if="activeInspectorTab === 'response'" class="request-detail-section">
-              <div v-if="hasRawPayload('response')" class="mb-3 flex justify-start">
+              <div v-else class="empty">No response metrics have been recorded yet.</div>
+              <div v-if="hasRawPayload('response')" class="mt-3 flex justify-start">
                 <button
                   class="button secondary small raw-payload-launch"
                   type="button"
@@ -314,23 +339,6 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
                   <span>Show raw response data</span>
                 </button>
               </div>
-              <div v-if="store.requestResponseMetricRows.length" class="detail-table-wrap">
-                <table class="detail-table">
-                  <thead>
-                    <tr>
-                      <th>Metric</th>
-                      <th>Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in store.requestResponseMetricRows" :key="row.key + row.value">
-                      <td :title="row.title" class="detail-table-key">{{ row.key }}</td>
-                      <td :title="row.title" class="detail-table-value mono">{{ row.value }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-else class="empty">No response metrics have been recorded yet.</div>
             </section>
 
             <section v-else class="request-detail-section">
