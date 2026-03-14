@@ -712,11 +712,12 @@ export class LlmProxyServer {
 
     try {
       lease = await this.loadBalancer.acquire(route, abortController.signal);
+      const routedModel = lease.selectedModel ?? route.model;
       this.updateActiveConnection(route.id, {
         phase: "connected",
         backendId: lease.backend.id,
         backendName: lease.backend.name,
-        model: lease.selectedModel ?? route.model,
+        model: routedModel,
         queueMs: lease.queueMs,
       }, true);
       const upstreamParsedBody = applySelectedModel(parsedBody, lease.selectedModel);
@@ -769,6 +770,7 @@ export class LlmProxyServer {
           requestId: route.id,
           clientStream: route.stream,
           backendId: lease.backend.id,
+          model: routedModel,
           upstreamResponse,
           response,
         });
@@ -796,6 +798,7 @@ export class LlmProxyServer {
           kind: streamingKind,
           clientStream: route.stream,
           backendId: lease.backend.id,
+          model: routedModel,
           upstreamResponse,
           response,
         });
@@ -815,6 +818,9 @@ export class LlmProxyServer {
       copyResponseHeaders(upstreamResponse.headers, response);
       response.setHeader("x-llmproxy-request-id", route.id);
       response.setHeader("x-llmproxy-backend", lease.backend.id);
+      if (routedModel) {
+        response.setHeader("x-llmproxy-model", routedModel);
+      }
 
       if (!upstreamResponse.body) {
         response.end();
@@ -1086,10 +1092,11 @@ export class LlmProxyServer {
     kind: "chat.completions" | "completions";
     clientStream: boolean;
     backendId: string;
+    model?: string;
     upstreamResponse: Response;
     response: ServerResponse;
   }): Promise<Record<string, unknown>> {
-    const { requestId, kind, clientStream, backendId, upstreamResponse, response } = options;
+    const { requestId, kind, clientStream, backendId, model, upstreamResponse, response } = options;
     const accumulator = new StreamingAccumulator(kind);
     const reader = upstreamResponse.body?.getReader();
 
@@ -1102,6 +1109,9 @@ export class LlmProxyServer {
       copyResponseHeaders(upstreamResponse.headers, response);
       response.setHeader("x-llmproxy-request-id", requestId);
       response.setHeader("x-llmproxy-backend", backendId);
+      if (model) {
+        response.setHeader("x-llmproxy-model", model);
+      }
     }
 
     const decoder = new TextDecoder();
@@ -1135,7 +1145,7 @@ export class LlmProxyServer {
       return synthesizedResponse;
     }
 
-    this.sendSynthesizedJson(response, upstreamResponse.status, synthesizedResponse, backendId);
+    this.sendSynthesizedJson(response, upstreamResponse.status, synthesizedResponse, backendId, model);
     return synthesizedResponse;
   }
 
@@ -1143,10 +1153,11 @@ export class LlmProxyServer {
     requestId: string;
     clientStream: boolean;
     backendId: string;
+    model?: string;
     upstreamResponse: Response;
     response: ServerResponse;
   }): Promise<Record<string, unknown>> {
-    const { requestId, clientStream, backendId, upstreamResponse, response } = options;
+    const { requestId, clientStream, backendId, model, upstreamResponse, response } = options;
     const accumulator = new StreamingAccumulator("chat.completions");
     const reader = upstreamResponse.body?.getReader();
 
@@ -1155,7 +1166,7 @@ export class LlmProxyServer {
     }
 
     if (clientStream) {
-      this.writeStreamingResponseHeaders(response, upstreamResponse.status, backendId);
+      this.writeStreamingResponseHeaders(response, upstreamResponse.status, backendId, model);
     }
 
     const decoder = new TextDecoder();
@@ -1185,7 +1196,7 @@ export class LlmProxyServer {
       return synthesizedResponse;
     }
 
-    this.sendSynthesizedJson(response, upstreamResponse.status, synthesizedResponse, backendId);
+    this.sendSynthesizedJson(response, upstreamResponse.status, synthesizedResponse, backendId, model);
     return synthesizedResponse;
   }
 
@@ -1305,21 +1316,28 @@ export class LlmProxyServer {
     statusCode: number,
     payload: Record<string, unknown>,
     backendId: string,
+    model?: string,
   ): void {
     response.statusCode = statusCode;
     response.setHeader("content-type", "application/json; charset=utf-8");
     response.setHeader("cache-control", "no-store");
     response.setHeader("x-llmproxy-backend", backendId);
+    if (model) {
+      response.setHeader("x-llmproxy-model", model);
+    }
     response.end(JSON.stringify(payload));
   }
 
-  private writeStreamingResponseHeaders(response: ServerResponse, statusCode: number, backendId: string): void {
+  private writeStreamingResponseHeaders(response: ServerResponse, statusCode: number, backendId: string, model?: string): void {
     response.statusCode = statusCode;
     response.setHeader("content-type", "text/event-stream; charset=utf-8");
     response.setHeader("cache-control", "no-cache, no-transform");
     response.setHeader("connection", "keep-alive");
     response.setHeader("x-accel-buffering", "no");
     response.setHeader("x-llmproxy-backend", backendId);
+    if (model) {
+      response.setHeader("x-llmproxy-model", model);
+    }
   }
 
   private buildUpstreamHeaders(

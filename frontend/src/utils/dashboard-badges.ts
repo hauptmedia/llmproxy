@@ -40,6 +40,17 @@ export function badgeSpec(
   return { text, tone, title };
 }
 
+export function buildModelIdentityBadge(
+  model: string,
+  title = `Model that produced this response: ${model}.`,
+): UiBadge {
+  return {
+    text: model,
+    title,
+    className: "badge identity-model",
+  };
+}
+
 export function badgeClass(badge: UiBadge): string {
   return badge.className || `badge ${badge.tone ?? "neutral"}`;
 }

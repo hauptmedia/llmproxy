@@ -1,5 +1,5 @@
 import type { RenderMessageOptions, UiBadge } from "../types/dashboard";
-import { describeFinishReason, badgeSpec } from "./dashboard-badges";
+import { buildModelIdentityBadge, describeFinishReason, badgeSpec } from "./dashboard-badges";
 import { formatUiValue, prettyJson } from "./formatters";
 import { isClientRecord } from "./guards";
 import { escapeHtml, renderCodeBlockHtml, renderCodeInnerBlock } from "./code-rendering";
@@ -322,6 +322,10 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
   const metaBits: UiBadge[] = [
     buildMessageRoleBadgeSpec(message, role),
   ];
+
+  if (role === "assistant" && typeof message?.model === "string" && message.model.length > 0) {
+    metaBits.push(buildModelIdentityBadge(message.model));
+  }
 
   if (role === "tool" && typeof message?.name === "string" && message.name.length > 0) {
     metaBits.push(badgeSpec(`tool ${message.name}`, "warn", "Tool name associated with this tool response."));
@@ -777,15 +781,25 @@ function isStreamingReasoning(reasoningContent: unknown, finishReason: unknown, 
   );
 }
 
-export function renderResponseChoicesHtml(responseBody: unknown, live = false): string {
+export function renderResponseChoicesHtml(responseBody: unknown, live = false, responseModel = ""): string {
   if (!isClientRecord(responseBody) || !Array.isArray(responseBody.choices) || responseBody.choices.length === 0) {
     return '<div class="empty">No structured response payload was stored for this request.</div>';
   }
 
+  const resolvedModel =
+    typeof responseBody.model === "string" && responseBody.model.trim().length > 0
+      ? responseBody.model.trim()
+      : responseModel;
+
   return responseBody.choices
     .map((choice: Record<string, any>, index: number) => {
       if (isClientRecord(choice) && isClientRecord(choice.message)) {
-        return renderMessageHtml(choice.message, index, {
+        const messageWithModel = {
+          ...choice.message,
+          ...(resolvedModel ? { model: resolvedModel } : {}),
+        };
+
+        return renderMessageHtml(messageWithModel, index, {
           heading: `choice ${index + 1}`,
           role: typeof choice.message.role === "string" ? choice.message.role : "assistant",
           finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",

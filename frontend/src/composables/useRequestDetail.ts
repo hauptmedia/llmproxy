@@ -30,6 +30,14 @@ export function useRequestDetail(
     return state.snapshot.activeConnections.some((connection) => connection.id === requestId);
   }
 
+  function hasRecentRequestDetail(requestId: string): boolean {
+    return state.snapshot.recentRequests.some((entry) => entry.id === requestId && Boolean(entry.hasDetail));
+  }
+
+  function hasSnapshotRequestDetail(requestId: string): boolean {
+    return isActiveRequestId(requestId) || hasRecentRequestDetail(requestId);
+  }
+
   async function loadRequestDetail(requestId: string, useCache = true): Promise<void> {
     if (useCache && !isActiveRequestId(requestId) && state.requestDetail.cache[requestId]) {
       state.requestDetail.detail = state.requestDetail.cache[requestId];
@@ -74,6 +82,8 @@ export function useRequestDetail(
     state.requestDetail.open = true;
     state.requestDetail.requestId = requestId;
     state.requestDetail.error = "";
+    state.requestDetail.detail = null;
+    state.requestDetail.loading = true;
     await loadRequestDetail(requestId);
   }
 
@@ -93,7 +103,7 @@ export function useRequestDetail(
   }
 
   function scheduleOpenDetailRefresh(): void {
-    if (!state.requestDetail.open || !state.requestDetail.requestId || !isActiveRequestId(state.requestDetail.requestId)) {
+    if (!state.requestDetail.open || !state.requestDetail.requestId || !hasSnapshotRequestDetail(state.requestDetail.requestId)) {
       return;
     }
 
@@ -180,6 +190,7 @@ export function useRequestDetail(
   const requestResponseHtml = computed(() => renderResponseChoicesHtml(
     state.requestDetail.detail?.responseBody,
     Boolean(state.requestDetail.detail?.live),
+    state.requestDetail.detail?.entry.model ?? "",
   ));
 
   return {

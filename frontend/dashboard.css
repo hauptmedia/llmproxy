@@ -1703,7 +1703,7 @@
   }
 
   .conversation-surface-card {
-    @apply min-h-0;
+    @apply flex min-h-0 flex-col;
     flex: 1 1 auto;
     overflow: hidden;
     background-clip: padding-box;

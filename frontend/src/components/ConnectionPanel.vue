@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PropType } from "vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
-import { badgeClass, buildConnectionTransportBadges } from "../utils/dashboard-badges";
+import { badgeClass, buildConnectionTransportBadges, buildModelIdentityBadge } from "../utils/dashboard-badges";
 import type { ActiveConnectionSnapshot } from "../types/dashboard";
 
 const props = defineProps({
@@ -71,10 +71,11 @@ function connectionIdentityBadges(connection: ActiveConnectionSnapshot): Array<{
   }
 
   if (connection.model) {
+    const modelBadge = buildModelIdentityBadge(connection.model, `Requested or selected model: ${connection.model}.`);
     badges.push({
-      text: connection.model,
-      title: `Requested or selected model: ${connection.model}.`,
-      className: "badge identity-model",
+      text: modelBadge.text,
+      title: modelBadge.title ?? "",
+      className: modelBadge.className ?? "badge identity-model",
     });
   }
 

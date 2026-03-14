@@ -150,6 +150,7 @@ export interface DebugTranscriptEntry {
   audio?: JsonValue;
   name?: string;
   tool_call_id?: string;
+  model?: string;
   backend?: string;
   finish_reason?: string;
 }

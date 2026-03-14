@@ -756,6 +756,7 @@ export function useDebugChat(
     state.debug.lastRequestId = requestId;
     state.debug.status = `HTTP ${response.status}`;
     assistantTurn.backend = state.debug.backend;
+    assistantTurn.model = response.headers.get("x-llmproxy-model") || assistantTurn.model || "";
 
     if (!response.ok) {
       throw new Error(await readErrorResponse(response));
