@@ -29,6 +29,13 @@ export function createDashboardRouter() {
         path: "/",
         name: "overview",
         component: OverviewPage,
+        beforeEnter() {
+          if (dashboardBootstrap.page === "config") {
+            return { name: "config" };
+          }
+
+          return true;
+        },
       },
       {
         path: "/logs",

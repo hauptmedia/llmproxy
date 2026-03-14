@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
+import type { ProxySnapshot } from "./types";
 export interface DashboardRoute {
   page: "overview" | "chat" | "logs" | "diagnostics" | "config";
 }
@@ -18,11 +19,19 @@ export function normalizeDashboardSubPath(pathname: string): string {
     : pathname;
 }
 
-export function matchDashboardRoute(pathname: string, dashboardPath: string): DashboardRoute | undefined {
+export function resolveDashboardLandingPage(snapshot: Pick<ProxySnapshot, "backends">): DashboardRoute["page"] {
+  return snapshot.backends.length > 0 ? "overview" : "config";
+}
+
+export function matchDashboardRoute(
+  pathname: string,
+  dashboardPath: string,
+  landingPage: DashboardRoute["page"] = "overview",
+): DashboardRoute | undefined {
   const normalizedPathname = normalizeDashboardSubPath(pathname);
 
   if (normalizedPathname === dashboardPath) {
-    return { page: "overview" };
+    return { page: landingPage };
   }
 
   if (normalizedPathname === `${dashboardPath}/chat`) {

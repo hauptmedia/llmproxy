@@ -10,6 +10,7 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
   queueTimeoutMs: 30 * 1000,
   healthCheckIntervalMs: 10 * 1000,
   recentRequestLimit: 1000,
+  mcpServerEnabled: true,
 };
 
 export type BackendPatch = Partial<Pick<BackendConfig, "enabled" | "maxConcurrency">>;
@@ -22,6 +23,7 @@ export class ConfigStore {
   }
 
   public async load(): Promise<ProxyConfig> {
+    await this.ensureConfigExists();
     const raw = await fs.readFile(this.configPath, "utf8");
     const parsed = JSON.parse(raw) as Partial<ProxyConfig>;
     return normalizeConfig(parsed, this.configPath);
@@ -130,7 +132,21 @@ export class ConfigStore {
   }
 
   private async writeConfig(config: ProxyConfig): Promise<void> {
+    await fs.mkdir(path.dirname(this.configPath), { recursive: true });
     await fs.writeFile(this.configPath, `${JSON.stringify(serializeConfig(config), null, 2)}\n`, "utf8");
+  }
+
+  private async ensureConfigExists(): Promise<void> {
+    try {
+      await fs.access(this.configPath);
+      return;
+    } catch (error) {
+      if (!isMissingFileError(error)) {
+        throw error;
+      }
+    }
+
+    await this.writeConfig(normalizeConfig({}, this.configPath));
   }
 }
 
@@ -148,6 +164,14 @@ export function resolveBackendHeaders(backend: BackendConfig): Record<string, st
 function resolveConfigPath(): string {
   const fromEnv = process.env.LLMPROXY_CONFIG;
   return path.resolve(fromEnv ?? path.join(process.cwd(), "llmproxy.config.json"));
+}
+
+function isMissingFileError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  return "code" in error && (error as { code?: unknown }).code === "ENOENT";
 }
 
 function normalizeConfig(config: Partial<ProxyConfig>, configPath: string): ProxyConfig {
@@ -190,6 +214,10 @@ function normalizeServerConfig(config?: Partial<ServerConfig>): ServerConfig {
       typeof config?.recentRequestLimit === "number" && Number.isInteger(config.recentRequestLimit) && config.recentRequestLimit > 0
         ? config.recentRequestLimit
         : DEFAULT_SERVER_CONFIG.recentRequestLimit,
+    mcpServerEnabled:
+      typeof config?.mcpServerEnabled === "boolean"
+        ? config.mcpServerEnabled
+        : DEFAULT_SERVER_CONFIG.mcpServerEnabled,
   };
 }
 

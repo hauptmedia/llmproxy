@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderDashboardHtml } from "./dashboard";
+import { resolveDashboardLandingPage } from "./server-dashboard-paths";
 import { ProxySnapshot } from "./types";
 
 const snapshot: ProxySnapshot = {
@@ -69,4 +70,34 @@ test("renderDashboardHtml uses the Vite dev server when configured", () => {
       process.env.LLMPROXY_DASHBOARD_DEV_SERVER = previous;
     }
   }
+});
+
+test("dashboard landing page defaults to config when no backends are configured", () => {
+  assert.equal(resolveDashboardLandingPage(snapshot), "config");
+});
+
+test("dashboard landing page defaults to overview when backends are configured", () => {
+  assert.equal(resolveDashboardLandingPage({
+    ...snapshot,
+    backends: [
+      {
+        id: "backend-a",
+        name: "Backend A",
+        baseUrl: "http://127.0.0.1:8080",
+        connector: "openai",
+        enabled: true,
+        healthy: true,
+        maxConcurrency: 1,
+        activeRequests: 0,
+        availableSlots: 1,
+        totalRequests: 0,
+        successfulRequests: 0,
+        failedRequests: 0,
+        cancelledRequests: 0,
+        configuredModels: ["*"],
+        discoveredModels: [],
+        discoveredModelDetails: [],
+      },
+    ],
+  }), "overview");
 });
