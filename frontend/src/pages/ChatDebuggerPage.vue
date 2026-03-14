@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { useRouter } from "vue-router";
 import ConversationSurface from "../components/ConversationSurface.vue";
 import ChatComposer from "../components/ChatComposer.vue";
 import MessageCard from "../components/MessageCard.vue";
@@ -9,7 +8,6 @@ import { useDashboardStore } from "../composables/useDashboardStore";
 import { hasVisibleMessageContent } from "../utils/message-rendering";
 
 const store = useDashboardStore();
-const router = useRouter();
 const mcpServerEnabled = computed(() => store.state.serverConfig?.mcpServerEnabled !== false);
 const hasTranscript = computed(() => store.state.debug.transcript.length > 0);
 const trimmedSystemPrompt = computed(() => store.state.debug.systemPrompt.trim());
@@ -107,17 +105,12 @@ const chatConversationSignature = computed(() => [
   ].join(":")).join("|"),
 ].join("|"));
 
-async function openLastDebugRequestInDiagnostics(): Promise<void> {
+function openLastDebugRequestDiagnosis(): void {
   if (!store.state.debug.lastRequestId) {
     return;
   }
 
-  await router.push({
-    name: "diagnostics",
-    query: {
-      requestId: store.state.debug.lastRequestId,
-    },
-  });
+  store.openLastDebugRequestDiagnosis();
 }
 </script>
 
@@ -135,9 +128,9 @@ async function openLastDebugRequestInDiagnostics(): Promise<void> {
                 v-if="store.state.debug.lastRequestId"
                 class="icon-button compact"
                 type="button"
-                aria-label="Open the last debug request in diagnostics"
-                title="Open the last debug request in diagnostics."
-                @click="openLastDebugRequestInDiagnostics()"
+                aria-label="Open the last debug request on the diagnosis tab"
+                title="Open the last debug request on the diagnosis tab."
+                @click="openLastDebugRequestDiagnosis()"
               >
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M9.25 4.25h5.5"></path>

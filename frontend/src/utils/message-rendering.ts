@@ -190,6 +190,56 @@ function renderParameterIconHtml(): string {
   );
 }
 
+function renderTypeIconHtml(typeLabel: string): string {
+  const normalized = typeLabel.trim().toLowerCase();
+
+  if (normalized === "boolean") {
+    return (
+      `<span class="tool-type-icon" aria-hidden="true">` +
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
+          `<rect x="4" y="7" width="16" height="10" rx="5"></rect>` +
+          `<circle cx="9" cy="12" r="2.5"></circle>` +
+        `</svg>` +
+      `</span>`
+    );
+  }
+
+  if (normalized === "integer" || normalized === "number") {
+    return `<span class="tool-type-icon tool-type-icon-text" aria-hidden="true">#</span>`;
+  }
+
+  if (normalized === "string") {
+    return `<span class="tool-type-icon tool-type-icon-text" aria-hidden="true">"</span>`;
+  }
+
+  if (normalized === "array") {
+    return `<span class="tool-type-icon tool-type-icon-text" aria-hidden="true">[]</span>`;
+  }
+
+  if (normalized === "object") {
+    return `<span class="tool-type-icon tool-type-icon-text" aria-hidden="true">{}</span>`;
+  }
+
+  if (normalized === "null") {
+    return `<span class="tool-type-icon tool-type-icon-text" aria-hidden="true">0</span>`;
+  }
+
+  if (normalized === "enum") {
+    return `<span class="tool-type-icon tool-type-icon-text" aria-hidden="true">≡</span>`;
+  }
+
+  return `<span class="tool-type-icon tool-type-icon-text" aria-hidden="true">•</span>`;
+}
+
+function renderTypeBadgeHtml(typeLabel: string): string {
+  return (
+    `<span class="badge neutral tool-type-badge">` +
+      renderTypeIconHtml(typeLabel) +
+      `<span>${escapeHtml(typeLabel)}</span>` +
+    `</span>`
+  );
+}
+
 function renderToolDisclosureHtml(
   label: string,
   bodyHtml: string,
@@ -207,7 +257,7 @@ function renderToolDisclosureHtml(
           renderParameterIconHtml() +
           `<span>${escapeHtml(label)}</span>` +
         `</span>` +
-        `<span class="badge neutral" title="${escapeHtml(`${count} ${count === 1 ? "parameter" : "parameters"}`)}">${count}</span>` +
+        `<span class="badge neutral tool-count-badge" title="${escapeHtml(`${count} ${count === 1 ? "parameter" : "parameters"}`)}">${count}</span>` +
       `</summary>` +
       `<div class="tool-disclosure-body">` +
         `<div class="tool-parameter-panel">` +
@@ -534,7 +584,7 @@ function renderToolParameterHtml(
         `<div class="tool-parameter-head">` +
           `<span class="tool-parameter-name">${renderParameterIconHtml()}<span>${escapeHtml(name)}</span></span>` +
           `<span class="badge ${requiredNames.has(name) ? "good" : "neutral"}">${requiredNames.has(name) ? "required" : "optional"}</span>` +
-          `<span class="badge neutral">${escapeHtml(typeLabel)}</span>` +
+          `${renderTypeBadgeHtml(typeLabel)}` +
         `</div>` +
       (description ? `<div class="tool-parameter-description">${escapeHtml(description)}</div>` : "") +
       (notes.length > 0 ? `<div class="tool-parameter-note">${escapeHtml(notes.join(" • "))}</div>` : "") +
@@ -627,7 +677,7 @@ function renderInvocationValueHtml(value: unknown): string {
       `<div class="tool-parameter-row">` +
         `<div class="tool-parameter-head">` +
           `<span class="tool-parameter-name">${renderParameterIconHtml()}<span>${escapeHtml(name)}</span></span>` +
-          `<span class="badge neutral">${escapeHtml(valueTypeLabel(value))}</span>` +
+          `${renderTypeBadgeHtml(valueTypeLabel(value))}` +
         `</div>` +
         renderInvocationValueHtml(value) +
     `</div>`

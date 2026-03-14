@@ -35,16 +35,6 @@ export interface RequestCatalogRow {
   live: boolean;
 }
 
-export interface DiagnosticsRequestOption {
-  id: string;
-  time: string;
-  label: string;
-  status: string;
-  model: string;
-  backend: string;
-  live: boolean;
-}
-
 export function normalizeRequestLogRow(entry: RequestLogEntry): RequestCatalogRow {
   return {
     id: entry.id,
@@ -125,57 +115,4 @@ export function buildRequestCatalog(
   }
 
   return Array.from(rows.values());
-}
-
-export function normalizeRequestStatus(entry: RequestLogEntry): string {
-  if (entry.outcome === "queued_timeout") {
-    return "queue timeout";
-  }
-
-  if (entry.outcome === "success") {
-    return "success";
-  }
-
-  return entry.outcome;
-}
-
-export function buildDiagnosticsRequestOptions(
-  snapshot: Pick<ProxySnapshot, "activeConnections" | "recentRequests">,
-  shortId: (value: string) => string,
-): DiagnosticsRequestOption[] {
-  const rows = new Map<string, DiagnosticsRequestOption>();
-
-  for (const connection of snapshot.activeConnections) {
-    if (!connection.hasDetail) {
-      continue;
-    }
-
-    rows.set(connection.id, {
-      id: connection.id,
-      time: connection.startedAt,
-      label: `${shortId(connection.id)} · ${connection.method} ${connection.path}`,
-      status: connection.phase,
-      model: connection.model || "unknown",
-      backend: connection.backendName || "unassigned",
-      live: true,
-    });
-  }
-
-  for (const entry of snapshot.recentRequests) {
-    if (!entry.hasDetail || rows.has(entry.id)) {
-      continue;
-    }
-
-    rows.set(entry.id, {
-      id: entry.id,
-      time: entry.time,
-      label: `${shortId(entry.id)} · ${entry.method} ${entry.path}`,
-      status: normalizeRequestStatus(entry),
-      model: entry.model || "unknown",
-      backend: entry.backendName || "unassigned",
-      live: false,
-    });
-  }
-
-  return Array.from(rows.values()).sort((left, right) => right.time.localeCompare(left.time));
 }

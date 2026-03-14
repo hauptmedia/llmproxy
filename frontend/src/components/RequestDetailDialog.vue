@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import ConversationSurface from "./ConversationSurface.vue";
+import DiagnosticActionsView from "./DiagnosticActionsView.vue";
 import DiagnosticReportView from "./DiagnosticReportView.vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
 import JsonAceViewer from "./JsonAceViewer.vue";
@@ -13,7 +14,7 @@ import { readErrorResponse } from "../utils/http";
 type RawPayloadKind = "request" | "response";
 
 const store = useDashboardStore();
-const activeInspectorTab = ref<"request" | "response" | "problems" | "tools">("request");
+const activeInspectorTab = ref<"request" | "response" | "diagnosis" | "tools">("request");
 const activeRawPayload = ref<{
   kind: RawPayloadKind;
   title: string;
@@ -69,9 +70,9 @@ const rawPayloadDialogTitle = computed(() => {
 });
 
 watch(
-  () => [store.state.requestDetail.open, store.state.requestDetail.requestId],
+  () => [store.state.requestDetail.open, store.state.requestDetail.requestId, store.state.requestDetail.tab] as const,
   () => {
-    activeInspectorTab.value = "request";
+    activeInspectorTab.value = store.state.requestDetail.tab || "request";
     activeRawPayload.value = null;
   },
 );
@@ -112,6 +113,11 @@ watch(
 onBeforeUnmount(() => {
   setBackgroundScrollLocked(false);
 });
+
+function selectInspectorTab(tab: "request" | "response" | "diagnosis" | "tools"): void {
+  activeInspectorTab.value = tab;
+  store.state.requestDetail.tab = tab;
+}
 
 function getRawPayloadValue(kind: RawPayloadKind): unknown {
   const detail = store.state.requestDetail.detail as {
@@ -293,7 +299,7 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
               :class="{ active: activeInspectorTab === 'request' }"
               role="tab"
               :aria-selected="activeInspectorTab === 'request'"
-              @click="activeInspectorTab = 'request'"
+              @click="selectInspectorTab('request')"
             >
               <span>Request</span>
             </button>
@@ -303,19 +309,9 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
               :class="{ active: activeInspectorTab === 'response' }"
               role="tab"
               :aria-selected="activeInspectorTab === 'response'"
-              @click="activeInspectorTab = 'response'"
+              @click="selectInspectorTab('response')"
             >
               <span>Response</span>
-            </button>
-            <button
-              type="button"
-              class="request-detail-tab-button"
-              :class="{ active: activeInspectorTab === 'problems' }"
-              role="tab"
-              :aria-selected="activeInspectorTab === 'problems'"
-              @click="activeInspectorTab = 'problems'"
-            >
-              <span>Diagnosis</span>
             </button>
             <button
               type="button"
@@ -323,9 +319,19 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
               :class="{ active: activeInspectorTab === 'tools' }"
               role="tab"
               :aria-selected="activeInspectorTab === 'tools'"
-              @click="activeInspectorTab = 'tools'"
+              @click="selectInspectorTab('tools')"
             >
               Tools
+            </button>
+            <button
+              type="button"
+              class="request-detail-tab-button"
+              :class="{ active: activeInspectorTab === 'diagnosis' }"
+              role="tab"
+              :aria-selected="activeInspectorTab === 'diagnosis'"
+              @click="selectInspectorTab('diagnosis')"
+            >
+              <span>Diagnosis</span>
             </button>
           </div>
           <div class="detail-card-viewport">
@@ -403,12 +409,17 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
               </div>
             </section>
 
-            <section v-else-if="activeInspectorTab === 'problems'" class="request-detail-section">
+            <section v-else-if="activeInspectorTab === 'diagnosis'" class="request-detail-section">
               <DiagnosticReportView
                 :report="diagnosticsReport"
                 :loading="diagnosticsLoading"
                 :error="diagnosticsError"
                 :waiting-for-final="store.state.requestDetail.detail?.live === true"
+              />
+              <DiagnosticActionsView
+                v-if="diagnosticsReport && store.state.requestDetail.requestId"
+                :request-id="store.state.requestDetail.requestId"
+                :report="diagnosticsReport"
               />
             </section>
 

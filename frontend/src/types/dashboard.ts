@@ -1,4 +1,4 @@
-export type DashboardPage = "overview" | "logs" | "chat" | "diagnostics" | "config";
+export type DashboardPage = "overview" | "logs" | "chat" | "config";
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 export interface EditableServerConfig {
@@ -281,6 +281,7 @@ export interface RequestDetailState {
   open: boolean;
   loading: boolean;
   requestId: string;
+  tab: "request" | "response" | "tools" | "diagnosis";
   error: string;
   detail: RequestLogDetail | null;
   cache: Record<string, RequestLogDetail>;

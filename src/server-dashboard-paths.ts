@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 import type { ProxySnapshot } from "./types";
 export interface DashboardRoute {
-  page: "overview" | "chat" | "logs" | "diagnostics" | "config";
+  page: "overview" | "chat" | "logs" | "config";
 }
 
 export function normalizeDashboardPath(pathname: string): string {
@@ -47,7 +47,7 @@ export function matchDashboardRoute(
   }
 
   if (normalizedPathname === `${dashboardPath}/diagnostics`) {
-    return { page: "diagnostics" };
+    return { page: "logs" };
   }
 
   return undefined;

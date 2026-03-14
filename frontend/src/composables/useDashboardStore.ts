@@ -28,6 +28,7 @@ function createInitialState(): DashboardState {
       open: false,
       loading: false,
       requestId: "",
+      tab: "request",
       error: "",
       detail: null,
       cache: {},
@@ -310,6 +311,13 @@ function createDashboardStoreInternal() {
       }
 
       void requestDetail.openRequestDetail(state.debug.lastRequestId);
+    },
+    openLastDebugRequestDiagnosis: () => {
+      if (!state.debug.lastRequestId) {
+        return;
+      }
+
+      void requestDetail.openRequestDetail(state.debug.lastRequestId, "diagnosis");
     },
     shortId,
     recentRequestBadges: buildRecentRequestBadges,

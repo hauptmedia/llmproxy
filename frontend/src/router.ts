@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from "vue-router";
 import { dashboardBootstrap } from "./dashboard-bootstrap";
 import BackendsPage from "./pages/BackendsPage.vue";
 import ChatDebuggerPage from "./pages/ChatDebuggerPage.vue";
-import DiagnosticsPage from "./pages/DiagnosticsPage.vue";
 import LogsPage from "./pages/LogsPage.vue";
 import OverviewPage from "./pages/OverviewPage.vue";
 
@@ -49,8 +48,7 @@ export function createDashboardRouter() {
       },
       {
         path: "/diagnostics",
-        name: "diagnostics",
-        component: DiagnosticsPage,
+        redirect: { name: "logs" },
       },
       {
         path: "/backends",

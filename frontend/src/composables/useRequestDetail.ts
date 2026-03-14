@@ -70,9 +70,13 @@ export function useRequestDetail(
     }
   }
 
-  async function openRequestDetail(requestId: string): Promise<void> {
+  async function openRequestDetail(
+    requestId: string,
+    tab: "request" | "response" | "tools" | "diagnosis" = "request",
+  ): Promise<void> {
     state.requestDetail.open = true;
     state.requestDetail.requestId = requestId;
+    state.requestDetail.tab = tab;
     state.requestDetail.error = "";
     state.requestDetail.detail = null;
     state.requestDetail.loading = true;
@@ -91,6 +95,7 @@ export function useRequestDetail(
     state.requestDetail.open = false;
     state.requestDetail.loading = false;
     state.requestDetail.requestId = "";
+    state.requestDetail.tab = "request";
     state.requestDetail.error = "";
   }
 

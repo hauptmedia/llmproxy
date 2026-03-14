@@ -33,23 +33,6 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
     <template v-else-if="report">
       <p class="diagnostics-report-summary">{{ report.summary }}</p>
 
-      <div class="detail-table-wrap">
-        <table class="detail-table">
-          <thead>
-            <tr>
-              <th>Fact</th>
-              <th>Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="fact in report.facts" :key="fact.label">
-              <td class="detail-table-key">{{ fact.label }}</td>
-              <td class="detail-table-value mono">{{ fact.value }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
       <div v-if="report.findings.length" class="diagnostics-findings">
         <article
           v-for="finding in report.findings"

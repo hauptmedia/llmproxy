@@ -41,24 +41,11 @@ const pageLinks: Array<{ page: DashboardPage; label: string; icon: string[] }> =
       "M5.5 7.5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H11l-3.5 3v-3H7.5a2 2 0 0 1-2-2z",
     ],
   },
-  {
-    page: "diagnostics",
-    label: "Diagnostics",
-    icon: [
-      "M10.5 6.5h7",
-      "M10.5 11.5h7",
-      "M10.5 16.5h5",
-      "M6.5 8.5h.01",
-      "M6.5 13.5h.01",
-      "M19 19l-3.2-3.2",
-      "M14.5 18a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z",
-    ],
-  },
 ];
 
 const currentPage = computed(() => {
   const routeName = route.name;
-  if (routeName === "chat" || routeName === "config" || routeName === "diagnostics" || routeName === "overview" || routeName === "logs") {
+  if (routeName === "chat" || routeName === "config" || routeName === "overview" || routeName === "logs") {
     return routeName;
   }
 
