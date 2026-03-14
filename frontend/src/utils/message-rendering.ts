@@ -171,14 +171,7 @@ function renderDetailBlock(label: string, value: unknown): string {
 
 function renderFunctionIconHtml(): string {
   return (
-    `<span class="tool-inline-icon tool-inline-icon-function" aria-hidden="true">` +
-      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
-        `<path d="M8 7.5h8"></path>` +
-        `<path d="M8 12h8"></path>` +
-        `<path d="M8 16.5h4.5"></path>` +
-        `<rect x="3.75" y="4" width="16.5" height="16" rx="3"></rect>` +
-      `</svg>` +
-    `</span>`
+    `<span class="tool-inline-icon tool-inline-icon-function tool-inline-icon-text" aria-hidden="true">fn</span>`
   );
 }
 
@@ -194,6 +187,32 @@ function renderParameterIconHtml(): string {
         `<circle cx="6" cy="17.25" r="1.25"></circle>` +
       `</svg>` +
     `</span>`
+  );
+}
+
+function renderToolDisclosureHtml(
+  label: string,
+  bodyHtml: string,
+  count: number,
+  emptyMessage: string,
+): string {
+  if (!bodyHtml) {
+    return `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
+  }
+
+  return (
+    `<details class="tool-disclosure">` +
+      `<summary class="tool-disclosure-summary">` +
+        `<span class="tool-disclosure-summary-main">` +
+          renderParameterIconHtml() +
+          `<span>${escapeHtml(label)}</span>` +
+        `</span>` +
+        `<span class="badge neutral">${count} ${count === 1 ? "item" : "items"}</span>` +
+      `</summary>` +
+      `<div class="tool-disclosure-body">` +
+        bodyHtml +
+      `</div>` +
+    `</details>`
   );
 }
 
@@ -715,6 +734,9 @@ function renderFunctionToolHtml(tool: Record<string, any>, index: number): strin
       : "",
     typeof fn?.strict === "boolean" ? `<span class="badge ${fn.strict ? "good" : "neutral"}">${fn.strict ? "strict" : "non-strict"}</span>` : "",
   ].filter(Boolean).join("");
+  const parametersHtml = properties
+    .map(([propertyName, propertyDefinition]) => renderToolParameterHtml(propertyName, propertyDefinition, requiredNames))
+    .join("");
 
     return (
       `<article class="tool-definition-card">` +
@@ -725,13 +747,12 @@ function renderFunctionToolHtml(tool: Record<string, any>, index: number): strin
           (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
         `</div>` +
       (description ? `<p class="tool-definition-description">${escapeHtml(description)}</p>` : "") +
-      (properties.length > 0
-        ? (
-            `<div class="tool-parameter-list">` +
-              properties.map(([propertyName, propertyDefinition]) => renderToolParameterHtml(propertyName, propertyDefinition, requiredNames)).join("") +
-            `</div>`
-          )
-        : '<div class="empty">This tool did not declare any top-level JSON schema properties.</div>') +
+      renderToolDisclosureHtml(
+        "Parameters",
+        properties.length > 0 ? `<div class="tool-parameter-list">${parametersHtml}</div>` : "",
+        properties.length,
+        "This tool did not declare any top-level JSON schema properties.",
+      ) +
     `</article>`
   );
 }
@@ -742,6 +763,14 @@ function renderGenericToolHtml(tool: Record<string, any>, index: number): string
       ? tool.type.trim()
       : `tool-${index + 1}`;
   const fields = Object.entries(tool).filter(([key]) => key !== "type");
+  const fieldsHtml = fields.map(([key, value]) => (
+    `<div class="tool-parameter-row">` +
+      `<div class="tool-parameter-head">` +
+        `<span class="tool-parameter-name">${renderParameterIconHtml()}<span>${escapeHtml(key)}</span></span>` +
+      `</div>` +
+      `<div class="tool-parameter-description">${escapeHtml(formatUiValue(value) || "n/a")}</div>` +
+    `</div>`
+  )).join("");
 
     return (
       `<article class="tool-definition-card">` +
@@ -752,20 +781,12 @@ function renderGenericToolHtml(tool: Record<string, any>, index: number): string
           `</div>` +
           `<div class="message-meta"><span class="badge neutral">${escapeHtml(toolType)}</span></div>` +
         `</div>` +
-        (fields.length > 0
-          ? (
-             `<div class="tool-parameter-list">` +
-                fields.map(([key, value]) => (
-                 `<div class="tool-parameter-row">` +
-                   `<div class="tool-parameter-head">` +
-                     `<span class="tool-parameter-name">${renderParameterIconHtml()}<span>${escapeHtml(key)}</span></span>` +
-                    `</div>` +
-                   `<div class="tool-parameter-description">${escapeHtml(formatUiValue(value) || "n/a")}</div>` +
-                  `</div>`
-              )).join("") +
-            `</div>`
-          )
-        : '<div class="empty">No additional configuration fields were stored for this tool.</div>') +
+        renderToolDisclosureHtml(
+          "Parameters",
+          fields.length > 0 ? `<div class="tool-parameter-list">${fieldsHtml}</div>` : "",
+          fields.length,
+          "No additional configuration fields were stored for this tool.",
+        ) +
     `</article>`
   );
 }

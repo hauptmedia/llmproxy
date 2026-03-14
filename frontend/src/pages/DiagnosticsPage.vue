@@ -25,10 +25,6 @@ const selectedPromptName = ref("");
 
 const availableRequests = computed(() => buildDiagnosticsRequestOptions(store.state.snapshot, store.shortId));
 
-const selectedRequest = computed(() => (
-  diagnosticsPayload.value?.detail ?? null
-));
-
 const selectedReport = computed(() => (
   diagnosticsPayload.value?.report ?? null
 ));
@@ -232,18 +228,6 @@ function openSelectedRequest(): void {
 
   void store.openRequestDetail(selectedRequestId.value);
 }
-
-function severityLabel(severity: "info" | "warn" | "bad"): string {
-  if (severity === "bad") {
-    return "High";
-  }
-
-  if (severity === "warn") {
-    return "Medium";
-  }
-
-  return "Info";
-}
 </script>
 
 <template>
@@ -287,73 +271,7 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
 
     </div>
 
-    <div v-if="selectedReport && selectedRequest" class="diagnostics-grid">
-      <div class="panel">
-        <div class="panel-header">
-          <div>
-            <h2 class="panel-title">Heuristic diagnosis</h2>
-            <p class="panel-subtitle">{{ selectedReport.summary }}</p>
-          </div>
-        </div>
-
-        <div class="detail-table-wrap">
-          <table class="detail-table">
-            <thead>
-              <tr>
-                <th>Fact</th>
-                <th>Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="fact in selectedReport.facts" :key="fact.label">
-                <td class="detail-table-key">{{ fact.label }}</td>
-                <td class="detail-table-value mono">{{ fact.value }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="diagnostics-output-preview">
-          <div class="diagnostics-section-label">Output preview</div>
-          <div v-if="selectedReport.outputPreview" class="diagnostics-preview-copy">
-            {{ selectedReport.outputPreview }}
-          </div>
-          <div v-else class="empty">No assistant text output was stored for this request.</div>
-        </div>
-
-        <div class="diagnostics-findings">
-          <article
-            v-for="finding in selectedReport.findings"
-            :key="finding.code"
-            :class="['diagnostics-finding', `severity-${finding.severity}`]"
-          >
-            <div class="diagnostics-finding-head">
-              <div>
-                <div class="diagnostics-finding-title">{{ finding.title }}</div>
-                <div class="diagnostics-finding-summary">{{ finding.summary }}</div>
-              </div>
-              <span :class="['diagnostics-severity-chip', `severity-${finding.severity}`]">
-                {{ severityLabel(finding.severity) }}
-              </span>
-            </div>
-
-            <div class="diagnostics-finding-block">
-              <div class="diagnostics-section-label">Evidence</div>
-              <ul class="diagnostics-list">
-                <li v-for="evidence in finding.evidence" :key="evidence">{{ evidence }}</li>
-              </ul>
-            </div>
-
-            <div class="diagnostics-finding-block">
-              <div class="diagnostics-section-label">Troubleshooting</div>
-              <ul class="diagnostics-list">
-                <li v-for="step in finding.troubleshooting" :key="step">{{ step }}</li>
-              </ul>
-            </div>
-          </article>
-        </div>
-      </div>
-
+    <div v-if="selectedReport">
       <div class="panel">
         <div class="panel-header">
           <div>
@@ -442,4 +360,3 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
     </div>
   </section>
 </template>
-

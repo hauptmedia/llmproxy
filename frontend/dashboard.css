@@ -429,6 +429,14 @@
     grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
   }
 
+  .diagnostics-report-view {
+    @apply min-h-full;
+  }
+
+  .diagnostics-report-summary {
+    @apply mt-0 mb-4 text-sm leading-relaxed text-stone-700;
+  }
+
   .diagnostics-output-preview,
   .diagnostics-tools,
   .diagnostics-prompt-preview {
@@ -1432,36 +1440,6 @@
     gap: 0;
   }
 
-  .log-issue-filter-trigger {
-    width: 16px;
-    height: 16px;
-    min-width: 16px;
-    min-height: 16px;
-    padding: 0;
-    border-width: 0;
-    background: transparent;
-    color: #b45309;
-    box-shadow: none;
-  }
-
-  .log-issue-filter-trigger svg {
-    width: 12px;
-    height: 12px;
-  }
-
-  .log-issue-filter-trigger:hover {
-    background: transparent;
-    border-color: transparent;
-    color: #92400e;
-  }
-
-  .log-issue-filter-trigger.active {
-    background: transparent;
-    border-color: transparent;
-    color: #92400e;
-    box-shadow: none;
-  }
-
   .log-issue-cell {
     padding-left: 0;
     padding-right: 0;
@@ -2103,6 +2081,31 @@
     @apply mt-3 text-sm leading-relaxed text-stone-700;
   }
 
+  .tool-disclosure {
+    @apply mt-3 rounded-[1.15rem] border border-amber-900/10 bg-white/56;
+    overflow: hidden;
+  }
+
+  .tool-disclosure-summary {
+    @apply flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-stone-800;
+  }
+
+  .tool-disclosure-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .tool-disclosure-summary::marker {
+    content: "";
+  }
+
+  .tool-disclosure-summary-main {
+    @apply inline-flex min-w-0 items-center gap-2;
+  }
+
+  .tool-disclosure-body {
+    @apply border-t border-amber-900/10 px-3 py-3;
+  }
+
   .tool-invocation-table-wrap {
     @apply rounded-2xl bg-white/72;
   }
@@ -2143,6 +2146,14 @@
     width: 0.8rem;
     height: 0.8rem;
     display: block;
+  }
+
+  .tool-inline-icon-text {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: lowercase;
+    line-height: 1;
   }
 
   .tool-inline-icon-function {

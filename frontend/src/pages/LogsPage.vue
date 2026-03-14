@@ -96,7 +96,7 @@ const {
                   <div class="log-header-cell log-issue-header-content">
                     <button
                       type="button"
-                      class="log-filter-trigger log-issue-filter-trigger"
+                      class="log-filter-trigger"
                       :class="{ active: isFilterActive('issues') }"
                       :title="issuesFilterTitle"
                       aria-label="Filter problematic requests"

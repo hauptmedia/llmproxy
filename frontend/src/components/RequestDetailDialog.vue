@@ -1,21 +1,27 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import ConversationSurface from "./ConversationSurface.vue";
+import DiagnosticReportView from "./DiagnosticReportView.vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
 import JsonAceViewer from "./JsonAceViewer.vue";
 import MessageCard from "./MessageCard.vue";
 import ToolDefinitionsView from "./ToolDefinitionsView.vue";
+import type { DiagnosticReport } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
+import { readErrorResponse } from "../utils/http";
 
 type RawPayloadKind = "request" | "response";
 
 const store = useDashboardStore();
-const activeInspectorTab = ref<"request" | "response" | "tools">("request");
+const activeInspectorTab = ref<"request" | "response" | "problems" | "tools">("request");
 const activeRawPayload = ref<{
   kind: RawPayloadKind;
   title: string;
   value: unknown;
 } | null>(null);
+const diagnosticsReport = ref<DiagnosticReport | null>(null);
+const diagnosticsLoading = ref(false);
+const diagnosticsError = ref("");
 let previousDocumentOverflow = "";
 let previousBodyOverflow = "";
 let scrollLockApplied = false;
@@ -71,6 +77,31 @@ watch(
 );
 
 watch(
+  () => [
+    store.state.requestDetail.open,
+    store.state.requestDetail.requestId,
+    store.state.requestDetail.detail?.live,
+  ] as const,
+  ([open, requestId, live]) => {
+    diagnosticsReport.value = null;
+    diagnosticsError.value = "";
+
+    if (!open || !requestId) {
+      diagnosticsLoading.value = false;
+      return;
+    }
+
+    if (live === true) {
+      diagnosticsLoading.value = false;
+      return;
+    }
+
+    void loadDiagnosticsReport(requestId);
+  },
+  { immediate: true },
+);
+
+watch(
   () => store.state.requestDetail.open,
   (open) => {
     setBackgroundScrollLocked(open);
@@ -114,6 +145,45 @@ function openRawPayloadInspector(kind: RawPayloadKind): void {
 
 function closeRawPayloadInspector(): void {
   activeRawPayload.value = null;
+}
+
+async function loadDiagnosticsReport(requestId: string): Promise<void> {
+  diagnosticsLoading.value = true;
+
+  try {
+    const response = await fetch(`/api/diagnostics/requests/${encodeURIComponent(requestId)}`, {
+      method: "GET",
+    });
+
+    if (response.status === 404) {
+      diagnosticsReport.value = null;
+      diagnosticsError.value = "";
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error(await readErrorResponse(response));
+    }
+
+    const payload = await response.json() as { report: DiagnosticReport };
+    if (store.state.requestDetail.requestId !== requestId) {
+      return;
+    }
+
+    diagnosticsReport.value = payload.report;
+    diagnosticsError.value = "";
+  } catch (error) {
+    if (store.state.requestDetail.requestId !== requestId) {
+      return;
+    }
+
+    diagnosticsReport.value = null;
+    diagnosticsError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (store.state.requestDetail.requestId === requestId) {
+      diagnosticsLoading.value = false;
+    }
+  }
 }
 
 function serializePayloadForClipboard(value: unknown): string {
@@ -240,6 +310,16 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
             <button
               type="button"
               class="request-detail-tab-button"
+              :class="{ active: activeInspectorTab === 'problems' }"
+              role="tab"
+              :aria-selected="activeInspectorTab === 'problems'"
+              @click="activeInspectorTab = 'problems'"
+            >
+              <span>Diagnosis</span>
+            </button>
+            <button
+              type="button"
+              class="request-detail-tab-button"
               :class="{ active: activeInspectorTab === 'tools' }"
               role="tab"
               :aria-selected="activeInspectorTab === 'tools'"
@@ -261,16 +341,7 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
                   <tbody>
                     <tr v-for="row in store.requestParamRows" :key="row.key + row.value">
                       <td class="detail-table-key">
-                        <span class="detail-table-key-label">
-                          <span>{{ row.key }}</span>
-                          <span
-                            class="detail-table-help"
-                            :title="row.title"
-                            aria-hidden="true"
-                          >
-                            ?
-                          </span>
-                        </span>
+                        <span class="detail-table-key-label" :title="row.title">{{ row.key }}</span>
                       </td>
                       <td :title="row.title" class="detail-table-value mono">{{ row.value }}</td>
                     </tr>
@@ -307,16 +378,7 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
                   <tbody>
                     <tr v-for="row in store.requestResponseMetricRows" :key="row.key + row.value">
                       <td class="detail-table-key">
-                        <span class="detail-table-key-label">
-                          <span>{{ row.key }}</span>
-                          <span
-                            class="detail-table-help"
-                            :title="row.title"
-                            aria-hidden="true"
-                          >
-                            ?
-                          </span>
-                        </span>
+                        <span class="detail-table-key-label" :title="row.title">{{ row.key }}</span>
                       </td>
                       <td :title="row.title" class="detail-table-value mono">{{ row.value }}</td>
                     </tr>
@@ -339,6 +401,15 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
                   <span>Show raw response data</span>
                 </button>
               </div>
+            </section>
+
+            <section v-else-if="activeInspectorTab === 'problems'" class="request-detail-section">
+              <DiagnosticReportView
+                :report="diagnosticsReport"
+                :loading="diagnosticsLoading"
+                :error="diagnosticsError"
+                :waiting-for-final="store.state.requestDetail.detail?.live === true"
+              />
             </section>
 
             <section v-else class="request-detail-section">

@@ -250,9 +250,52 @@ export function buildRequestParamRows(
       .map(([key, value]) => ({
         key,
         value: formatCompactValue(value),
-        title: `Top-level OpenAI request field "${key}".`,
+        title: describeRequestField(key),
       })),
   );
+}
+
+function describeRequestField(key: string): string {
+  const normalized = key.trim();
+
+  switch (normalized) {
+    case "model":
+      return "Model requested by the client. This can be a concrete model name or a routing alias such as auto.";
+    case "max_completion_tokens":
+      return "Maximum number of completion tokens the model is allowed to generate for this response. When reached, generation usually stops with finish reason \"length\".";
+    case "max_tokens":
+      return "Legacy maximum completion-token limit for this request. llmproxy treats it as a fallback when max_completion_tokens is not present.";
+    case "temperature":
+      return "Sampling temperature. Lower values make the response more deterministic; higher values make it more varied and creative.";
+    case "top_p":
+      return "Nucleus sampling threshold. The model samples only from the smallest probability mass whose total reaches this value.";
+    case "top_k":
+      return "Top-k sampling limit. The model samples only from the highest-probability candidate tokens up to this count.";
+    case "min_p":
+      return "Minimum probability threshold for token candidates. Lower-probability options below this threshold are filtered out.";
+    case "repeat_penalty":
+      return "Penalty applied to already used tokens to reduce repetition and looping output.";
+    case "seed":
+      return "Optional random seed. When the backend supports it, the same seed can make sampling more reproducible.";
+    case "tool_choice":
+      return "Controls whether the model may call tools automatically, must call a specific tool, or must avoid tools.";
+    case "parallel_tool_calls":
+      return "Whether the model is allowed to emit multiple tool calls in parallel within one assistant turn.";
+    case "response_format":
+      return "Requested output format, for example structured JSON output when supported by the backend.";
+    case "presence_penalty":
+      return "Penalty that encourages the model to introduce new topics instead of reusing the same concepts repeatedly.";
+    case "frequency_penalty":
+      return "Penalty that discourages repeatedly using the same tokens or phrases.";
+    case "stop":
+      return "Custom stop sequence or sequences. Generation ends when one of them is reached.";
+    case "n":
+      return "Number of completions requested for this call. Most llmproxy flows typically use a single response.";
+    case "user":
+      return "Optional end-user identifier passed through for abuse monitoring, analytics, or downstream policy handling.";
+    default:
+      return `Top-level request field "${normalized}". If you set it explicitly, llmproxy forwarded this parameter to the backend request.`;
+  }
 }
 
 export function buildDebugMetaBadges(debug: DebugState, liveUsage: string): UiBadge[] {
@@ -501,12 +544,30 @@ export function buildRequestResponseMetricRows(
   }
 
   const items: RequestFieldRow[] = [];
+  const servedModel = resolveServedModelName(options?.responseBody, options?.requestBody, entry.model);
+  const backendLabel = entry.backendName?.trim() || entry.backendId?.trim() || "";
+
+  if (backendLabel) {
+    items.push({
+      key: "Backend",
+      value: backendLabel,
+      title: "Backend instance that actually served and answered this request.",
+    });
+  }
+
+  if (servedModel) {
+    items.push({
+      key: "Model",
+      value: servedModel,
+      title: "Concrete model that actually produced the response after llmproxy routing resolved the request.",
+    });
+  }
 
   if (typeof entry.timeToFirstTokenMs === "number") {
     items.push({
       key: "Time to first token",
       value: formatDuration(entry.timeToFirstTokenMs),
-      title: "Time to first generated token.",
+      title: "How long it took from request start until the first completion token arrived from the backend.",
     });
   }
 
@@ -514,7 +575,7 @@ export function buildRequestResponseMetricRows(
     items.push({
       key: "Generation time",
       value: formatDuration(entry.generationMs),
-      title: "Generation phase duration.",
+      title: "How long the backend spent in the actual generation phase after output started.",
     });
   }
 
@@ -523,7 +584,7 @@ export function buildRequestResponseMetricRows(
     items.push({
       key: "Tokens per second",
       value: tokenRate.replace("tok/s", "tokens/s"),
-      title: "Generated completion tokens per second.",
+      title: "Average completion-token throughput during the generation phase.",
     });
   }
 
@@ -531,7 +592,7 @@ export function buildRequestResponseMetricRows(
     items.push({
       key: "Reasoning tokens",
       value: `${entry.reasoningTokens} tokens`,
-      title: "Generated tokens attributed to reasoning content.",
+      title: "Generated tokens attributed to hidden reasoning or thinking content, when the backend reports them separately.",
     });
   }
 
@@ -539,11 +600,11 @@ export function buildRequestResponseMetricRows(
     items.push({
       key: "Content tokens",
       value: `${entry.contentTokens} tokens`,
-      title: "Generated tokens attributed to normal visible content.",
+      title: "Generated tokens that became normal visible assistant output in the final response.",
     });
   }
 
-  const completionMetric = buildCompletionMetricValue(entry, options);
+  const completionMetric = buildCompletionMetricValue(entry, options, servedModel);
   if (completionMetric) {
     items.push({
       key: "Completion tokens",
@@ -556,7 +617,7 @@ export function buildRequestResponseMetricRows(
     items.push({
       key: "Legacy text tokens",
       value: `${entry.textTokens} tokens`,
-      title: "Generated tokens attributed to legacy text completion output.",
+      title: "Generated tokens counted from legacy text-completion style output when the backend reports them separately.",
     });
   }
 
@@ -571,10 +632,11 @@ function buildCompletionMetricValue(
     backends?: BackendSnapshot[];
     live?: boolean;
   },
+  servedModelName?: string,
 ): { value: string; title: string } | null {
   const usedTokens = resolveUsedCompletionTokens(entry, Boolean(options?.live));
   const requestedLimit = resolveRequestedCompletionLimit(options?.requestBody);
-  const servedModel = resolveServedModelName(options?.responseBody, options?.requestBody, entry.model);
+  const servedModel = servedModelName ?? resolveServedModelName(options?.responseBody, options?.requestBody, entry.model);
   const modelLimit = resolveModelCompletionLimit(servedModel, entry.backendId, options?.backends);
 
   if (usedTokens === null) {
