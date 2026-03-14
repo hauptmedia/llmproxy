@@ -24,6 +24,12 @@ const store = useDashboardStore();
 const mcpServerEnabled = computed(() => store.state.serverConfig?.mcpServerEnabled !== false);
 const hasTranscript = computed(() => store.state.debug.transcript.length > 0);
 const trimmedSystemPrompt = computed(() => store.state.debug.systemPrompt.trim());
+const debugSubmitLabel = "Send message";
+const clearChatTitle = computed(() => (
+  store.state.debug.sending
+    ? "Cancel the current request and clear the chat conversation"
+    : "Clear the current chat conversation"
+));
 const showAdvancedParameters = ref(false);
 const advancedParamHelp = {
   temperature: "Controls randomness. Lower values are more deterministic, higher values are more creative. Typical range: 0.0 to 2.0. This UI accepts values >= 0.",
@@ -160,8 +166,8 @@ const chatConversationSignature = computed<string>(() => {
               v-if="hasTranscript"
               class="icon-button compact"
               type="button"
-              aria-label="Clear the current chat conversation"
-              title="Clear the current chat conversation"
+              :aria-label="clearChatTitle"
+              :title="clearChatTitle"
               @click="store.clearDebugChat()"
             >
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -217,7 +223,7 @@ const chatConversationSignature = computed<string>(() => {
               :models="store.state.models"
               :sending="store.state.debug.sending"
               :show-advanced-parameters="showAdvancedParameters"
-              submit-label="Send first message"
+              :submit-label="debugSubmitLabel"
               prompt-placeholder="Enter the first user message to send through the proxy."
               prompt-id="debug-prompt"
               model-id="debug-model"
@@ -253,7 +259,7 @@ const chatConversationSignature = computed<string>(() => {
               :models="store.state.models"
               :sending="store.state.debug.sending"
               :show-advanced-parameters="showAdvancedParameters"
-              submit-label="Send follow-up"
+              :submit-label="debugSubmitLabel"
               prompt-placeholder="Enter the next message to continue the conversation."
               prompt-id="debug-follow-up"
               model-id="debug-follow-up-model"

@@ -27,6 +27,13 @@ export function useDebugChat(
   onErrorToast: (title: string, message: string) => void,
 ) {
   let metricsTicker: number | undefined;
+  let activeRunId = 0;
+
+  function isExpectedDebugAbort(error: unknown): boolean {
+    return error instanceof DOMException
+      ? error.name === "AbortError"
+      : error instanceof Error && error.name === "AbortError";
+  }
 
   function replaceTranscriptEntry(entry: DebugTranscriptEntry): DebugTranscriptEntry {
     return replaceDebugTranscriptEntry(state.debug.transcript, entry);
@@ -101,6 +108,9 @@ export function useDebugChat(
     if (state.debug.sending) {
       return;
     }
+
+    const runId = activeRunId + 1;
+    activeRunId = runId;
 
     state.debug.stream = true;
 
@@ -254,6 +264,10 @@ export function useDebugChat(
         currentRequestId = createClientDebugRequestId();
       }
     } catch (error) {
+      if (runId !== activeRunId || isExpectedDebugAbort(error)) {
+        return;
+      }
+
       const message = error instanceof Error ? error.message : String(error);
       state.debug.error = message;
       onErrorToast("Chat request", message);
@@ -266,17 +280,28 @@ export function useDebugChat(
         }
       }
     } finally {
-      state.debug.sending = false;
-      state.debug.abortController = null;
-      stopDebugMetricsTicker();
+      if (runId === activeRunId) {
+        state.debug.sending = false;
+        state.debug.abortController = null;
+        stopDebugMetricsTicker();
+      }
     }
   }
 
   function stopDebugChat(): void {
+    activeRunId += 1;
     state.debug.abortController?.abort(new Error("Request cancelled from dashboard."));
+    state.debug.sending = false;
+    state.debug.abortController = null;
+    stopDebugMetricsTicker();
   }
 
   function clearDebugChat(): void {
+    activeRunId += 1;
+    state.debug.abortController?.abort(new Error("Chat session cleared."));
+    state.debug.sending = false;
+    state.debug.abortController = null;
+    stopDebugMetricsTicker();
     state.debug.transcript = [];
     state.debug.rawRequest = "";
     state.debug.rawResponse = "";
@@ -290,6 +315,7 @@ export function useDebugChat(
   }
 
   function prepareDebugChatDraft(systemPrompt: string, prompt: string): void {
+    activeRunId += 1;
     stopDebugMetricsTicker();
     state.debug.abortController?.abort(new Error("Chat session reset from diagnostics."));
     state.debug.sending = false;
