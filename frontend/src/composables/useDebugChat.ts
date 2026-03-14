@@ -27,6 +27,7 @@ export function useDebugChat(
   state: DashboardState,
   onErrorToast: (title: string, message: string) => void,
 ) {
+  const maxFunctionRounds = 100;
   let metricsTicker: number | undefined;
   let activeRunId = 0;
 
@@ -257,7 +258,7 @@ export function useDebugChat(
       let currentAssistantTurn = assistantTurn;
       let currentRequestId = requestId;
 
-      for (let round = 0; round < 6; round += 1) {
+      for (let round = 0; round < maxFunctionRounds; round += 1) {
         const currentPayload = {
           model,
           messages: [
@@ -310,7 +311,7 @@ export function useDebugChat(
           }
         }
 
-        if (round === 5) {
+        if (round === maxFunctionRounds - 1) {
           onErrorToast("llmproxy functions", "Maximum llmproxy function rounds reached.");
           break;
         }
