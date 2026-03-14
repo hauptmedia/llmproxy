@@ -120,6 +120,7 @@ watch(
 
     void loadDiagnosticsReport(requestId);
   },
+  { immediate: true },
 );
 
 onMounted(() => {
@@ -252,9 +253,6 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
       <div class="panel-header">
         <div>
           <h2 class="panel-title">Diagnostics</h2>
-          <p class="panel-subtitle">
-            MCP tools and prompt playbooks for debugging stored llmproxy requests with an LLM.
-          </p>
         </div>
         <button
           class="icon-button compact"
@@ -285,17 +283,6 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
               {{ request.label }}
             </option>
           </select>
-        </div>
-
-        <div class="diagnostics-toolbar-actions">
-          <button
-            class="button secondary"
-            type="button"
-            :disabled="!selectedRequestId || loadingReport"
-            @click="loadDiagnosticsReport(selectedRequestId)"
-          >
-            {{ loadingReport ? "Refreshing..." : "Refresh diagnosis" }}
-          </button>
         </div>
       </div>
 
