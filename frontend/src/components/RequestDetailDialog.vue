@@ -331,7 +331,7 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
               :aria-selected="activeInspectorTab === 'diagnosis'"
               @click="selectInspectorTab('diagnosis')"
             >
-              <span>Diagnosis</span>
+              <span>Analyzer</span>
             </button>
           </div>
           <div class="detail-card-viewport">

@@ -2106,11 +2106,12 @@
   }
 
   .tool-disclosure-body {
-    @apply px-0 pt-2 pb-0;
+    @apply pt-2 pb-0;
+    padding-left: 0.65rem;
   }
 
   .tool-parameter-panel {
-    @apply pl-3;
+    padding-left: 0.85rem;
     border-left: 2px solid rgba(180, 83, 9, 0.18);
   }
 
@@ -2134,7 +2135,6 @@
     @apply mt-1 text-[11px];
   }
 
-  .tool-count-badge,
   .tool-type-badge,
   .tool-parameter-head .badge {
     @apply px-2 py-0.5 text-[10px];
@@ -2192,6 +2192,10 @@
     @apply inline-flex items-center gap-2 text-sm font-semibold text-stone-950;
   }
 
+  .tool-parameter-type-label {
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-stone-500;
+  }
+
   .tool-inline-icon {
     @apply inline-flex items-center justify-center rounded-full border border-amber-900/10;
     width: 1.3rem;
@@ -2222,6 +2226,17 @@
   .tool-inline-icon-parameter {
     color: #57534e;
     background: rgba(245, 245, 244, 0.98);
+  }
+
+  .tool-inline-count-icon {
+    @apply inline-flex items-center justify-center rounded-full border text-[10px] font-semibold leading-none;
+    min-width: 1.3rem;
+    height: 1.3rem;
+    padding: 0 0.24rem;
+    color: #8a4b0f;
+    border-color: rgba(180, 83, 9, 0.16);
+    background: rgba(255, 247, 237, 0.96);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
   }
 
   .tool-parameter-description {

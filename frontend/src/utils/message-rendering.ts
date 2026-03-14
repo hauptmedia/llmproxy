@@ -175,7 +175,12 @@ function renderFunctionIconHtml(): string {
   );
 }
 
-function renderParameterIconHtml(): string {
+function renderParameterIconHtml(count?: number): string {
+  if (typeof count === "number") {
+    const countTitle = `${count} ${count === 1 ? "parameter" : "parameters"}`;
+    return `<span class="tool-inline-count-icon" aria-hidden="true" title="${escapeHtml(countTitle)}">${count}</span>`;
+  }
+
   return (
     `<span class="tool-inline-icon tool-inline-icon-parameter" aria-hidden="true">` +
       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
@@ -231,10 +236,10 @@ function renderTypeIconHtml(typeLabel: string): string {
   return `<span class="tool-type-icon tool-type-icon-text" aria-hidden="true">•</span>`;
 }
 
-function renderTypeBadgeHtml(typeLabel: string): string {
+function renderTypeBadgeHtml(typeLabel: string, includeIcon = true): string {
   return (
     `<span class="badge neutral tool-type-badge">` +
-      renderTypeIconHtml(typeLabel) +
+      (includeIcon ? renderTypeIconHtml(typeLabel) : "") +
       `<span>${escapeHtml(typeLabel)}</span>` +
     `</span>`
   );
@@ -251,13 +256,12 @@ function renderToolDisclosureHtml(
   }
 
   return (
-    `<details class="tool-disclosure">` +
+      `<details class="tool-disclosure">` +
       `<summary class="tool-disclosure-summary">` +
         `<span class="tool-disclosure-summary-main">` +
-          renderParameterIconHtml() +
+          renderParameterIconHtml(count) +
           `<span>${escapeHtml(label)}</span>` +
         `</span>` +
-        `<span class="badge neutral tool-count-badge" title="${escapeHtml(`${count} ${count === 1 ? "parameter" : "parameters"}`)}">${count}</span>` +
       `</summary>` +
       `<div class="tool-disclosure-body">` +
         `<div class="tool-parameter-panel">` +
@@ -582,9 +586,8 @@ function renderToolParameterHtml(
     return (
       `<div class="tool-parameter-row">` +
         `<div class="tool-parameter-head">` +
-          `<span class="tool-parameter-name">${renderParameterIconHtml()}<span>${escapeHtml(name)}</span></span>` +
+          `<span class="tool-parameter-name"><span class="tool-parameter-type-label">${escapeHtml(typeLabel)}</span><span>${escapeHtml(name)}</span></span>` +
           `<span class="badge ${requiredNames.has(name) ? "good" : "neutral"}">${requiredNames.has(name) ? "required" : "optional"}</span>` +
-          `${renderTypeBadgeHtml(typeLabel)}` +
         `</div>` +
       (description ? `<div class="tool-parameter-description">${escapeHtml(description)}</div>` : "") +
       (notes.length > 0 ? `<div class="tool-parameter-note">${escapeHtml(notes.join(" • "))}</div>` : "") +

@@ -547,20 +547,6 @@ export function buildRequestResponseMetricRows(
   const servedModel = resolveServedModelName(options?.responseBody, options?.requestBody, entry.model);
   const backendLabel = entry.backendName?.trim() || entry.backendId?.trim() || "";
 
-  items.push({
-    key: "Status",
-    value: describeRequestStatus(entry),
-    title: "Final request status recorded by llmproxy for this request.",
-  });
-
-  if (entry.finishReason) {
-    items.push({
-      key: "Finish reason",
-      value: entry.finishReason,
-      title: describeFinishReason(entry.finishReason),
-    });
-  }
-
   if (backendLabel) {
     items.push({
       key: "Backend",
@@ -576,6 +562,12 @@ export function buildRequestResponseMetricRows(
       title: "Concrete model that actually produced the response after llmproxy routing resolved the request.",
     });
   }
+
+  items.push({
+    key: "Status",
+    value: describeRequestStatus(entry),
+    title: "Final request status recorded by llmproxy for this request.",
+  });
 
   if (typeof entry.timeToFirstTokenMs === "number") {
     items.push({
@@ -632,6 +624,14 @@ export function buildRequestResponseMetricRows(
       key: "Legacy text tokens",
       value: `${entry.textTokens} tokens`,
       title: "Generated tokens counted from legacy text-completion style output when the backend reports them separately.",
+    });
+  }
+
+  if (entry.finishReason) {
+    items.push({
+      key: "Finish reason",
+      value: entry.finishReason,
+      title: describeFinishReason(entry.finishReason),
     });
   }
 
