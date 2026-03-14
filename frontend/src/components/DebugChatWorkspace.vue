@@ -125,13 +125,15 @@ function getPendingAssistantCopy(entry: DebugTranscriptEntry, index: number): Re
     return { ...entry };
   }
 
-  const waitingMessage = store.state.debug.status.startsWith("Running ")
-    ? "Running llmproxy functions and waiting for the next model response..."
-    : "Waiting for model response...";
+  const waitingTitle = store.state.debug.status.startsWith("Running ")
+    ? "Running llmproxy functions and waiting for the next model response."
+    : "Waiting for model response.";
 
   return {
     ...entry,
-    content: waitingMessage,
+    content: "",
+    pending: true,
+    pending_title: waitingTitle,
   };
 }
 
@@ -140,11 +142,7 @@ function getPendingAssistantBadges(entry: DebugTranscriptEntry, index: number): 
     return [];
   }
 
-  return [{
-    text: "waiting",
-    tone: "neutral",
-    title: "The assistant request is still in progress. Response content will appear here as soon as the first streamed data arrives.",
-  }];
+  return [];
 }
 
 function getTranscriptContentLength(entry: DebugTranscriptEntry): number {
@@ -206,6 +204,7 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
       message: getPendingAssistantCopy(entry, index),
       index: index + offset,
       finishReason: entry.finish_reason || "",
+      hideFinishBadge: true,
       reasoningCollapsed: shouldCollapseDebugReasoning(entry, index),
       extraBadges: getPendingAssistantBadges(entry, index),
     });

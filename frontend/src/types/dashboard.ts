@@ -342,6 +342,7 @@ export interface RenderMessageOptions {
   heading?: string;
   role?: string;
   finishReason?: string;
+  hideFinishBadge?: boolean;
   reasoningCollapsed?: boolean;
   extraBadges?: UiBadge[];
   hideRoleBadge?: boolean;
@@ -354,6 +355,7 @@ export interface ConversationTranscriptItem {
   message: Record<string, unknown>;
   index: number;
   finishReason?: string;
+  hideFinishBadge?: boolean;
   reasoningCollapsed?: boolean;
   extraBadges?: UiBadge[];
 }

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { UiBadge } from "../types/dashboard";
 import { renderMessageHtml } from "../utils/message-rendering";
+import type { JsonAceController } from "../utils/json-ace";
+import { createJsonAceEditor } from "../utils/json-ace";
 
 interface MessageLike extends Record<string, unknown> {
   role?: string;
@@ -13,18 +15,27 @@ const props = withDefaults(defineProps<{
   heading?: string;
   bubbleLayout?: boolean;
   finishReason?: string;
+  hideFinishBadge?: boolean;
   reasoningCollapsed?: boolean;
   extraBadges?: UiBadge[];
 }>(), {
   heading: "",
   bubbleLayout: false,
   finishReason: "",
+  hideFinishBadge: false,
   reasoningCollapsed: true,
   extraBadges: () => [],
 });
 
 const hostEl = ref<HTMLElement | null>(null);
 const reasoningExpanded = ref(false);
+const inlineJsonEditors: JsonAceController[] = [];
+
+function destroyInlineJsonEditors(): void {
+  while (inlineJsonEditors.length > 0) {
+    inlineJsonEditors.pop()?.destroy();
+  }
+}
 
 function handleReasoningToggle(event: Event): void {
   const target = event.target;
@@ -35,9 +46,43 @@ function handleReasoningToggle(event: Event): void {
   reasoningExpanded.value = target.open;
 }
 
+async function syncInlineJsonEditors(): Promise<void> {
+  destroyInlineJsonEditors();
+  await nextTick();
+
+  if (!hostEl.value) {
+    return;
+  }
+
+  const containers = hostEl.value.querySelectorAll<HTMLElement>(".tool-response-json-ace");
+
+  for (const container of containers) {
+    const host = container.querySelector<HTMLElement>(".tool-response-json-ace-host");
+    const payload = container.querySelector<HTMLScriptElement>('script[type="application/json"]');
+    if (!host || !payload) {
+      continue;
+    }
+
+    try {
+      const controller = await createJsonAceEditor(host, {
+        value: payload.textContent ?? "",
+        readOnly: true,
+        minLines: 8,
+        maxLines: 18,
+        scrollPastEnd: 0,
+        padding: 10,
+      });
+      inlineJsonEditors.push(controller);
+    } catch (error) {
+      console.error("Failed to initialize inline tool JSON viewer.", error);
+    }
+  }
+}
+
 const html = computed(() => renderMessageHtml(props.message, props.index, {
   heading: props.heading || undefined,
   finishReason: props.finishReason || "",
+  hideFinishBadge: props.hideFinishBadge,
   reasoningCollapsed: reasoningExpanded.value ? false : props.reasoningCollapsed,
   extraBadges: props.extraBadges,
   hideRoleBadge: props.bubbleLayout && (role.value === "system" || role.value === "tool"),
@@ -66,6 +111,32 @@ const assistantAvatarTitle = computed(() => {
   return model ? `Model: ${model}` : "";
 });
 
+const toolAvatarTitle = computed(() => {
+  if (role.value !== "tool") {
+    return "";
+  }
+
+  const parts: string[] = [];
+  const toolName =
+    typeof props.message.name === "string" && props.message.name.trim().length > 0
+      ? props.message.name.trim()
+      : "";
+  const toolCallId =
+    typeof props.message.tool_call_id === "string" && props.message.tool_call_id.trim().length > 0
+      ? props.message.tool_call_id.trim()
+      : "";
+
+  if (toolName) {
+    parts.push(`Tool: ${toolName}`);
+  }
+
+  if (toolCallId) {
+    parts.push(`Call id: ${toolCallId}`);
+  }
+
+  return parts.join("\n");
+});
+
 const hostClass = computed(() => {
   const normalizedRole = role.value;
 
@@ -79,10 +150,16 @@ const hostClass = computed(() => {
 
 onMounted(() => {
   hostEl.value?.addEventListener("toggle", handleReasoningToggle, true);
+  void syncInlineJsonEditors();
 });
 
 onBeforeUnmount(() => {
   hostEl.value?.removeEventListener("toggle", handleReasoningToggle, true);
+  destroyInlineJsonEditors();
+});
+
+watch(html, () => {
+  void syncInlineJsonEditors();
 });
 </script>
 
@@ -133,6 +210,7 @@ onBeforeUnmount(() => {
       v-if="showAvatar && role === 'tool'"
       class="message-avatar"
       :class="`role-${role}`"
+      :title="toolAvatarTitle || undefined"
       aria-hidden="true"
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

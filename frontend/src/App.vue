@@ -71,7 +71,7 @@ watch(
 </script>
 
 <template>
-  <div class="shell">
+  <div class="shell" :class="{ 'shell-chat': currentPage === 'chat' }">
     <div class="hero-sticky">
       <header class="hero">
         <div class="hero-bar">
@@ -109,7 +109,9 @@ watch(
       </header>
     </div>
 
-    <RouterView />
+    <main class="shell-content">
+      <RouterView />
+    </main>
     <div v-if="store.state.toasts.length" class="toast-stack" aria-live="polite" aria-atomic="true">
       <div
         v-for="toast in store.state.toasts"

@@ -1,32 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import type { Ace } from "ace-builds";
-import { prettyJson } from "../utils/formatters";
-
-type AceModule = typeof import("ace-builds");
-
-let aceLoader: Promise<AceModule> | null = null;
-
-async function loadAce(): Promise<AceModule> {
-  if (!aceLoader) {
-    aceLoader = (async () => {
-      const aceModule = await import("ace-builds") as unknown as { default: AceModule };
-      const ace = aceModule.default;
-      const [{ default: workerJsonUrl }] = await Promise.all([
-        import("ace-builds/src-noconflict/worker-json?url"),
-        import("ace-builds/src-noconflict/mode-json"),
-        import("ace-builds/src-noconflict/theme-textmate"),
-        import("ace-builds/src-noconflict/ext-searchbox"),
-      ]);
-
-      ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
-
-      return ace;
-    })();
-  }
-
-  return aceLoader;
-}
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import type { JsonAceController } from "../utils/json-ace";
+import { createJsonAceEditor } from "../utils/json-ace";
 
 const props = withDefaults(defineProps<{
   value?: unknown;
@@ -38,49 +13,8 @@ const props = withDefaults(defineProps<{
 });
 
 const editorHost = ref<HTMLElement | null>(null);
-let editor: Ace.Editor | null = null;
-let resizeObserver: ResizeObserver | null = null;
+let controller: JsonAceController | null = null;
 let disposed = false;
-
-const serializedValue = computed(() => {
-  const value = props.value;
-  if (value === undefined || value === null || value === "") {
-    return props.placeholder;
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return props.placeholder;
-    }
-
-    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-      try {
-        return prettyJson(JSON.parse(trimmed));
-      } catch {
-        return value;
-      }
-    }
-
-    return value;
-  }
-
-  return prettyJson(value);
-});
-
-function syncEditorValue(): void {
-  if (!editor) {
-    return;
-  }
-
-  const nextValue = serializedValue.value;
-  if (editor.getValue() === nextValue) {
-    return;
-  }
-
-  editor.setValue(nextValue, -1);
-  editor.clearSelection();
-}
 
 async function initializeEditor(): Promise<void> {
   if (!editorHost.value) {
@@ -88,49 +22,16 @@ async function initializeEditor(): Promise<void> {
   }
 
   try {
-    const ace = await loadAce();
-
-    if (disposed || !editorHost.value) {
-      return;
-    }
-
-    editor = ace.edit(editorHost.value, {
-      mode: "ace/mode/json",
-      theme: "ace/theme/textmate",
+    controller = await createJsonAceEditor(editorHost.value, {
+      value: props.value,
+      placeholder: props.placeholder,
       readOnly: props.readOnly,
-      showPrintMargin: false,
-      highlightActiveLine: false,
-      highlightGutterLine: false,
-      showGutter: true,
-      useWorker: true,
-      displayIndentGuides: true,
-      wrap: true,
-      tabSize: 2,
-      useSoftTabs: true,
-      fontSize: 14,
-      scrollPastEnd: 0.25,
-      fixedWidthGutter: true,
-      showFoldWidgets: true,
     });
 
-    editor.session.setUseWorker(true);
-    editor.session.setUseWrapMode(true);
-    editor.session.setFoldStyle("markbeginend");
-    editor.renderer.setScrollMargin(12, 12, 12, 12);
-    editor.renderer.setPadding(12);
-    editor.setValue(serializedValue.value, -1);
-    editor.clearSelection();
-
-    if (typeof ResizeObserver !== "undefined") {
-      resizeObserver = new ResizeObserver(() => {
-        editor?.resize();
-      });
-      resizeObserver.observe(editorHost.value);
+    if (disposed) {
+      controller.destroy();
+      controller = null;
     }
-
-    window.requestAnimationFrame(() => {
-      editor?.resize();
-    });
   } catch (error) {
     console.error("Failed to initialize the JSON editor.", error);
   }
@@ -142,20 +43,18 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   disposed = true;
-  resizeObserver?.disconnect();
-  resizeObserver = null;
-  editor?.destroy();
-  editor = null;
+  controller?.destroy();
+  controller = null;
 });
 
-watch(serializedValue, () => {
-  syncEditorValue();
+watch(() => [props.value, props.placeholder] as const, ([value, placeholder]) => {
+  controller?.setValue(value, placeholder);
 });
 
 watch(
   () => props.readOnly,
   (readOnly) => {
-    editor?.setReadOnly(readOnly);
+    controller?.setReadOnly(readOnly);
   },
 );
 </script>

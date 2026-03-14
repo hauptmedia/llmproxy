@@ -20,6 +20,7 @@ withDefaults(defineProps<{
       :index="item.index"
       :bubble-layout="bubbleLayout"
       :finish-reason="item.finishReason || ''"
+      :hide-finish-badge="item.hideFinishBadge ?? false"
       :reasoning-collapsed="item.reasoningCollapsed ?? true"
       :extra-badges="item.extraBadges || []"
     />

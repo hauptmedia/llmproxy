@@ -3,6 +3,7 @@ import { buildModelIdentityBadge, describeFinishReason, badgeSpec } from "./dash
 import { formatUiValue, prettyJson } from "./formatters";
 import { isClientRecord } from "./guards";
 import { escapeHtml, renderCodeBlockHtml, renderCodeInnerBlock } from "./code-rendering";
+import { serializeJsonAceValue } from "./json-ace";
 
 function renderMarkdownInline(markdown: unknown): string {
   const placeholders: Array<{ token: string; html: string }> = [];
@@ -411,15 +412,21 @@ function renderReasoningPanelLive(reasoningContent: unknown, collapsed: boolean,
 }
 
 function renderToolResponseContentHtml(content: unknown): string {
-  if (typeof content === "string") {
-    return renderMessageStringHtml(content);
-  }
-
-  if (content === null || content === undefined) {
+  if (content === null || content === undefined || content === "") {
     return "";
   }
 
-  return renderCodeBlockHtml(prettyJson(content), "turn-content");
+  const serialized = serializeJsonAceValue(content, "");
+  if (!serialized) {
+    return "";
+  }
+
+  return (
+    `<div class="tool-response-json-ace" data-json-ace="true">` +
+      `<script type="application/json">${escapeHtml(serialized)}</script>` +
+      `<div class="tool-response-json-ace-host"></div>` +
+    `</div>`
+  );
 }
 
 function renderToolResponsePanel(content: unknown, collapsed: boolean): string {
@@ -546,6 +553,14 @@ function renderToolResponseBubble(content: unknown, collapsed: boolean, toolName
   });
 }
 
+function renderPendingAssistantIndicator(title: string): string {
+  return (
+    `<div class="chat-loading-indicator"${title ? ` title="${escapeHtml(title)}"` : ""}>` +
+      `<span class="chat-loading-spinner" aria-hidden="true"></span>` +
+    `</div>`
+  );
+}
+
 function renderMessageContentHtml(content: unknown): string {
   if (typeof content === "string") {
     return renderMessageStringHtml(content);
@@ -609,6 +624,23 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
     !isClientRecord(message?.function_call) &&
     !Array.isArray(message?.tool_calls) &&
     !(typeof message?.reasoning_content === "string" && message.reasoning_content.length > 0);
+  const toolCallOnly =
+    role === "assistant" &&
+    Array.isArray(message?.tool_calls) &&
+    message.tool_calls.length > 0 &&
+    !hasVisibleMessageContent(message?.content) &&
+    !(typeof message?.reasoning_content === "string" && message.reasoning_content.length > 0) &&
+    !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
+    !isClientRecord(message?.function_call) &&
+    !(typeof message?.audio === "object" && message.audio !== null);
+  const pendingAssistantOnly =
+    role === "assistant" &&
+    message?.pending === true &&
+    !hasVisibleMessageContent(message?.content) &&
+    !(typeof message?.reasoning_content === "string" && message.reasoning_content.length > 0) &&
+    !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
+    !isClientRecord(message?.function_call) &&
+    !Array.isArray(message?.tool_calls);
   const metaBits: UiBadge[] = [];
 
   if (!options.hideRoleBadge && role !== "user" && role !== "assistant") {
@@ -629,7 +661,7 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
     metaBits.push(badgeSpec(`call ${message.tool_call_id}`, "neutral", "Tool call id that this tool response belongs to."));
   }
 
-  if (typeof options.finishReason === "string" && options.finishReason.length > 0) {
+  if (!options.hideFinishBadge && typeof options.finishReason === "string" && options.finishReason.length > 0) {
     metaBits.push(badgeSpec(`finish ${options.finishReason}`, "good", describeFinishReason(options.finishReason)));
   }
 
@@ -640,7 +672,7 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
   const hasHead = Boolean(options.heading) || metaBits.length > 0;
 
   return (
-    `<article class="turn ${escapeHtml(role)}${(reasoningOnly || toolResponseOnly) ? " compact-bubble-only" : ""}${reasoningOnly ? " reasoning-only" : ""}${toolResponseOnly ? " tool-response-only" : ""}">` +
+    `<article class="turn ${escapeHtml(role)}${(reasoningOnly || toolResponseOnly || toolCallOnly) ? " compact-bubble-only" : ""}${reasoningOnly ? " reasoning-only" : ""}${toolResponseOnly ? " tool-response-only" : ""}${toolCallOnly ? " tool-call-only" : ""}${pendingAssistantOnly ? " pending-only" : ""}">` +
       (hasHead
         ? (
           `<div class="turn-head">` +
@@ -656,7 +688,9 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
         )
         : "") +
       renderReasoningBubble(message?.reasoning_content, options.reasoningCollapsed ?? true, reasoningLive) +
-      ((hasVisibleMessageContent(message?.content) || !message?.reasoning_content)
+      (pendingAssistantOnly
+        ? renderPendingAssistantIndicator(typeof message?.pending_title === "string" ? message.pending_title : "")
+        : ((hasVisibleMessageContent(message?.content) || !message?.reasoning_content)
         ? (role === "tool"
           ? renderToolResponseBubble(
               message?.content,
@@ -665,7 +699,7 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
               typeof message?.tool_call_id === "string" ? message.tool_call_id : "",
             )
           : renderMessageContentHtml(message?.content))
-        : "") +
+        : "")) +
       (typeof message?.refusal === "string" && message.refusal.length > 0
         ? renderDetailBlock("Refusal", message.refusal)
         : "") +
@@ -944,25 +978,41 @@ function renderFunctionInvocationHtml(
   ].filter(Boolean).join("\n");
   const argumentsValue = parseStructuredArguments(payload.arguments);
   const argumentRows = renderInvocationArgumentListHtml(argumentsValue);
-  const argumentCount = isClientRecord(argumentsValue)
-    ? Object.keys(argumentsValue).length
-    : (argumentsValue === undefined || argumentsValue === null || argumentsValue === "" ? 0 : 1);
+  const bodyParts: string[] = [];
 
-  return (
-    `<article class="tool-definition-card"${hoverDetails ? ` title="${escapeHtml(hoverDetails)}"` : ""}>` +
-      `<div class="tool-definition-head">` +
-        `<div>` +
-          `<div class="tool-definition-title">${renderToolTitleMarkerHtml()}<span>${escapeHtml(name)}</span></div>` +
-          (options.note ? `<div class="tool-definition-subtitle">${escapeHtml(options.note)}</div>` : "") +
-        `</div>` +
-      `</div>` +
-      renderToolDisclosureHtml(
-        "Arguments",
-        argumentRows,
-        argumentCount,
-      ) +
-    `</article>`
-  );
+  if (options.note) {
+    bodyParts.push(`<div class="tool-parameter-note">${escapeHtml(options.note)}</div>`);
+  }
+
+  if (argumentRows) {
+    bodyParts.push(
+      `<div class="tool-parameter-panel">` +
+        argumentRows +
+      `</div>`,
+    );
+  } else {
+    bodyParts.push(`<div class="tool-parameter-note">This call did not include any arguments.</div>`);
+  }
+
+  return renderCompactBubbleDisclosure({
+    kindClass: "compact-bubble-panel-tool",
+    contentClass: "tool-invocation-content",
+    iconClass: "tool-response-icon",
+    iconHtml:
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
+        `<path d="M9 7V6a3 3 0 0 1 6 0v1"></path>` +
+        `<path d="M4.75 8.5h14.5"></path>` +
+        `<path d="M6.25 8.5h11.5a1.5 1.5 0 0 1 1.5 1.5v6.75a2 2 0 0 1-2 2H6.75a2 2 0 0 1-2-2V10a1.5 1.5 0 0 1 1.5-1.5Z"></path>` +
+        `<path d="M10 12h4"></path>` +
+        `<path d="M12 10v4"></path>` +
+      `</svg>`,
+    labelText: name,
+    labelTitle: hoverDetails || undefined,
+    bodyHtml: bodyParts.join(""),
+    collapsed: true,
+    collapsedTitle: "Tool call captured for this assistant message. Expand it to inspect the sent arguments.",
+    expandedTitle: "Tool call captured for this assistant message. Collapse it to focus on the conversation flow.",
+  });
 }
 
 function renderFunctionToolHtml(tool: Record<string, any>, index: number): string {
