@@ -25,13 +25,19 @@ const store = useDashboardStore();
 const mcpServerEnabled = computed(() => store.state.serverConfig?.mcpServerEnabled !== false);
 const hasTranscript = computed(() => store.state.debug.transcript.length > 0);
 const trimmedSystemPrompt = computed(() => store.state.debug.systemPrompt.trim());
+const hasDraftInputs = computed(() => (
+  trimmedSystemPrompt.value.length > 0 ||
+  store.state.debug.prompt.trim().length > 0
+));
 const debugSubmitLabel = computed(() => (
   store.state.debug.sending ? "Queue message" : "Send message"
 ));
 const clearChatTitle = computed(() => (
   store.state.debug.sending
     ? "Cancel the current request and clear the chat conversation"
-    : "Clear the current chat conversation"
+    : (hasTranscript.value
+      ? "Clear the current chat conversation"
+      : "Reset the current chat inputs")
 ));
 const showAdvancedParameters = ref(false);
 const advancedParamHelp = {
@@ -62,6 +68,12 @@ const systemPromptSuggestions = [
     title: "Prompt coach",
     description: "Turn rough prompts into clearer requests and suggest tighter follow-ups.",
     value: "You are a prompt design coach. Rewrite unclear prompts into sharper requests, explain why they are better, and suggest useful follow-up questions.",
+  },
+  {
+    key: "structured-analyst",
+    title: "Structured analyst",
+    description: "Answer in a clean structure with assumptions, findings, and clear next steps.",
+    value: "You are a structured analysis assistant. Organize answers into assumptions, findings, and next steps, and keep the response concise but actionable.",
   },
 ] as const;
 
@@ -291,7 +303,6 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
               </svg>
             </button>
             <button
-              v-if="hasTranscript"
               class="icon-button compact"
               type="button"
               :aria-label="clearChatTitle"
@@ -333,32 +344,34 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
 
           <template #footer>
             <div v-if="!hasTranscript" class="chat-initial-footer">
-              <div class="chat-suggestion-section">
-                <div class="diagnostics-section-label">System prompt ideas</div>
-                <SuggestionActionCards
-                  :items="systemPromptSuggestionItems"
-                  @select="applySystemPromptSuggestion"
-                />
-              </div>
+            <div class="chat-suggestion-section">
+              <div class="diagnostics-section-label">System prompt ideas</div>
+              <SuggestionActionCards
+                class="chat-suggestion-grid"
+                :items="systemPromptSuggestionItems"
+                @select="applySystemPromptSuggestion"
+              />
+            </div>
 
-              <textarea
-                id="debug-system-prompt"
-                v-model="store.state.debug.systemPrompt"
-                class="chat-editor-textarea"
-                placeholder="Optional high-level instruction (System Prompt) for the model."
-              ></textarea>
+            <div class="chat-suggestion-section">
+              <div class="diagnostics-section-label">Message ideas</div>
+              <SuggestionActionCards
+                class="chat-suggestion-grid"
+                :items="firstMessageSuggestionItems"
+                @select="applyFirstMessageSuggestion"
+              />
+            </div>
 
-              <div class="chat-suggestion-section">
-                <div class="diagnostics-section-label">Message ideas</div>
-                <SuggestionActionCards
-                  :items="firstMessageSuggestionItems"
-                  @select="applyFirstMessageSuggestion"
-                />
-              </div>
+            <textarea
+              id="debug-system-prompt"
+              v-model="store.state.debug.systemPrompt"
+              class="chat-editor-textarea"
+              placeholder="Optional high-level instruction (System Prompt) for the model."
+            ></textarea>
 
-              <ChatComposer
-                :prompt="store.state.debug.prompt"
-                :model="store.state.debug.model"
+            <ChatComposer
+              :prompt="store.state.debug.prompt"
+              :model="store.state.debug.model"
                 :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
                 :mcp-server-enabled="mcpServerEnabled"
                 :params="store.state.debug.params"

@@ -87,6 +87,27 @@ onBeforeUnmount(() => {
 <template>
   <div :class="hostClass">
     <div
+      v-if="showAvatar && role === 'system'"
+      class="message-avatar"
+      :class="`role-${role}`"
+      title="System prompt"
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="6.75"></circle>
+        <path d="M12 3.75v2.5"></path>
+        <path d="M12 17.75v2.5"></path>
+        <path d="M3.75 12h2.5"></path>
+        <path d="M17.75 12h2.5"></path>
+        <path d="M6.1 6.1 7.9 7.9"></path>
+        <path d="M16.1 16.1 17.9 17.9"></path>
+        <path d="M16.1 7.9 17.9 6.1"></path>
+        <path d="M6.1 17.9 7.9 16.1"></path>
+        <path d="M12 9.1a2.9 2.9 0 0 1 2.9 2.9"></path>
+      </svg>
+    </div>
+
+    <div
       v-if="showAvatar && role === 'assistant'"
       class="message-avatar"
       :class="`role-${role}`"
@@ -107,27 +128,6 @@ onBeforeUnmount(() => {
     </div>
 
     <div ref="hostEl" class="message-card-body" v-html="html"></div>
-
-    <div
-      v-if="showAvatar && role === 'system'"
-      class="message-avatar"
-      :class="`role-${role}`"
-      title="System prompt"
-      aria-hidden="true"
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="6.75"></circle>
-        <path d="M12 3.75v2.5"></path>
-        <path d="M12 17.75v2.5"></path>
-        <path d="M3.75 12h2.5"></path>
-        <path d="M17.75 12h2.5"></path>
-        <path d="M6.1 6.1 7.9 7.9"></path>
-        <path d="M16.1 16.1 17.9 17.9"></path>
-        <path d="M16.1 7.9 17.9 6.1"></path>
-        <path d="M6.1 17.9 7.9 16.1"></path>
-        <path d="M12 9.1a2.9 2.9 0 0 1 2.9 2.9"></path>
-      </svg>
-    </div>
 
     <div
       v-if="showAvatar && role === 'user'"

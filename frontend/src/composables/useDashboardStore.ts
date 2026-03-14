@@ -82,7 +82,7 @@ function createInitialState(): DashboardState {
     debug: reactive({
       model: "auto",
       systemPrompt: "",
-      prompt: "Say hello briefly and mention the model you are using.",
+      prompt: "",
       queuedMessages: [],
       enableDiagnosticTools: true,
       stream: true,
@@ -314,6 +314,11 @@ function createDashboardStoreInternal() {
     prepareDebugChatDraft: debugChat.prepareDebugChatDraft,
     openDebugChatDialog: () => {
       state.debug.dialogOpen = true;
+    },
+    startDebugChatDialog: (systemPrompt: string, prompt: string) => {
+      debugChat.prepareDebugChatDraft(systemPrompt, prompt);
+      state.debug.dialogOpen = true;
+      void debugChat.sendDebugChat();
     },
     closeDebugChatDialog: () => {
       state.debug.dialogOpen = false;

@@ -358,7 +358,8 @@ export function useDebugChat(
     state.debug.error = "";
     state.debug.backend = "";
     state.debug.lastRequestId = "";
-    state.debug.prompt = "Say hello briefly and mention the model you are using.";
+    state.debug.systemPrompt = "";
+    state.debug.prompt = "";
     resetDebugMetrics();
   }
 

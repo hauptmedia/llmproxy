@@ -103,8 +103,7 @@ async function openPromptInChat(): Promise<void> {
     return;
   }
 
-  store.prepareDebugChatDraft(systemPrompt, userPrompt);
-  store.openDebugChatDialog();
+  store.startDebugChatDialog(systemPrompt, userPrompt);
 }
 </script>
 

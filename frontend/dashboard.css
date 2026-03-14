@@ -1750,6 +1750,22 @@
     @apply grid gap-2;
   }
 
+  .chat-suggestion-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  @media (max-width: 1200px) {
+    .chat-suggestion-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 720px) {
+    .chat-suggestion-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
   .chat-conversation-shell {
     @apply flex flex-col;
     flex: 1 1 auto;
@@ -1826,10 +1842,14 @@
 
   .conversation-bubble-transcript .message-card-host.role-assistant,
   .conversation-bubble-transcript .message-card-host.role-tool,
-  .conversation-bubble-transcript .message-card-host.role-system,
   .conversation-bubble-transcript .message-card-host.role-developer,
   .conversation-bubble-transcript .message-card-host.role-unknown {
     justify-content: flex-start;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-system {
+    justify-content: flex-start;
+    align-items: flex-start;
   }
 
   .conversation-bubble-transcript .message-card-host .turn {
@@ -1840,39 +1860,13 @@
   }
 
   .conversation-bubble-transcript .message-card-host.role-user .turn {
-    border-top-right-radius: 1rem;
+    border-radius: 1.35rem;
     background-image: linear-gradient(180deg, rgba(255, 244, 214, 0.98), rgba(255, 251, 239, 0.92));
-  }
-
-  .conversation-bubble-transcript .message-card-host.role-user .turn::after {
-    content: "";
-    position: absolute;
-    right: -0.28rem;
-    bottom: 0.72rem;
-    width: 0.82rem;
-    height: 0.82rem;
-    background-image: linear-gradient(180deg, rgba(255, 244, 214, 0.98), rgba(255, 251, 239, 0.92));
-    border-right: 1px solid rgba(120, 53, 15, 0.1);
-    border-bottom: 1px solid rgba(120, 53, 15, 0.1);
-    clip-path: polygon(0 0, 100% 50%, 0 100%);
   }
 
   .conversation-bubble-transcript .message-card-host.role-assistant .turn {
-    border-top-left-radius: 1rem;
+    border-radius: 1.35rem;
     background-image: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.92));
-  }
-
-  .conversation-bubble-transcript .message-card-host.role-assistant .turn::after {
-    content: "";
-    position: absolute;
-    left: -0.28rem;
-    bottom: 0.72rem;
-    width: 0.82rem;
-    height: 0.82rem;
-    background-image: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.92));
-    border-left: 1px solid rgba(120, 53, 15, 0.1);
-    border-bottom: 1px solid rgba(120, 53, 15, 0.1);
-    clip-path: polygon(100% 0, 0 50%, 100% 100%);
   }
 
   .conversation-bubble-transcript .message-card-host.role-system .turn,
@@ -1893,6 +1887,8 @@
 
   .conversation-bubble-transcript .message-card-host.role-system .message-avatar {
     grid-column: 1;
+    align-self: flex-start;
+    margin-top: 0.2rem;
   }
 
   .conversation-bubble-transcript .message-card-host.role-assistant .message-card-body {
