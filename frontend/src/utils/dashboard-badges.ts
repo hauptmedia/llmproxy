@@ -579,15 +579,6 @@ export function buildRequestResponseMetricRows(
     });
   }
 
-  const tokenRate = formatTokenRate(entry.completionTokensPerSecond);
-  if (tokenRate) {
-    items.push({
-      key: "Tokens per second",
-      value: tokenRate.replace("tok/s", "tokens/s"),
-      title: "Average completion-token throughput during the generation phase.",
-    });
-  }
-
   if (typeof entry.reasoningTokens === "number" && entry.reasoningTokens > 0) {
     items.push({
       key: "Reasoning tokens",
@@ -610,6 +601,15 @@ export function buildRequestResponseMetricRows(
       key: "Completion tokens",
       value: completionMetric.value,
       title: completionMetric.title,
+    });
+  }
+
+  const tokenRate = formatTokenRate(entry.completionTokensPerSecond);
+  if (tokenRate) {
+    items.push({
+      key: "Completion throughput",
+      value: tokenRate.replace("tok/s", "tokens/s"),
+      title: "Average completion-token throughput during the generation phase.",
     });
   }
 

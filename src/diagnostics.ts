@@ -466,13 +466,6 @@ function buildFacts(
     });
   }
 
-  if (entry.model) {
-    facts.push({
-      label: "Model",
-      value: entry.model,
-    });
-  }
-
   if (entry.backendName) {
     facts.push({
       label: "Backend",
@@ -500,13 +493,6 @@ function buildFacts(
     facts.push({
       label: "Model token limit",
       value: String(modelTokenLimit),
-    });
-  }
-
-  if (entry.completionTokensPerSecond !== undefined) {
-    facts.push({
-      label: "Completion throughput",
-      value: `${round(entry.completionTokensPerSecond)} tok/s`,
     });
   }
 
@@ -553,7 +539,7 @@ function buildDiagnosticSummary(findings: DiagnosticFinding[], entry: RequestLog
   }
 
   if (entry.outcome === "success") {
-    return "The stored request completed without an obvious failure signal in the retained diagnostics data.";
+    return "";
   }
 
   return "The retained request data does not point to one dominant failure mode yet.";
