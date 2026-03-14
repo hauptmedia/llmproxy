@@ -275,6 +275,7 @@ export interface DebugState {
   transcript: DebugTranscriptEntry[];
   metrics: DebugMetrics;
   params: DebugParams;
+  dialogOpen: boolean;
 }
 
 export interface RequestDetailState {

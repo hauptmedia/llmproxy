@@ -42,10 +42,18 @@ function renderMarkdownInline(markdown: unknown): string {
   return html;
 }
 
-function isMarkdownBlockBoundary(line: string): boolean {
+function isMarkdownFence(line: string): boolean {
   const fence = String.fromCharCode(96).repeat(3);
+  return line.trimStart().startsWith(fence);
+}
+
+function getMarkdownFenceLanguage(line: string): string {
+  return line.trimStart().slice(3).trim().toLowerCase();
+}
+
+function isMarkdownBlockBoundary(line: string): boolean {
   return (
-    line.startsWith(fence) ||
+    isMarkdownFence(line) ||
     /^(#{1,6})\s+/.test(line) ||
     /^[-*+]\s+/.test(line) ||
     /^\d+\.\s+/.test(line) ||
@@ -54,7 +62,6 @@ function isMarkdownBlockBoundary(line: string): boolean {
 }
 
 function renderMarkdownToHtml(markdown: unknown): string {
-  const fence = String.fromCharCode(96).repeat(3);
   const normalized = String(markdown ?? "").replace(/\r\n?/g, "\n").trim();
 
   if (!normalized) {
@@ -73,17 +80,17 @@ function renderMarkdownToHtml(markdown: unknown): string {
       continue;
     }
 
-    if (line.startsWith(fence)) {
+    if (isMarkdownFence(line)) {
       const codeLines: string[] = [];
-      const language = line.slice(3).trim().toLowerCase();
+      const language = getMarkdownFenceLanguage(line);
       index += 1;
 
-      while (index < lines.length && !lines[index].startsWith(fence)) {
+      while (index < lines.length && !isMarkdownFence(lines[index])) {
         codeLines.push(lines[index]);
         index += 1;
       }
 
-      if (index < lines.length && lines[index].startsWith(fence)) {
+      if (index < lines.length && isMarkdownFence(lines[index])) {
         index += 1;
       }
 
@@ -166,12 +173,6 @@ function renderDetailBlock(label: string, value: unknown): string {
       `<div class="detail-block-label">${escapeHtml(label)}</div>` +
       renderCodeBlockHtml(value, "turn-content") +
     `</div>`
-  );
-}
-
-function renderFunctionIconHtml(): string {
-  return (
-    `<span class="tool-inline-icon tool-inline-icon-function tool-inline-icon-text" aria-hidden="true">fn</span>`
   );
 }
 
@@ -749,7 +750,7 @@ function renderFunctionInvocationHtml(
       `<article class="tool-definition-card">` +
         `<div class="tool-definition-head">` +
           `<div>` +
-            `<div class="tool-definition-title">${renderFunctionIconHtml()}<span>${escapeHtml(name)}</span></div>` +
+            `<div class="tool-definition-title"><span>${escapeHtml(name)}</span></div>` +
             (options.note ? `<div class="tool-definition-subtitle">${escapeHtml(options.note)}</div>` : "") +
           `</div>` +
           (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
@@ -797,7 +798,7 @@ function renderFunctionToolHtml(tool: Record<string, any>, index: number): strin
       `<article class="tool-definition-card">` +
         `<div class="tool-definition-head">` +
           `<div>` +
-            `<div class="tool-definition-title">${renderFunctionIconHtml()}<span>${escapeHtml(name)}</span></div>` +
+            `<div class="tool-definition-title"><span>${escapeHtml(name)}</span></div>` +
           `</div>` +
           (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
         `</div>` +
@@ -831,7 +832,7 @@ function renderGenericToolHtml(tool: Record<string, any>, index: number): string
       `<article class="tool-definition-card">` +
         `<div class="tool-definition-head">` +
           `<div>` +
-            `<div class="tool-definition-title">${renderFunctionIconHtml()}<span>${escapeHtml(toolType)}</span></div>` +
+              `<div class="tool-definition-title"><span>${escapeHtml(toolType)}</span></div>` +
             `<div class="tool-definition-subtitle">Tool ${index + 1}</div>` +
           `</div>` +
           `<div class="message-meta"><span class="badge neutral">${escapeHtml(toolType)}</span></div>` +
@@ -859,7 +860,7 @@ export function renderToolsHtml(tools: unknown): string {
              `<article class="tool-definition-card">` +
                `<div class="tool-definition-head">` +
                   `<div>` +
-                   `<div class="tool-definition-title">${renderFunctionIconHtml()}<span>Tool ${index + 1}</span></div>` +
+                   `<div class="tool-definition-title"><span>Tool ${index + 1}</span></div>` +
                    `<div class="tool-definition-subtitle">Stored tool payload</div>` +
                   `</div>` +
                 `</div>` +

@@ -104,6 +104,7 @@ function createInitialState(): DashboardState {
         repeat_penalty: 1.1,
         max_tokens: 20000,
       },
+      dialogOpen: false,
     }),
     toasts: reactive([] as DashboardState["toasts"]),
   };
@@ -193,6 +194,11 @@ function createDashboardStoreInternal() {
   const summaryCards = computed(() => buildSummaryCards(state.snapshot));
 
   function handleKeyDown(event: KeyboardEvent): void {
+    if (event.key === "Escape" && state.debug.dialogOpen) {
+      state.debug.dialogOpen = false;
+      return;
+    }
+
     if (event.key === "Escape" && state.requestDetail.open) {
       requestDetail.closeRequestDetail();
     }
@@ -305,6 +311,12 @@ function createDashboardStoreInternal() {
     stopDebugChat: debugChat.stopDebugChat,
     clearDebugChat: debugChat.clearDebugChat,
     prepareDebugChatDraft: debugChat.prepareDebugChatDraft,
+    openDebugChatDialog: () => {
+      state.debug.dialogOpen = true;
+    },
+    closeDebugChatDialog: () => {
+      state.debug.dialogOpen = false;
+    },
     openLastDebugRequest: () => {
       if (!state.debug.lastRequestId) {
         return;

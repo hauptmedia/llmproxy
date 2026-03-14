@@ -429,10 +429,6 @@
     grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
   }
 
-  .diagnostics-report-view {
-    @apply min-h-full;
-  }
-
   .diagnostics-report-summary {
     @apply mt-0 mb-4 text-sm leading-relaxed text-stone-700;
   }
@@ -513,6 +509,10 @@
   .diagnostics-actions {
     @apply grid gap-3;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .diagnosis-actions-section {
+    margin-top: 0.35rem;
   }
 
   .diagnostics-action-card {
@@ -2218,11 +2218,6 @@
     line-height: 1;
   }
 
-  .tool-inline-icon-function {
-    color: #c2410c;
-    background: rgba(255, 247, 237, 0.96);
-  }
-
   .tool-inline-icon-parameter {
     color: #57534e;
     background: rgba(245, 245, 244, 0.98);
@@ -2261,6 +2256,28 @@
     @apply fixed inset-0 z-40 grid place-items-center p-3;
     background: rgba(28, 25, 23, 0.26);
     backdrop-filter: blur(6px);
+  }
+
+  .debug-chat-overlay {
+    @apply fixed inset-0 z-50 grid place-items-center p-3;
+    background: rgba(28, 25, 23, 0.34);
+    backdrop-filter: blur(8px);
+  }
+
+  .debug-chat-dialog {
+    @apply flex flex-col;
+    width: calc(100vw - 24px);
+    height: calc(100dvh - 24px);
+    max-width: none;
+    max-height: calc(100dvh - 24px);
+    min-height: 0;
+  }
+
+  .debug-chat-dialog .chat-panel,
+  .debug-chat-dialog .chat-thread,
+  .debug-chat-dialog .chat-conversation-shell {
+    height: 100%;
+    min-height: 0;
   }
 
   .request-detail-dialog {

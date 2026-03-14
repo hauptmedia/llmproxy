@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 import BrandLogo from "./components/BrandLogo.vue";
+import DebugChatDialog from "./components/DebugChatDialog.vue";
 import RequestDetailDialog from "./components/RequestDetailDialog.vue";
 import ServerConfigEditorDialog from "./components/ServerConfigEditorDialog.vue";
 import { useDashboardStore } from "./composables/useDashboardStore";
@@ -134,6 +135,7 @@ watch(
         </button>
       </div>
     </div>
+    <DebugChatDialog />
     <RequestDetailDialog />
     <ServerConfigEditorDialog
       :state="store.state.serverEditor"
