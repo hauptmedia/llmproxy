@@ -96,7 +96,13 @@ Two entry points exist:
 
 - `GET /api/diagnostics/requests/:id` for a ready-made heuristics report plus the stored request/response payloads
 - `POST /mcp` for MCP-style JSON-RPC calls such as `initialize`, `tools/list`, `tools/call`, `prompts/list`, and `prompts/get`
-- MCP tools for listing models and running chat completions, exposed through the normal `tools/call` flow on `POST /mcp`
+- MCP tools such as `list_models` and `chat_with_model`, exposed through the normal `tools/call` flow on `POST /mcp`
+
+The MCP tool `chat_with_model` deliberately stays request-based:
+
+- it accepts the normal chat-completions request body shape
+- it always returns one final synthesized completion JSON payload
+- it does not expose a streaming mode over MCP
 
 The built-in diagnostics engine currently looks for signals such as:
 
@@ -105,4 +111,4 @@ The built-in diagnostics engine currently looks for signals such as:
 - rejected requests that never reached a backend
 - backend/upstream failures after routing
 
-The diagnostics page in the dashboard uses the same retained request data and exposes ready-made prompt playbooks so an external LLM can produce a higher-level diagnosis on top of the structured heuristics output.
+The dashboard analyzer uses the same retained request data and exposes ready-made prompt playbooks so an external LLM can produce a higher-level diagnosis on top of the structured heuristics output.

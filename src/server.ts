@@ -517,11 +517,7 @@ export class LlmProxyServer {
         id: model.id,
         object: "model",
         created: 0,
-        owned_by: model.ownedBy,
-        metadata: {
-          backendId: model.backendId,
-          source: model.source,
-        },
+        owned_by: "",
       })),
     };
   }

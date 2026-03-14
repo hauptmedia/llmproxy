@@ -26,6 +26,730 @@ export const MCP_ENDPOINT = "/mcp";
 export const MCP_MANIFEST_PATH = "/mcp/manifest";
 export const MCP_DISABLED_MESSAGE = "MCP server is disabled in config.";
 const LLMPROXY_MCP_SERVICE_ID = "llmproxy";
+const CHAT_TOOL_ALLOWED_TOP_LEVEL_KEYS = new Set([
+  "model",
+  "messages",
+  "temperature",
+  "top_p",
+  "top_k",
+  "min_p",
+  "repeat_penalty",
+  "seed",
+  "stop",
+  "max_tokens",
+  "max_completion_tokens",
+  "tools",
+  "tool_choice",
+]);
+const CHAT_MESSAGE_ROLES = ["system", "developer", "user", "assistant", "tool"] as const;
+type ChatMessageRole = (typeof CHAT_MESSAGE_ROLES)[number];
+
+function buildChatTextContentPartSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    description: "One text content part.",
+    properties: {
+      type: {
+        type: "string",
+        enum: ["text"],
+      },
+      text: {
+        type: "string",
+        description: "Text for this content part.",
+      },
+    },
+    required: ["type", "text"],
+    additionalProperties: false,
+  };
+}
+
+function buildChatImageContentPartSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    description: "One image content part.",
+    properties: {
+      type: {
+        type: "string",
+        enum: ["image_url"],
+      },
+      image_url: {
+        type: "object",
+        description: "Image URL payload in the normal OpenAI chat-completions shape.",
+        properties: {
+          url: {
+            type: "string",
+            description: "Image URL or data URL.",
+          },
+          detail: {
+            type: "string",
+            enum: ["auto", "low", "high"],
+            description: "Optional OpenAI-compatible image detail hint.",
+          },
+        },
+        required: ["url"],
+        additionalProperties: false,
+      },
+    },
+    required: ["type", "image_url"],
+    additionalProperties: false,
+  };
+}
+
+function buildChatContentPartArraySchema(): Record<string, unknown> {
+  return {
+    type: "array",
+    minItems: 1,
+    description: "Ordered multimodal content parts. Each part must be either text or image_url.",
+    items: {
+      oneOf: [
+        buildChatTextContentPartSchema(),
+        buildChatImageContentPartSchema(),
+      ],
+    },
+  };
+}
+
+function buildRequiredMessageContentSchema(): Record<string, unknown> {
+  return {
+    oneOf: [
+      {
+        type: "string",
+        description: "Simple string content.",
+      },
+      buildChatContentPartArraySchema(),
+    ],
+  };
+}
+
+function buildAssistantMessageContentSchema(): Record<string, unknown> {
+  return {
+    oneOf: [
+      {
+        type: "string",
+        description: "Assistant text content.",
+      },
+      {
+        type: "null",
+        description: "Use null when the assistant turn only carries tool_calls.",
+      },
+      buildChatContentPartArraySchema(),
+    ],
+  };
+}
+
+function buildToolCallSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    description: "One assistant tool call in the normal OpenAI-compatible chat shape.",
+    properties: {
+      id: {
+        type: "string",
+        description: "Unique tool call ID.",
+      },
+      type: {
+        type: "string",
+        enum: ["function"],
+      },
+      function: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Tool function name.",
+          },
+          arguments: {
+            type: "string",
+            description: "JSON-encoded function arguments string.",
+          },
+        },
+        required: ["name", "arguments"],
+        additionalProperties: false,
+      },
+    },
+    required: ["id", "type", "function"],
+    additionalProperties: false,
+  };
+}
+
+function buildPromptLikeMessageSchema(role: "system" | "developer" | "user"): Record<string, unknown> {
+  return {
+    type: "object",
+    properties: {
+      role: {
+        type: "string",
+        enum: [role],
+      },
+      content: buildRequiredMessageContentSchema(),
+      name: {
+        type: "string",
+        description: "Optional participant name.",
+      },
+    },
+    required: ["role", "content"],
+    additionalProperties: false,
+  };
+}
+
+function buildAssistantMessageSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    properties: {
+      role: {
+        type: "string",
+        enum: ["assistant"],
+      },
+      content: buildAssistantMessageContentSchema(),
+      name: {
+        type: "string",
+        description: "Optional participant name.",
+      },
+      refusal: {
+        oneOf: [
+          {
+            type: "string",
+            description: "Optional refusal text.",
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      tool_calls: {
+        type: "array",
+        minItems: 1,
+        description: "Assistant tool calls emitted in this turn.",
+        items: buildToolCallSchema(),
+      },
+    },
+    required: ["role"],
+    additionalProperties: false,
+  };
+}
+
+function buildToolMessageSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    properties: {
+      role: {
+        type: "string",
+        enum: ["tool"],
+      },
+      content: {
+        type: "string",
+        description: "Tool result payload, usually JSON serialized as a string.",
+      },
+      tool_call_id: {
+        type: "string",
+        description: "ID of the assistant tool call this tool result answers.",
+      },
+      name: {
+        type: "string",
+        description: "Optional tool name.",
+      },
+    },
+    required: ["role", "content", "tool_call_id"],
+    additionalProperties: false,
+  };
+}
+
+function buildChatMessagesSchema(): Record<string, unknown> {
+  return {
+    type: "array",
+    minItems: 1,
+    description: "Ordered chat history. Each entry must be a system, developer, user, assistant, or tool message with the normal OpenAI-compatible shape for that role.",
+    items: {
+      oneOf: [
+        buildPromptLikeMessageSchema("system"),
+        buildPromptLikeMessageSchema("developer"),
+        buildPromptLikeMessageSchema("user"),
+        buildAssistantMessageSchema(),
+        buildToolMessageSchema(),
+      ],
+    },
+  };
+}
+
+function buildChatToolDefinitionSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    description: "One function tool definition in the normal OpenAI-compatible chat-completions shape.",
+    properties: {
+      type: {
+        type: "string",
+        enum: ["function"],
+      },
+      function: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Function name exposed to the model.",
+          },
+          description: {
+            type: "string",
+            description: "Optional human-readable function description.",
+          },
+          parameters: {
+            type: "object",
+            description: "JSON Schema object for the function arguments.",
+            additionalProperties: true,
+          },
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+    },
+    required: ["type", "function"],
+    additionalProperties: false,
+  };
+}
+
+function buildChatToolChoiceSchema(): Record<string, unknown> {
+  return {
+    oneOf: [
+      {
+        type: "string",
+        enum: ["auto", "none", "required"],
+        description: "Standard OpenAI-compatible tool_choice mode.",
+      },
+      {
+        type: "object",
+        description: "Force one specific function tool.",
+        properties: {
+          type: {
+            type: "string",
+            enum: ["function"],
+          },
+          function: {
+            type: "object",
+            properties: {
+              name: {
+                type: "string",
+                description: "Function name to force.",
+              },
+            },
+            required: ["name"],
+            additionalProperties: false,
+          },
+        },
+        required: ["type", "function"],
+        additionalProperties: false,
+      },
+    ],
+  };
+}
+
+function buildChatInputSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    properties: {
+      model: {
+        type: "string",
+        description: "Requested model name. Use auto or omit it to let llmproxy choose.",
+      },
+      messages: buildChatMessagesSchema(),
+      temperature: {
+        type: "number",
+      },
+      top_p: {
+        type: "number",
+      },
+      top_k: {
+        type: "integer",
+      },
+      min_p: {
+        type: "number",
+      },
+      repeat_penalty: {
+        type: "number",
+      },
+      seed: {
+        type: "integer",
+      },
+      stop: {
+        oneOf: [
+          {
+            type: "string",
+            description: "One stop sequence.",
+          },
+          {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "string",
+            },
+            description: "Multiple stop sequences.",
+          },
+        ],
+      },
+      max_tokens: {
+        type: "integer",
+      },
+      max_completion_tokens: {
+        type: "integer",
+      },
+      tools: {
+        type: "array",
+        items: buildChatToolDefinitionSchema(),
+      },
+      tool_choice: buildChatToolChoiceSchema(),
+    },
+    required: ["messages"],
+    additionalProperties: false,
+  };
+}
+
+function validateAllowedKeys(
+  value: Record<string, unknown>,
+  allowedKeys: Set<string>,
+  message: string,
+): void {
+  for (const key of Object.keys(value)) {
+    if (!allowedKeys.has(key)) {
+      throw new Error(message.replace("{key}", key));
+    }
+  }
+}
+
+function validateOptionalString(value: unknown, message: string): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(message);
+  }
+}
+
+function validateOptionalFiniteNumber(value: unknown, message: string): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(message);
+  }
+}
+
+function validateOptionalInteger(value: unknown, message: string): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new Error(message);
+  }
+}
+
+function validateContentParts(value: unknown, messagePrefix: string): void {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${messagePrefix} content arrays must contain at least one part.`);
+  }
+
+  for (let partIndex = 0; partIndex < value.length; partIndex += 1) {
+    const part = value[partIndex];
+    if (!isRecord(part)) {
+      throw new Error(`${messagePrefix} content part ${partIndex} must be an object.`);
+    }
+
+    if (part.type === "text") {
+      validateAllowedKeys(
+        part,
+        new Set(["type", "text"]),
+        `${messagePrefix} text content part ${partIndex} includes unsupported field "{key}".`,
+      );
+      if (typeof part.text !== "string" || part.text.length === 0) {
+        throw new Error(`${messagePrefix} text content part ${partIndex} requires a non-empty "text" string.`);
+      }
+      continue;
+    }
+
+    if (part.type === "image_url") {
+      validateAllowedKeys(
+        part,
+        new Set(["type", "image_url"]),
+        `${messagePrefix} image content part ${partIndex} includes unsupported field "{key}".`,
+      );
+      if (!isRecord(part.image_url)) {
+        throw new Error(`${messagePrefix} image content part ${partIndex} requires an "image_url" object.`);
+      }
+
+      validateAllowedKeys(
+        part.image_url,
+        new Set(["url", "detail"]),
+        `${messagePrefix} image content part ${partIndex} image_url includes unsupported field "{key}".`,
+      );
+      if (typeof part.image_url.url !== "string" || part.image_url.url.length === 0) {
+        throw new Error(`${messagePrefix} image content part ${partIndex} requires a non-empty image_url.url string.`);
+      }
+      if (
+        part.image_url.detail !== undefined &&
+        part.image_url.detail !== "auto" &&
+        part.image_url.detail !== "low" &&
+        part.image_url.detail !== "high"
+      ) {
+        throw new Error(`${messagePrefix} image content part ${partIndex} image_url.detail must be one of auto, low, or high.`);
+      }
+      continue;
+    }
+
+    throw new Error(`${messagePrefix} content part ${partIndex} must use type "text" or "image_url".`);
+  }
+}
+
+function validateRequiredContent(
+  value: unknown,
+  messagePrefix: string,
+): void {
+  if (typeof value === "string" && value.length > 0) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    validateContentParts(value, messagePrefix);
+    return;
+  }
+
+  throw new Error(`${messagePrefix} content must be a non-empty string or a non-empty array of text/image_url parts.`);
+}
+
+function validateAssistantContent(value: unknown, messagePrefix: string): void {
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (typeof value === "string" && value.length > 0) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    validateContentParts(value, messagePrefix);
+    return;
+  }
+
+  throw new Error(`${messagePrefix} content must be null, a non-empty string, or a non-empty array of text/image_url parts.`);
+}
+
+function validateToolCalls(value: unknown, messagePrefix: string): void {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${messagePrefix} tool_calls must be a non-empty array.`);
+  }
+
+  for (let toolCallIndex = 0; toolCallIndex < value.length; toolCallIndex += 1) {
+    const toolCall = value[toolCallIndex];
+    if (!isRecord(toolCall)) {
+      throw new Error(`${messagePrefix} tool_call ${toolCallIndex} must be an object.`);
+    }
+
+    validateAllowedKeys(
+      toolCall,
+      new Set(["id", "type", "function"]),
+      `${messagePrefix} tool_call ${toolCallIndex} includes unsupported field "{key}".`,
+    );
+    if (typeof toolCall.id !== "string" || toolCall.id.length === 0) {
+      throw new Error(`${messagePrefix} tool_call ${toolCallIndex} requires a non-empty "id" string.`);
+    }
+    if (toolCall.type !== "function") {
+      throw new Error(`${messagePrefix} tool_call ${toolCallIndex} must use type "function".`);
+    }
+    if (!isRecord(toolCall.function)) {
+      throw new Error(`${messagePrefix} tool_call ${toolCallIndex} requires a "function" object.`);
+    }
+
+    validateAllowedKeys(
+      toolCall.function,
+      new Set(["name", "arguments"]),
+      `${messagePrefix} tool_call ${toolCallIndex} function includes unsupported field "{key}".`,
+    );
+    if (typeof toolCall.function.name !== "string" || toolCall.function.name.length === 0) {
+      throw new Error(`${messagePrefix} tool_call ${toolCallIndex} function.name must be a non-empty string.`);
+    }
+    if (typeof toolCall.function.arguments !== "string") {
+      throw new Error(`${messagePrefix} tool_call ${toolCallIndex} function.arguments must be a JSON-encoded string.`);
+    }
+  }
+}
+
+function validateChatMessage(message: unknown, index: number): void {
+  const prefix = `The llmproxy MCP tool "chat_with_model" message ${index}`;
+  if (!isRecord(message)) {
+    throw new Error(`${prefix} must be an object.`);
+  }
+
+  const role = message.role;
+  if (typeof role !== "string" || !CHAT_MESSAGE_ROLES.includes(role as ChatMessageRole)) {
+    throw new Error(`${prefix} role must be one of ${CHAT_MESSAGE_ROLES.join(", ")}.`);
+  }
+
+  if (role === "system" || role === "developer" || role === "user") {
+    validateAllowedKeys(
+      message,
+      new Set(["role", "content", "name"]),
+      `${prefix} includes unsupported field "{key}" for role "${role}".`,
+    );
+    validateRequiredContent(message.content, prefix);
+    validateOptionalString(message.name, `${prefix} name must be a non-empty string when provided.`);
+    return;
+  }
+
+  if (role === "assistant") {
+    validateAllowedKeys(
+      message,
+      new Set(["role", "content", "name", "refusal", "tool_calls"]),
+      `${prefix} includes unsupported field "{key}" for role "assistant".`,
+    );
+    validateAssistantContent(message.content, prefix);
+    validateOptionalString(message.name, `${prefix} name must be a non-empty string when provided.`);
+    if (message.refusal !== undefined && message.refusal !== null && typeof message.refusal !== "string") {
+      throw new Error(`${prefix} refusal must be a string or null when provided.`);
+    }
+    if (message.tool_calls !== undefined) {
+      validateToolCalls(message.tool_calls, prefix);
+    }
+    if (message.content === undefined && message.refusal === undefined && message.tool_calls === undefined) {
+      throw new Error(`${prefix} must provide at least one of content, refusal, or tool_calls.`);
+    }
+    return;
+  }
+
+  validateAllowedKeys(
+    message,
+    new Set(["role", "content", "tool_call_id", "name"]),
+    `${prefix} includes unsupported field "{key}" for role "tool".`,
+  );
+  if (typeof message.content !== "string") {
+    throw new Error(`${prefix} content must be a string for role "tool".`);
+  }
+  if (typeof message.tool_call_id !== "string" || message.tool_call_id.length === 0) {
+    throw new Error(`${prefix} tool_call_id must be a non-empty string for role "tool".`);
+  }
+  validateOptionalString(message.name, `${prefix} name must be a non-empty string when provided.`);
+}
+
+function validateChatTools(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error('The llmproxy MCP tool "chat_with_model" argument "tools" must be an array.');
+  }
+
+  for (let index = 0; index < value.length; index += 1) {
+    const tool = value[index];
+    if (!isRecord(tool)) {
+      throw new Error(`The llmproxy MCP tool "chat_with_model" tool ${index} must be an object.`);
+    }
+
+    validateAllowedKeys(
+      tool,
+      new Set(["type", "function"]),
+      `The llmproxy MCP tool "chat_with_model" tool ${index} includes unsupported field "{key}".`,
+    );
+    if (tool.type !== "function") {
+      throw new Error(`The llmproxy MCP tool "chat_with_model" tool ${index} must use type "function".`);
+    }
+    if (!isRecord(tool.function)) {
+      throw new Error(`The llmproxy MCP tool "chat_with_model" tool ${index} requires a "function" object.`);
+    }
+
+    validateAllowedKeys(
+      tool.function,
+      new Set(["name", "description", "parameters"]),
+      `The llmproxy MCP tool "chat_with_model" tool ${index} function includes unsupported field "{key}".`,
+    );
+    if (typeof tool.function.name !== "string" || tool.function.name.length === 0) {
+      throw new Error(`The llmproxy MCP tool "chat_with_model" tool ${index} function.name must be a non-empty string.`);
+    }
+    if (tool.function.description !== undefined && typeof tool.function.description !== "string") {
+      throw new Error(`The llmproxy MCP tool "chat_with_model" tool ${index} function.description must be a string when provided.`);
+    }
+    if (tool.function.parameters !== undefined && !isRecord(tool.function.parameters)) {
+      throw new Error(`The llmproxy MCP tool "chat_with_model" tool ${index} function.parameters must be a JSON Schema object when provided.`);
+    }
+  }
+}
+
+function validateChatToolChoice(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (typeof value === "string") {
+    if (value !== "auto" && value !== "none" && value !== "required") {
+      throw new Error('The llmproxy MCP tool "chat_with_model" argument "tool_choice" must be auto, none, required, or a function selector object.');
+    }
+    return;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error('The llmproxy MCP tool "chat_with_model" argument "tool_choice" must be auto, none, required, or a function selector object.');
+  }
+
+  validateAllowedKeys(
+    value,
+    new Set(["type", "function"]),
+    'The llmproxy MCP tool "chat_with_model" argument "tool_choice" includes unsupported field "{key}".',
+  );
+  if (value.type !== "function") {
+    throw new Error('The llmproxy MCP tool "chat_with_model" object "tool_choice" must use type "function".');
+  }
+  if (!isRecord(value.function)) {
+    throw new Error('The llmproxy MCP tool "chat_with_model" object "tool_choice" requires a "function" object.');
+  }
+
+  validateAllowedKeys(
+    value.function,
+    new Set(["name"]),
+    'The llmproxy MCP tool "chat_with_model" object "tool_choice.function" includes unsupported field "{key}".',
+  );
+  if (typeof value.function.name !== "string" || value.function.name.length === 0) {
+    throw new Error('The llmproxy MCP tool "chat_with_model" object "tool_choice.function.name" must be a non-empty string.');
+  }
+}
+
+function validateChatToolArguments(args: Record<string, unknown>): void {
+  if (Object.prototype.hasOwnProperty.call(args, "stream")) {
+    throw new Error('The llmproxy MCP tool "chat_with_model" does not accept "stream". It always returns one final non-streaming completion payload.');
+  }
+
+  validateAllowedKeys(
+    args,
+    CHAT_TOOL_ALLOWED_TOP_LEVEL_KEYS,
+    'The llmproxy MCP tool "chat_with_model" received unsupported argument "{key}".',
+  );
+  validateOptionalString(args.model, 'The llmproxy MCP tool "chat_with_model" argument "model" must be a non-empty string when provided.');
+
+  if (!Array.isArray(args.messages) || args.messages.length === 0) {
+    throw new Error('The llmproxy MCP tool "chat_with_model" argument "messages" must be a non-empty array.');
+  }
+
+  for (let index = 0; index < args.messages.length; index += 1) {
+    validateChatMessage(args.messages[index], index);
+  }
+
+  validateOptionalFiniteNumber(args.temperature, 'The llmproxy MCP tool "chat_with_model" argument "temperature" must be a finite number.');
+  validateOptionalFiniteNumber(args.top_p, 'The llmproxy MCP tool "chat_with_model" argument "top_p" must be a finite number.');
+  validateOptionalInteger(args.top_k, 'The llmproxy MCP tool "chat_with_model" argument "top_k" must be an integer.');
+  validateOptionalFiniteNumber(args.min_p, 'The llmproxy MCP tool "chat_with_model" argument "min_p" must be a finite number.');
+  validateOptionalFiniteNumber(args.repeat_penalty, 'The llmproxy MCP tool "chat_with_model" argument "repeat_penalty" must be a finite number.');
+  validateOptionalInteger(args.seed, 'The llmproxy MCP tool "chat_with_model" argument "seed" must be an integer.');
+  validateOptionalInteger(args.max_tokens, 'The llmproxy MCP tool "chat_with_model" argument "max_tokens" must be an integer.');
+  validateOptionalInteger(args.max_completion_tokens, 'The llmproxy MCP tool "chat_with_model" argument "max_completion_tokens" must be an integer.');
+
+  if (args.stop !== undefined) {
+    if (typeof args.stop !== "string") {
+      if (!Array.isArray(args.stop) || args.stop.length === 0 || args.stop.some((entry) => typeof entry !== "string" || entry.length === 0)) {
+        throw new Error('The llmproxy MCP tool "chat_with_model" argument "stop" must be a string or a non-empty array of non-empty strings.');
+      }
+    } else if (args.stop.length === 0) {
+      throw new Error('The llmproxy MCP tool "chat_with_model" argument "stop" must not be an empty string.');
+    }
+  }
+
+  validateChatTools(args.tools);
+  validateChatToolChoice(args.tool_choice);
+}
 
 function buildOpenAiCompatMcpService(context: McpContext): McpService {
   return {
@@ -46,43 +770,10 @@ function buildOpenAiCompatMcpService(context: McpContext): McpService {
           },
         },
         {
-          name: "create_chat_completion",
-          title: "Chat completion",
-          description: "Runs a normal llmproxy chat completion with the same request body as POST /v1/chat/completions. If stream=true, llmproxy buffers the stream and returns the final synthesized completion JSON.",
-          inputSchema: {
-            type: "object",
-            properties: {
-              model: {
-                type: "string",
-                description: "Requested model name. Use auto or omit it to let llmproxy choose.",
-              },
-              messages: {
-                type: "array",
-                description: "Chat messages in the normal OpenAI-compatible chat format.",
-              },
-              stream: {
-                type: "boolean",
-                description: "When true, llmproxy still returns the final completion JSON after buffering the stream.",
-              },
-              temperature: {
-                type: "number",
-              },
-              top_p: {
-                type: "number",
-              },
-              max_tokens: {
-                type: "integer",
-              },
-              tools: {
-                type: "array",
-              },
-              tool_choice: {
-                description: "Normal OpenAI-compatible tool_choice value.",
-              },
-            },
-            required: ["messages"],
-            additionalProperties: true,
-          },
+          name: "chat_with_model",
+          title: "Chat",
+          description: "Write to the models registered in llmproxy using the normal OpenAI-compatible chat-completions request body shape, and always receive one final non-streaming completion JSON payload.",
+          inputSchema: buildChatInputSchema(),
         },
       ],
       prompts: [],
@@ -105,13 +796,18 @@ function buildOpenAiCompatMcpService(context: McpContext): McpService {
         };
       }
 
-      if (toolName === "create_chat_completion") {
-        const payload = await context.runChatCompletion({ ...args });
+      if (toolName === "chat_with_model") {
+        validateChatToolArguments(args);
+        const normalizedArgs = { ...args };
+        const payload = await context.runChatCompletion({
+          ...normalizedArgs,
+          stream: false,
+        });
         return {
           content: [
             {
               type: "text",
-              text: "Ran a chat completion through llmproxy and returned the final completion payload.",
+              text: "Ran a non-streaming chat completion through llmproxy and returned the final completion payload.",
             },
             {
               type: "json",

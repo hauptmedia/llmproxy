@@ -254,10 +254,9 @@ function renderToolDisclosureHtml(
   label: string,
   bodyHtml: string,
   count: number,
-  emptyMessage: string,
 ): string {
   if (!bodyHtml) {
-    return `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
+    return "";
   }
 
   return (
@@ -372,7 +371,6 @@ function renderReasoningPanel(reasoningContent: unknown, collapsed: boolean): st
           : "Model reasoning captured for this message. Collapse it to focus on the final content.",
       )}">` +
         `<span aria-hidden="true">🧠</span>` +
-        `<span>Reasoning</span>` +
         `<span class="reasoning-chevron" aria-hidden="true">▼</span>` +
       `</summary>` +
       `<div class="reasoning-content">` +
@@ -403,7 +401,6 @@ function renderReasoningPanelLive(reasoningContent: unknown, collapsed: boolean,
             `<path d="M13.5 10.5h2"></path>` +
           `</svg>` +
         `</span>` +
-        `<span>Reasoning</span>` +
         `<span class="reasoning-chevron" aria-hidden="true">â–¼</span>` +
       `</summary>` +
       `<div class="reasoning-content">` +
@@ -468,7 +465,7 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
     metaBits.push(buildMessageRoleBadgeSpec(message, role));
   }
 
-  if (role === "assistant" && typeof message?.model === "string" && message.model.length > 0) {
+  if (!options.hideModelBadge && role === "assistant" && typeof message?.model === "string" && message.model.length > 0) {
     metaBits.push(buildModelIdentityBadge(message.model));
   }
 
@@ -806,7 +803,6 @@ function renderFunctionInvocationHtml(
         "Arguments",
         argumentRows,
         argumentCount,
-        "No arguments were provided.",
       ) +
     `</article>`
   );
@@ -856,7 +852,6 @@ function renderFunctionToolHtml(tool: Record<string, any>, index: number): strin
         "Parameters",
         properties.length > 0 ? `<div class="tool-parameter-list">${parametersHtml}</div>` : "",
         properties.length,
-        "This tool did not declare any top-level JSON schema properties.",
       ) +
     `</article>`
   );
@@ -890,7 +885,6 @@ function renderGenericToolHtml(tool: Record<string, any>, index: number): string
           "Parameters",
           fields.length > 0 ? `<div class="tool-parameter-list">${fieldsHtml}</div>` : "",
           fields.length,
-          "No additional configuration fields were stored for this tool.",
         ) +
     `</article>`
   );

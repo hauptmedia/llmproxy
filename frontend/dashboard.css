@@ -1891,6 +1891,9 @@
 
   .chat-transcript {
     @apply gap-4;
+    width: 100%;
+    max-width: 980px;
+    margin-inline: auto;
   }
 
   .chat-initial-footer {
@@ -1898,16 +1901,15 @@
   }
 
   .conversation-bubble-transcript .message-card-host {
-    display: grid;
-    grid-template-columns: 2.35rem minmax(0, 1fr) 2.35rem;
+    display: flex;
     width: 100%;
-    align-items: flex-end;
-    column-gap: 0.7rem;
-    padding-inline: 0.2rem;
+    align-items: end;
+    gap: 0.18rem;
+    padding-inline: 0.5rem;
   }
 
   .conversation-bubble-transcript .message-card-host.role-user {
-    justify-content: stretch;
+    justify-content: flex-end;
   }
 
   .conversation-bubble-transcript .message-card-host.role-assistant,
@@ -1919,97 +1921,133 @@
   .conversation-bubble-transcript .message-card-host.role-system,
   .conversation-bubble-transcript .message-card-host.role-tool {
     justify-content: flex-start;
-    align-items: flex-start;
+    align-items: end;
   }
 
   .conversation-bubble-transcript .message-card-host .turn {
     position: relative;
     width: auto;
-    max-width: min(82%, 52rem);
-    box-shadow: 0 14px 28px rgba(120, 53, 15, 0.08);
+    max-width: min(72%, 44rem);
+    overflow: visible;
+    border-radius: 1.18rem;
+    border-width: 1px;
+    border-color: var(--bubble-border, rgba(120, 53, 15, 0.1));
+    background: var(--bubble-bg, rgba(255, 255, 255, 0.96));
+    box-shadow:
+      0 2px 8px rgba(120, 53, 15, 0.045);
   }
 
   .conversation-bubble-transcript .message-card-host.role-user .turn {
-    border-radius: 1.35rem;
-    background-image: linear-gradient(180deg, rgba(255, 244, 214, 0.98), rgba(255, 251, 239, 0.92));
+    --bubble-bg: rgba(255, 244, 214, 0.98);
+    --bubble-border: rgba(194, 65, 12, 0.12);
+    border-radius: 1.18rem 1.18rem 0.38rem 1.18rem;
   }
 
   .conversation-bubble-transcript .message-card-host.role-assistant .turn {
-    border-radius: 1.35rem;
-    background-image: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.92));
+    --bubble-bg: rgba(244, 248, 255, 0.98);
+    --bubble-border: rgba(14, 116, 144, 0.12);
+    border-radius: 1.18rem 1.18rem 1.18rem 0.38rem;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-system .turn {
+    --bubble-bg: rgba(249, 245, 255, 0.98);
+    --bubble-border: rgba(124, 58, 237, 0.12);
+    border-radius: 1.18rem 1.18rem 1.18rem 0.42rem;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-tool .turn {
+    --bubble-bg: rgba(255, 248, 240, 0.98);
+    --bubble-border: rgba(180, 83, 9, 0.12);
+    border-radius: 1.18rem 1.18rem 1.18rem 0.42rem;
   }
 
   .conversation-bubble-transcript .message-card-host.role-system .turn,
   .conversation-bubble-transcript .message-card-host.role-tool .turn,
   .conversation-bubble-transcript .message-card-host.role-developer .turn,
   .conversation-bubble-transcript .message-card-host.role-unknown .turn {
-    max-width: min(88%, 56rem);
+    max-width: min(74%, 46rem);
   }
 
   .conversation-bubble-transcript .message-card-body {
     min-width: 0;
     display: flex;
+    width: auto;
+    position: relative;
+    z-index: 1;
+    flex: 0 1 auto;
+  }
+
+  .conversation-bubble-transcript .message-card-host.with-avatar .turn::before {
+    display: none;
+  }
+
+  .conversation-bubble-transcript .message-card-host.with-avatar .turn::after {
+    display: none;
   }
 
   .conversation-bubble-transcript .message-card-host.role-assistant .message-avatar {
-    grid-column: 1;
+    align-self: end;
+    margin-right: 0;
   }
 
   .conversation-bubble-transcript .message-card-host.role-tool .message-avatar {
-    grid-column: 1;
-    align-self: flex-start;
-    margin-top: 0.2rem;
+    align-self: end;
+    margin-right: 0;
   }
 
   .conversation-bubble-transcript .message-card-host.role-system .message-avatar {
-    grid-column: 1;
-    align-self: flex-start;
-    margin-top: 0.2rem;
+    align-self: end;
+    margin-right: 0;
   }
 
   .conversation-bubble-transcript .message-card-host.role-assistant .message-card-body {
-    grid-column: 2 / 3;
     justify-content: flex-start;
+    padding-left: 0;
   }
 
   .conversation-bubble-transcript .message-card-host.role-tool .message-card-body {
-    grid-column: 2 / 3;
     justify-content: flex-start;
+    padding-left: 0;
   }
 
   .conversation-bubble-transcript .message-card-host.role-system .message-card-body {
-    grid-column: 2 / 3;
     justify-content: flex-start;
+    padding-left: 0;
   }
 
   .conversation-bubble-transcript .message-card-host.role-user .message-card-body {
-    grid-column: 2 / 3;
     justify-content: flex-end;
+    padding-right: 0;
   }
 
   .conversation-bubble-transcript .message-card-host.role-user .message-avatar {
-    grid-column: 3;
+    align-self: end;
+    margin-left: 0;
   }
 
   .conversation-bubble-transcript .message-card-host.role-developer .message-card-body,
   .conversation-bubble-transcript .message-card-host.role-unknown .message-card-body {
-    grid-column: 2 / 4;
     justify-content: flex-start;
+    width: 100%;
   }
 
   .message-avatar {
     @apply inline-flex items-center justify-center rounded-full border shadow-sm;
-    width: 2.35rem;
-    height: 2.35rem;
+    width: 2.3rem;
+    height: 2.3rem;
     flex: 0 0 auto;
-    background: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.96);
     border-color: rgba(120, 53, 15, 0.12);
     color: #44403c;
+    box-shadow:
+      0 3px 10px rgba(120, 53, 15, 0.08);
+    position: relative;
+    z-index: 2;
   }
 
   .message-avatar svg {
-    width: 1.18rem;
-    height: 1.18rem;
+    width: 1.02rem;
+    height: 1.02rem;
     display: block;
   }
 
@@ -2119,6 +2157,12 @@
     align-content: start;
   }
 
+  .conversation-bubble-transcript {
+    width: 100%;
+    max-width: 980px;
+    margin-inline: auto;
+  }
+
   .turn {
     @apply rounded-3xl border border-amber-900/10 bg-white/80 p-4;
   }
@@ -2141,6 +2185,40 @@
     @apply mb-3 flex items-center justify-between gap-3;
   }
 
+  .conversation-bubble-transcript .turn {
+    padding: 0.78rem 0.92rem;
+  }
+
+  .conversation-bubble-transcript .turn-head {
+    margin-bottom: 0.45rem;
+    gap: 0.55rem;
+  }
+
+  .conversation-bubble-transcript .turn-role {
+    font-size: 0.88rem;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-user .turn-head {
+    justify-content: flex-end;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-user .message-meta {
+    justify-content: flex-end;
+  }
+
+  .conversation-bubble-transcript .message-meta {
+    gap: 0.34rem;
+  }
+
+  .conversation-bubble-transcript .message-meta .badge,
+  .conversation-bubble-transcript .message-meta .chip {
+    min-height: 22px;
+    padding: 0.12rem 0.5rem;
+    font-size: 0.7rem;
+    line-height: 1.15;
+    box-shadow: none;
+  }
+
   .turn-role {
     @apply font-extrabold text-stone-950;
   }
@@ -2149,9 +2227,20 @@
     @apply mb-3 overflow-hidden rounded-2xl border border-amber-900/10 bg-amber-50/60;
   }
 
+  .conversation-bubble-transcript .reasoning-panel {
+    margin-bottom: 0.55rem;
+    border-radius: 0.95rem;
+    background: rgba(255, 251, 235, 0.72);
+  }
+
   .reasoning-summary {
     @apply flex cursor-pointer items-center gap-2 px-3.5 py-3 font-bold text-amber-900;
     list-style: none;
+  }
+
+  .conversation-bubble-transcript .reasoning-summary {
+    padding: 0.6rem 0.78rem;
+    font-size: 0.82rem;
   }
 
   .reasoning-icon {

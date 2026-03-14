@@ -41,12 +41,6 @@ const mcpServicesForDocs = computed(() => serviceDefinitions.value.map((service)
   ...service,
   helperRoutes: service.helperRoutes.map((route) => ({ ...route })),
   toolsForRenderer: mapToolDefinitionsForRenderer(service.tools),
-  promptsWithSummary: service.prompts.map((prompt) => ({
-    ...prompt,
-    argumentSummary: prompt.arguments.length > 0
-      ? prompt.arguments.map((argument) => `${argument.required ? "required" : "optional"} ${argument.name}`).join(", ")
-      : "No prompt arguments.",
-  })),
 })));
 const currentBackendConfig = computed(() => {
   const backendId = store.state.backendEditor.originalId || store.state.backendEditor.fields.id;
@@ -132,9 +126,6 @@ const serverConfigRows = computed(() => {
       </div>
       <div v-if="activeTab === 'general'" class="config-tab-panel">
         <div class="panel-header config-section-head">
-          <div>
-            <h3 class="panel-title">General settings</h3>
-          </div>
           <button
             class="icon-button compact"
             type="button"
@@ -221,21 +212,6 @@ const serverConfigRows = computed(() => {
                 <div v-if="service.toolsForRenderer.length" class="mcp-service-section">
                   <div class="diagnostics-section-label">Tools</div>
                   <ToolDefinitionsView :tools="service.toolsForRenderer" />
-                </div>
-
-                <div v-if="service.promptsWithSummary.length" class="mcp-service-section">
-                  <div class="diagnostics-section-label">Prompts</div>
-                  <div class="mcp-prompt-grid">
-                    <article
-                      v-for="prompt in service.promptsWithSummary"
-                      :key="`${service.id}:${prompt.name}`"
-                      class="mcp-prompt-card"
-                    >
-                      <div class="mcp-prompt-title">{{ prompt.title }}</div>
-                      <div class="mcp-prompt-description">{{ prompt.description }}</div>
-                      <div class="mcp-prompt-args mono">{{ prompt.argumentSummary }}</div>
-                    </article>
-                  </div>
                 </div>
               </article>
             </template>

@@ -840,14 +840,20 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
   assert.equal(modelsResponse.status, 200);
   const modelsPayload = await modelsResponse.json() as {
     object: string;
-    data: Array<{ id: string; owned_by: string }>;
+    data: Array<{ id: string; object: string; created: number; owned_by: string }>;
   };
   assert.equal(modelsPayload.object, "list");
   assert.deepEqual(
     modelsPayload.data.map((entry) => entry.id),
     ["mock-stack-model"],
   );
-  assert.equal(modelsPayload.data[0]?.owned_by, "inner router");
+  assert.equal(modelsPayload.data[0]?.object, "model");
+  assert.equal(modelsPayload.data[0]?.created, 0);
+  assert.equal(modelsPayload.data[0]?.owned_by, "");
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(modelsPayload.data[0] ?? {}, "metadata"),
+    false,
+  );
 
   const nonStreamingResponse = await fetch(`${outerBaseUrl}/v1/chat/completions`, {
     method: "POST",

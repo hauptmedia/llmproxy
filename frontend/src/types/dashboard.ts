@@ -345,6 +345,7 @@ export interface RenderMessageOptions {
   reasoningCollapsed?: boolean;
   extraBadges?: UiBadge[];
   hideRoleBadge?: boolean;
+  hideModelBadge?: boolean;
   hideToolMetaBadges?: boolean;
 }
 

@@ -123,7 +123,8 @@ For a short architecture overview of connectors, routing, retention, and config 
 - The `Active Connections` dashboard section shows live `chat.completions` requests in real time, including queue state, streaming mode, token counts, and `tok/s`.
 - The `Chat` page lets you send debug requests to `/v1/chat/completions`, inspect the conversation, and jump straight into the stored request debugger for the last request.
 - The built-in MCP server exposes JSON-RPC tools and prompts under `POST /mcp` so LLMs can inspect retained requests, fetch stored request details, and run built-in diagnosis heuristics.
-- The MCP endpoint also exposes tools for listing models and running chat completions through the same JSON-RPC `tools/call` flow.
+- The MCP endpoint also exposes the tools `list_models` and `chat_with_model` through the same JSON-RPC `tools/call` flow.
+- The MCP tool `chat_with_model` is always request-based and returns one final completion JSON payload; it does not expose a streaming mode.
 - If `mcpServerEnabled` is turned off, the MCP endpoint returns `503`, the dashboard chat stops attaching MCP tools, and MCP prompt previews are disabled until the server is enabled again.
 - Built-in diagnostics currently include signals such as `finish_reason=length`, effective completion-token-limit hits, endless repetition patterns, rejected requests before backend assignment, and upstream/backend failures.
 - `GET /api/diagnostics/requests/:id` returns a precomputed diagnostics report plus the stored request detail for one retained request.

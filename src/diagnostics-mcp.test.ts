@@ -421,6 +421,8 @@ test("MCP tools expose models and chat completions", async () => {
           object: string;
           data: Array<{
             id: string;
+            object: string;
+            created: number;
             owned_by: string;
           }>;
         };
@@ -433,7 +435,13 @@ test("MCP tools expose models and chat completions", async () => {
     assert.equal(modelsPayload.error, undefined);
     assert.equal(modelsPayload.result?.structuredContent?.object, "list");
     assert.deepEqual(modelsPayload.result?.structuredContent?.data.map((entry) => entry.id), ["diagnostics-model"]);
-    assert.equal(modelsPayload.result?.structuredContent?.data[0]?.owned_by, "mock diagnostics upstream");
+    assert.equal(modelsPayload.result?.structuredContent?.data[0]?.object, "model");
+    assert.equal(modelsPayload.result?.structuredContent?.data[0]?.created, 0);
+    assert.equal(modelsPayload.result?.structuredContent?.data[0]?.owned_by, "");
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(modelsPayload.result?.structuredContent?.data[0] ?? {}, "metadata"),
+      false,
+    );
 
     const chatResponse = await fetch(`${baseUrl}/mcp`, {
       method: "POST",
@@ -445,10 +453,9 @@ test("MCP tools expose models and chat completions", async () => {
         id: 3,
         method: "tools/call",
         params: {
-          name: "create_chat_completion",
+          name: "chat_with_model",
           arguments: {
             model: "diagnostics-model",
-            stream: false,
             max_tokens: 64,
             messages: [
               {
@@ -480,6 +487,212 @@ test("MCP tools expose models and chat completions", async () => {
     assert.equal(chatPayload.result?.structuredContent?.object, "chat.completion");
     assert.equal(chatPayload.result?.structuredContent?.model, "diagnostics-model");
     assert.equal(chatPayload.result?.structuredContent?.choices?.[0]?.finish_reason, "length");
+  } finally {
+    while (cleanup.length > 0) {
+      const task = cleanup.pop();
+      if (task) {
+        await task();
+      }
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("MCP chat_with_model tool rejects explicit stream arguments", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-mcp-chat-stream-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  try {
+    const backendPort = await getFreePort();
+    const routerPort = await getFreePort();
+
+    const backend = await startMockDiagnosticsBackend(backendPort);
+    cleanup.push(async () => {
+      await new Promise<void>((resolve, reject) => {
+        backend.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        });
+      });
+    });
+
+    const config: ProxyConfig = {
+      server: {
+        host: "127.0.0.1",
+        port: routerPort,
+        requestTimeoutMs: 10000,
+        queueTimeoutMs: 2000,
+        healthCheckIntervalMs: 60000,
+        recentRequestLimit: 1000,
+        mcpServerEnabled: true,
+      },
+      backends: [
+        {
+          id: "mock-diagnostics-upstream",
+          name: "mock diagnostics upstream",
+          baseUrl: `http://127.0.0.1:${backendPort}`,
+          enabled: true,
+          maxConcurrency: 1,
+          healthPath: "/v1/models",
+          models: ["diagnostics-model"],
+        },
+      ],
+    };
+
+    const router = await startRouter(config, path.join(tempDir, "mcp-chat-stream-router.config.json"));
+    cleanup.push(async () => {
+      await router.server.stop();
+      await router.loadBalancer.stop();
+    });
+
+    const baseUrl = `http://127.0.0.1:${routerPort}`;
+    await waitForHealthyBackend(baseUrl, "mock-diagnostics-upstream");
+
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 9,
+        method: "tools/call",
+        params: {
+          name: "chat_with_model",
+          arguments: {
+            stream: true,
+            messages: [
+              {
+                role: "user",
+                content: "Hello",
+              },
+            ],
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as {
+      result?: unknown;
+      error?: {
+        message?: string;
+      };
+    };
+
+    assert.equal(payload.result, undefined);
+    assert.equal(
+      payload.error?.message,
+      'The llmproxy MCP tool "chat_with_model" does not accept "stream". It always returns one final non-streaming completion payload.',
+    );
+  } finally {
+    while (cleanup.length > 0) {
+      const task = cleanup.pop();
+      if (task) {
+        await task();
+      }
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("MCP chat_with_model tool rejects unsupported extra arguments", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-mcp-chat-extra-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  try {
+    const backendPort = await getFreePort();
+    const routerPort = await getFreePort();
+
+    const backend = await startMockDiagnosticsBackend(backendPort);
+    cleanup.push(async () => {
+      await new Promise<void>((resolve, reject) => {
+        backend.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        });
+      });
+    });
+
+    const config: ProxyConfig = {
+      server: {
+        host: "127.0.0.1",
+        port: routerPort,
+        requestTimeoutMs: 10000,
+        queueTimeoutMs: 2000,
+        healthCheckIntervalMs: 60000,
+        recentRequestLimit: 1000,
+        mcpServerEnabled: true,
+      },
+      backends: [
+        {
+          id: "mock-diagnostics-upstream",
+          name: "mock diagnostics upstream",
+          baseUrl: `http://127.0.0.1:${backendPort}`,
+          enabled: true,
+          maxConcurrency: 1,
+          healthPath: "/v1/models",
+          models: ["diagnostics-model"],
+        },
+      ],
+    };
+
+    const router = await startRouter(config, path.join(tempDir, "mcp-chat-extra-router.config.json"));
+    cleanup.push(async () => {
+      await router.server.stop();
+      await router.loadBalancer.stop();
+    });
+
+    const baseUrl = `http://127.0.0.1:${routerPort}`;
+    await waitForHealthyBackend(baseUrl, "mock-diagnostics-upstream");
+
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 10,
+        method: "tools/call",
+        params: {
+          name: "chat_with_model",
+          arguments: {
+            messages: [
+              {
+                role: "user",
+                content: "Hello",
+              },
+            ],
+            extra_flag: true,
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as {
+      result?: unknown;
+      error?: {
+        message?: string;
+      };
+    };
+
+    assert.equal(payload.result, undefined);
+    assert.equal(
+      payload.error?.message,
+      'The llmproxy MCP tool "chat_with_model" received unsupported argument "extra_flag".',
+    );
   } finally {
     while (cleanup.length > 0) {
       const task = cleanup.pop();
@@ -565,7 +778,13 @@ test("MCP manifest exposes a single llmproxy functions service", async () => {
         services?: Array<{
           id?: string;
           title?: string;
-          tools?: Array<{ name?: string }>;
+          tools?: Array<{
+            name?: string;
+            inputSchema?: {
+              additionalProperties?: boolean;
+              properties?: Record<string, unknown>;
+            };
+          }>;
           prompts?: Array<{ name?: string }>;
         }>;
       };
@@ -581,8 +800,36 @@ test("MCP manifest exposes a single llmproxy functions service", async () => {
     assert.equal(manifestPayload.result?.services?.[0]?.title, "llmproxy functions");
     assert.deepEqual(
       manifestPayload.result?.services?.[0]?.tools?.map((tool) => tool.name),
-      ["list_models", "create_chat_completion", "list_requests", "get_request_detail", "diagnose_request"],
+      ["list_models", "chat_with_model", "list_requests", "get_request_detail", "diagnose_request"],
     );
+    const chatTool = manifestPayload.result?.services?.[0]?.tools?.find((tool) => tool.name === "chat_with_model");
+    assert.equal(Boolean(chatTool), true);
+    assert.equal(chatTool?.inputSchema?.additionalProperties, false);
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(chatTool?.inputSchema?.properties ?? {}, "stream"),
+      false,
+    );
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(chatTool?.inputSchema?.properties ?? {}, "messages"),
+      true,
+    );
+    const messagesSchema = chatTool?.inputSchema?.properties?.messages as {
+      type?: string;
+      items?: {
+        oneOf?: Array<{
+          properties?: Record<string, unknown>;
+        }>;
+      };
+    } | undefined;
+    assert.equal(messagesSchema?.type, "array");
+    assert.ok(Array.isArray(messagesSchema?.items?.oneOf));
+    const messageRoleEnums = (messagesSchema?.items?.oneOf ?? []).map((schema) => {
+      const roleProperty = schema.properties?.role as { enum?: unknown[] } | undefined;
+      return Array.isArray(roleProperty?.enum)
+        ? roleProperty.enum[0] as string | undefined
+        : undefined;
+    });
+    assert.deepEqual(messageRoleEnums, ["system", "developer", "user", "assistant", "tool"]);
     assert.deepEqual(
       manifestPayload.result?.services?.[0]?.prompts?.map((prompt) => prompt.name),
       ["diagnose-request", "troubleshoot-max-tokens", "troubleshoot-repetition", "troubleshoot-routing"],

@@ -41,6 +41,7 @@ const html = computed(() => renderMessageHtml(props.message, props.index, {
   reasoningCollapsed: reasoningExpanded.value ? false : props.reasoningCollapsed,
   extraBadges: props.extraBadges,
   hideRoleBadge: props.bubbleLayout && (role.value === "system" || role.value === "tool"),
+  hideModelBadge: props.bubbleLayout && role.value === "assistant",
   hideToolMetaBadges: props.bubbleLayout && role.value === "tool",
 }));
 
