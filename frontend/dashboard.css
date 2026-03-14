@@ -512,11 +512,17 @@
   }
 
   .diagnosis-actions-section {
-    margin-top: 0.35rem;
+    margin-top: 0.85rem;
+  }
+
+  .diagnosis-actions-head {
+    @apply mb-3;
   }
 
   .diagnostics-action-card {
     @apply rounded-[1.25rem] border border-amber-900/10 bg-stone-50/80 px-4 py-3 text-left text-sm transition;
+    appearance: none;
+    -webkit-appearance: none;
   }
 
   .diagnostics-action-card:hover {
@@ -528,16 +534,15 @@
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
   }
 
-  .diagnostics-action-card.recommended {
-    @apply border-amber-400/35;
-  }
-
   .diagnostics-action-title {
     @apply flex items-center gap-2 text-sm font-semibold text-stone-900;
   }
 
   .diagnostics-action-badge {
-    @apply inline-flex items-center rounded-full border border-amber-300/80 bg-white/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-700;
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-800;
+    border: 0;
+    background: rgba(254, 243, 199, 0.92);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
   }
 
   .diagnostics-action-description {
@@ -2075,6 +2080,12 @@
 
   .tool-definition-title {
     @apply inline-flex items-center gap-2 text-base font-semibold text-stone-950;
+  }
+
+  .tool-title-marker {
+    @apply inline-flex items-center justify-center rounded-lg border border-amber-900/10 bg-white/88 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-amber-800;
+    letter-spacing: 0.02em;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
   }
 
   .tool-definition-subtitle {

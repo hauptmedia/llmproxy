@@ -100,7 +100,7 @@ async function openPromptInChat(): Promise<void> {
 <template>
   <section class="request-detail-section diagnosis-actions-section">
     <div class="diagnosis-actions-head">
-      <div class="diagnostics-section-label">LLM actions</div>
+      <div class="diagnostics-section-label">LLM followup</div>
     </div>
 
     <div class="diagnostics-actions">
@@ -136,7 +136,7 @@ async function openPromptInChat(): Promise<void> {
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <path d="M5.5 7.5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H11l-3.5 3v-3H7.5a2 2 0 0 1-2-2z"></path>
         </svg>
-        <span>{{ loadingPrompt ? "Preparing chat..." : "Begin chat" }}</span>
+        <span>{{ loadingPrompt ? "Preparing chat..." : "Begin troubleshooting" }}</span>
       </button>
     </div>
   </section>

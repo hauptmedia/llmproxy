@@ -324,13 +324,6 @@ function createDashboardStoreInternal() {
 
       void requestDetail.openRequestDetail(state.debug.lastRequestId);
     },
-    openLastDebugRequestDiagnosis: () => {
-      if (!state.debug.lastRequestId) {
-        return;
-      }
-
-      void requestDetail.openRequestDetail(state.debug.lastRequestId, "diagnosis");
-    },
     shortId,
     recentRequestBadges: buildRecentRequestBadges,
     recentRequestMetrics: buildRecentRequestMetrics,

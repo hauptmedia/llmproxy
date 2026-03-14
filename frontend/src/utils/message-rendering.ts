@@ -196,6 +196,10 @@ function renderParameterIconHtml(count?: number): string {
   );
 }
 
+function renderToolTitleMarkerHtml(): string {
+  return `<span class="tool-title-marker" aria-hidden="true">&lt;/&gt;</span>`;
+}
+
 function renderTypeIconHtml(typeLabel: string): string {
   const normalized = typeLabel.trim().toLowerCase();
 
@@ -750,7 +754,7 @@ function renderFunctionInvocationHtml(
       `<article class="tool-definition-card">` +
         `<div class="tool-definition-head">` +
           `<div>` +
-            `<div class="tool-definition-title"><span>${escapeHtml(name)}</span></div>` +
+            `<div class="tool-definition-title">${renderToolTitleMarkerHtml()}<span>${escapeHtml(name)}</span></div>` +
             (options.note ? `<div class="tool-definition-subtitle">${escapeHtml(options.note)}</div>` : "") +
           `</div>` +
           (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
@@ -798,7 +802,7 @@ function renderFunctionToolHtml(tool: Record<string, any>, index: number): strin
       `<article class="tool-definition-card">` +
         `<div class="tool-definition-head">` +
           `<div>` +
-            `<div class="tool-definition-title"><span>${escapeHtml(name)}</span></div>` +
+            `<div class="tool-definition-title">${renderToolTitleMarkerHtml()}<span>${escapeHtml(name)}</span></div>` +
           `</div>` +
           (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
         `</div>` +
@@ -832,7 +836,7 @@ function renderGenericToolHtml(tool: Record<string, any>, index: number): string
       `<article class="tool-definition-card">` +
         `<div class="tool-definition-head">` +
           `<div>` +
-              `<div class="tool-definition-title"><span>${escapeHtml(toolType)}</span></div>` +
+              `<div class="tool-definition-title">${renderToolTitleMarkerHtml()}<span>${escapeHtml(toolType)}</span></div>` +
             `<div class="tool-definition-subtitle">Tool ${index + 1}</div>` +
           `</div>` +
           `<div class="message-meta"><span class="badge neutral">${escapeHtml(toolType)}</span></div>` +
@@ -860,7 +864,7 @@ export function renderToolsHtml(tools: unknown): string {
              `<article class="tool-definition-card">` +
                `<div class="tool-definition-head">` +
                   `<div>` +
-                   `<div class="tool-definition-title"><span>Tool ${index + 1}</span></div>` +
+                   `<div class="tool-definition-title">${renderToolTitleMarkerHtml()}<span>Tool ${index + 1}</span></div>` +
                    `<div class="tool-definition-subtitle">Stored tool payload</div>` +
                   `</div>` +
                 `</div>` +
