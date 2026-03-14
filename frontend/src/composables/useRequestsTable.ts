@@ -7,9 +7,11 @@ import {
   buildOutcomeOptions,
   clearRequestFilter,
   createRequestTableFilters,
+  diagnosticIssueTitle,
   filterRequestEntries,
   formatLogDate,
   formatLogTime,
+  hasDiagnosticIssue,
   hasActiveRequestFilters,
   isRequestFilterActive,
   maxTokensSummary,
@@ -20,6 +22,7 @@ import {
   outcomeTitle,
   requestColumnTitles,
   requestFilterIconPath,
+  requestIssueFilterOptions,
   requestNumericComparatorOptions,
   requestSortLabels,
   resetRequestFilters,
@@ -52,6 +55,15 @@ export function useRequestsTable() {
   const outcomeOptions = computed(() => buildOutcomeOptions(tableEntries.value));
   const modelOptions = computed(() => buildModelOptions(tableEntries.value));
   const backendOptions = computed(() => buildBackendOptions(tableEntries.value));
+  const issueEntriesCount = computed(() => tableEntries.value.filter((entry) => hasDiagnosticIssue(entry)).length);
+  const issuesFilterToggleDisabled = computed(() => issueEntriesCount.value === 0);
+  const issuesFilterTitle = computed(() => {
+    if (issueEntriesCount.value > 0) {
+      return `Filter stored requests by whether llmproxy's heuristic diagnostics flagged them. ${issueEntriesCount.value} problematic request${issueEntriesCount.value === 1 ? "" : "s"} currently retained.`;
+    }
+
+    return "No heuristic issues have been detected in the retained request list.";
+  });
 
   const filteredEntries = computed(() => (
     filterRequestEntries(tableEntries.value, filters, store.shortId)
@@ -88,14 +100,6 @@ export function useRequestsTable() {
 
   function isSortedBy(candidate: RequestSortKey): boolean {
     return sortKey.value === candidate && sortDirection.value !== "";
-  }
-
-  function sortIndicator(candidate: RequestSortKey): string {
-    if (sortKey.value !== candidate || !sortDirection.value) {
-      return "?";
-    }
-
-    return sortDirection.value === "asc" ? "?" : "?";
   }
 
   function sortTitle(candidate: RequestSortKey): string {
@@ -179,15 +183,21 @@ export function useRequestsTable() {
     backendOptions,
     clearFilter,
     columnTitles: requestColumnTitles,
+    diagnosticIssueTitle,
     filterIconPath: requestFilterIconPath,
     filters,
     filteredEntries,
     formatLogDate,
     formatLogTime,
     hasActiveFilters,
+    hasDiagnosticIssue,
+    issueFilterOptions: requestIssueFilterOptions,
     isFilterActive,
     isFilterOpen,
     isSortedBy,
+    issueEntriesCount,
+    issuesFilterTitle,
+    issuesFilterToggleDisabled,
     maxTokensSummary,
     modelOptions,
     noteSummary,
@@ -197,7 +207,6 @@ export function useRequestsTable() {
     outcomeOptions,
     outcomeTitle,
     resetFilters,
-    sortIndicator,
     sortTitle,
     sortedEntries,
     tableEntries,

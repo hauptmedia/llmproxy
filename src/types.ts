@@ -172,6 +172,9 @@ export interface RequestLogEntry {
   effectiveCompletionTokenLimit?: number;
   timeToFirstTokenMs?: number;
   finishReason?: string;
+  diagnosticSeverity?: "warn" | "bad";
+  diagnosticTitle?: string;
+  diagnosticSummary?: string;
   metricsExact?: boolean;
   hasDetail?: boolean;
 }

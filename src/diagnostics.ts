@@ -16,6 +16,9 @@ export interface DiagnosticFinding {
   code:
     | "max_tokens_reached"
     | "endless_repetition"
+    | "malformed_tool_call"
+    | "tool_result_error"
+    | "interrupted_response"
     | "request_rejected"
     | "upstream_error"
     | "cancelled"
@@ -52,9 +55,18 @@ export interface DiagnosticReport {
   signals: {
     maxTokensReached: boolean;
     repetitionDetected: boolean;
+    malformedToolCall: boolean;
+    toolResultError: boolean;
+    interruptedResponse: boolean;
     requestRejected: boolean;
     upstreamError: boolean;
   };
+}
+
+export interface DiagnosticIssueSummary {
+  severity: "warn" | "bad";
+  title: string;
+  summary: string;
 }
 
 export interface DiagnosticPromptDefinition {
@@ -80,6 +92,24 @@ export type DiagnosticPromptName =
   | "troubleshoot-routing";
 
 interface RepetitionSignal {
+  summary: string;
+  evidence: string[];
+  troubleshooting: string[];
+}
+
+interface ToolCallIssueSignal {
+  summary: string;
+  evidence: string[];
+  troubleshooting: string[];
+}
+
+interface ToolResultErrorSignal {
+  summary: string;
+  evidence: string[];
+  troubleshooting: string[];
+}
+
+interface InterruptedResponseSignal {
   summary: string;
   evidence: string[];
   troubleshooting: string[];
@@ -192,6 +222,30 @@ export function buildDiagnosticReport(
     });
   }
 
+  const toolCallIssue = detectMalformedToolCall(detail.responseBody, detail.entry.finishReason);
+  if (toolCallIssue) {
+    findings.push({
+      code: "malformed_tool_call",
+      severity: "bad",
+      title: "Tool call payload is malformed",
+      summary: toolCallIssue.summary,
+      evidence: toolCallIssue.evidence,
+      troubleshooting: toolCallIssue.troubleshooting,
+    });
+  }
+
+  const toolResultError = detectToolResultError(detail.requestBody);
+  if (toolResultError) {
+    findings.push({
+      code: "tool_result_error",
+      severity: detail.entry.outcome === "error" ? "bad" : "warn",
+      title: "Previous tool result already contained an error",
+      summary: toolResultError.summary,
+      evidence: toolResultError.evidence,
+      troubleshooting: toolResultError.troubleshooting,
+    });
+  }
+
   if (!detail.entry.backendId && (detail.entry.outcome === "error" || detail.entry.outcome === "queued_timeout")) {
     findings.push({
       code: "request_rejected",
@@ -226,6 +280,18 @@ export function buildDiagnosticReport(
         "Verify connector compatibility, request schema, and model availability on that backend.",
         "If this only fails for one model, compare the request against a known-good model/backend combination.",
       ],
+    });
+  }
+
+  const interruptedResponse = detectInterruptedResponse(detail.entry, outputText, detail.responseBody);
+  if (interruptedResponse) {
+    findings.push({
+      code: "interrupted_response",
+      severity: "warn",
+      title: "Generation was interrupted mid-response",
+      summary: interruptedResponse.summary,
+      evidence: interruptedResponse.evidence,
+      troubleshooting: interruptedResponse.troubleshooting,
     });
   }
 
@@ -288,9 +354,27 @@ export function buildDiagnosticReport(
     signals: {
       maxTokensReached,
       repetitionDetected: Boolean(repetitionSignal),
+      malformedToolCall: Boolean(toolCallIssue),
+      toolResultError: Boolean(toolResultError),
+      interruptedResponse: Boolean(interruptedResponse),
       requestRejected: findings.some((finding) => finding.code === "request_rejected"),
       upstreamError: findings.some((finding) => finding.code === "upstream_error"),
     },
+  };
+}
+
+export function selectPrimaryDiagnosticIssue(report: Pick<DiagnosticReport, "findings">): DiagnosticIssueSummary | undefined {
+  const finding = report.findings.find((candidate) => candidate.severity === "bad")
+    ?? report.findings.find((candidate) => candidate.severity === "warn");
+
+  if (!finding || (finding.severity !== "bad" && finding.severity !== "warn")) {
+    return undefined;
+  }
+
+  return {
+    severity: finding.severity,
+    title: finding.title,
+    summary: finding.summary,
   };
 }
 
@@ -445,7 +529,12 @@ function buildRecommendedPrompts(findings: DiagnosticFinding[]): DiagnosticPromp
     prompts.add("troubleshoot-repetition");
   }
 
-  if (findings.some((finding) => finding.code === "request_rejected" || finding.code === "upstream_error")) {
+  if (findings.some((finding) => (
+    finding.code === "request_rejected"
+    || finding.code === "upstream_error"
+    || finding.code === "malformed_tool_call"
+    || finding.code === "tool_result_error"
+  ))) {
     prompts.add("troubleshoot-routing");
   }
 
@@ -537,6 +626,160 @@ function detectRepetition(text: string): RepetitionSignal | undefined {
   return undefined;
 }
 
+function detectMalformedToolCall(
+  responseBody: JsonValue | undefined,
+  finishReason: string | undefined,
+): ToolCallIssueSignal | undefined {
+  const toolCalls = collectAssistantToolCalls(responseBody);
+
+  if (finishReason === "tool_calls" && toolCalls.length === 0) {
+    return {
+      summary: "The response ended with finish_reason=tool_calls, but no usable tool_calls payload was retained, so the next tool-execution step cannot be trusted.",
+      evidence: [
+        "finish_reason=tool_calls.",
+        "No assistant tool_calls were retained in the stored response body.",
+      ],
+      troubleshooting: [
+        "Inspect the raw streamed chunks or upstream logs to confirm whether the backend emitted incomplete tool-call deltas.",
+        "Make sure the backend connector is preserving tool_calls correctly for this model and endpoint.",
+        "Retry with a simpler tool schema and shorter prompt to rule out truncation or malformed partial tool-call output.",
+      ],
+    };
+  }
+
+  for (const toolCall of toolCalls) {
+    const name = readToolCallName(toolCall);
+    const rawArguments = readToolCallArguments(toolCall);
+    const label = name ? `Tool "${name}"` : "A tool call";
+
+    if (!name) {
+      return {
+        summary: "The assistant emitted a tool call without a function name, so llmproxy or the client cannot execute it safely.",
+        evidence: [
+          `${label} is missing a function name.`,
+        ],
+        troubleshooting: [
+          "Inspect the raw response chunks to confirm whether the model emitted a partial tool-call delta.",
+          "Retry with a simpler tool list and shorter prompt so the model has less room to produce malformed tool-call metadata.",
+          "If this happens only on one backend, compare connector compatibility and model tool-calling support.",
+        ],
+      };
+    }
+
+    if (!rawArguments) {
+      return {
+        summary: `The assistant called ${name}, but the tool arguments were empty or missing, so the MCP/tool execution step would fail immediately.`,
+        evidence: [
+          `Tool "${name}" has no usable arguments payload.`,
+        ],
+        troubleshooting: [
+          "Inspect the retained response body to confirm whether the backend emitted incomplete tool-call deltas.",
+          "Retry with a simpler schema and ensure the model is instructed to produce valid JSON arguments.",
+          "If the backend is streaming tool_calls, compare the assembled response against the raw SSE chunks.",
+        ],
+      };
+    }
+
+    try {
+      const parsed = JSON.parse(rawArguments) as unknown;
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        return {
+          summary: `The assistant called ${name}, but the arguments do not resolve to a JSON object, so MCP/function execution would not have a valid parameter object.`,
+          evidence: [
+            `Tool "${name}" arguments: ${truncate(rawArguments, 220)}.`,
+          ],
+          troubleshooting: [
+            "Keep tool schemas object-shaped and prompt the model to emit a JSON object only.",
+            "Reduce output length pressure so streamed tool-call arguments are less likely to be truncated or malformed.",
+            "Compare this response against a known-good model/backend that supports OpenAI-style tool calling reliably.",
+          ],
+        };
+      }
+    } catch {
+      return {
+        summary: `The assistant called ${name}, but the tool arguments are not valid JSON, so MCP/function execution would fail before the next assistant turn.`,
+        evidence: [
+          `Tool "${name}" arguments are not valid JSON: ${truncate(rawArguments, 220)}.`,
+        ],
+        troubleshooting: [
+          "Inspect the retained tool_call arguments and raw streamed chunks for truncation or malformed partial JSON.",
+          "Lower output pressure or simplify the tool schema so the model emits smaller argument payloads.",
+          "If this is specific to one backend or model, compare tool-call behavior on a known-good backend.",
+        ],
+      };
+    }
+  }
+
+  return undefined;
+}
+
+function detectToolResultError(requestBody: JsonValue | undefined): ToolResultErrorSignal | undefined {
+  const toolError = extractToolMessageError(requestBody);
+  if (!toolError) {
+    return undefined;
+  }
+
+  const source = toolError.name ? `tool "${toolError.name}"` : "a tool result";
+  return {
+    summary: `The next assistant turn was prompted with an error coming back from ${source}, so the model was reasoning on a failed MCP/tool invocation rather than a clean tool result.`,
+    evidence: [
+      toolError.toolCallId ? `tool_call_id=${toolError.toolCallId}.` : "A tool-role message in the request body contained an error payload.",
+      `Tool error: ${truncate(toolError.message, 220)}.`,
+    ],
+    troubleshooting: [
+      "Inspect the MCP or tool implementation that produced the error payload before troubleshooting the model response itself.",
+      "Verify that the tool name, schema, and emitted arguments line up with what the server expects.",
+      "If the model produced the tool call, compare the requested arguments against a known-good tool invocation and tighten the prompt if necessary.",
+    ],
+  };
+}
+
+function detectInterruptedResponse(
+  entry: RequestLogEntry,
+  outputText: string,
+  responseBody: JsonValue | undefined,
+): InterruptedResponseSignal | undefined {
+  if (entry.outcome !== "cancelled") {
+    return undefined;
+  }
+
+  const toolCalls = collectAssistantToolCalls(responseBody);
+  const reasoningText = extractPrimaryAssistantReasoning(responseBody);
+  if (!outputText && !reasoningText && toolCalls.length === 0 && (entry.completionTokens ?? 0) <= 0) {
+    return undefined;
+  }
+
+  const evidence = [
+    "Stored outcome: cancelled.",
+  ];
+
+  if (outputText) {
+    evidence.push(`Partial assistant text retained (${outputText.length} chars).`);
+  }
+
+  if (reasoningText) {
+    evidence.push(`Partial assistant reasoning retained (${reasoningText.length} chars).`);
+  }
+
+  if (toolCalls.length > 0) {
+    evidence.push(`Partial assistant tool_call payload retained (${toolCalls.length} call${toolCalls.length === 1 ? "" : "s"}).`);
+  }
+
+  if ((entry.completionTokens ?? 0) > 0) {
+    evidence.push(`Completion had already started (${entry.completionTokens} completion token${entry.completionTokens === 1 ? "" : "s"} recorded).`);
+  }
+
+  return {
+    summary: "The request was cancelled after the assistant had already started producing a turn, so the retained response is only partial.",
+    evidence,
+    troubleshooting: [
+      "If the cancellation was intentional, treat the stored response as partial and ignore this warning.",
+      "If the cancellation was unexpected, inspect client timeouts, dashboard cancels, browser disconnects, or upstream latency spikes.",
+      "Retry the request with a higher client timeout or without cancelling to confirm whether the model can complete the turn normally.",
+    ],
+  };
+}
+
 function detectRepeatedLine(text: string): RepetitionSignal | undefined {
   const counts = new Map<string, number>();
   const lines = text
@@ -617,6 +860,11 @@ function extractPrimaryAssistantText(value: JsonValue | undefined): string {
   return normalizeWhitespace(segments.join("\n\n"));
 }
 
+function extractPrimaryAssistantReasoning(value: JsonValue | undefined): string {
+  const segments = collectAssistantReasoningSegments(value);
+  return normalizeWhitespace(segments.join("\n\n"));
+}
+
 function buildResponseBodyPreview(value: JsonValue | undefined): string {
   if (value === undefined) {
     return "";
@@ -666,6 +914,80 @@ function collectAssistantTextSegments(value: JsonValue | undefined): string[] {
   return segments;
 }
 
+function collectAssistantToolCalls(value: JsonValue | undefined): Array<Record<string, JsonValue>> {
+  if (!isJsonRecord(value)) {
+    return [];
+  }
+
+  const toolCalls: Array<Record<string, JsonValue>> = [];
+
+  if (Array.isArray(value.choices)) {
+    for (const choice of value.choices) {
+      if (!isJsonRecord(choice) || !isJsonRecord(choice.message) || !Array.isArray(choice.message.tool_calls)) {
+        continue;
+      }
+
+      for (const toolCall of choice.message.tool_calls) {
+        if (isJsonRecord(toolCall)) {
+          toolCalls.push(toolCall);
+        }
+      }
+    }
+  }
+
+  if (Array.isArray(value.output)) {
+    for (const item of value.output) {
+      if (!isJsonRecord(item) || !Array.isArray(item.tool_calls)) {
+        continue;
+      }
+
+      for (const toolCall of item.tool_calls) {
+        if (isJsonRecord(toolCall)) {
+          toolCalls.push(toolCall);
+        }
+      }
+    }
+  }
+
+  return toolCalls;
+}
+
+function collectAssistantReasoningSegments(value: JsonValue | undefined): string[] {
+  if (!isJsonRecord(value)) {
+    return [];
+  }
+
+  const segments: string[] = [];
+
+  if (Array.isArray(value.choices)) {
+    for (const choice of value.choices) {
+      if (!isJsonRecord(choice) || !isJsonRecord(choice.message)) {
+        continue;
+      }
+
+      const reasoning = readStringField(choice.message, ["reasoning_content", "reasoning", "thinking"]);
+      if (reasoning) {
+        segments.push(reasoning);
+      }
+    }
+  }
+
+  if (Array.isArray(value.output)) {
+    for (const item of value.output) {
+      if (!isJsonRecord(item)) {
+        continue;
+      }
+
+      const reasoning = readStringField(item, ["reasoning_content", "reasoning", "thinking"]);
+      if (reasoning) {
+        segments.push(reasoning);
+      }
+    }
+  }
+
+  return segments;
+}
+
 function collectMessageTextSegments(message: Record<string, JsonValue>): string[] {
   const segments: string[] = [];
 
@@ -687,6 +1009,93 @@ function collectMessageTextSegments(message: Record<string, JsonValue>): string[
   }
 
   return segments;
+}
+
+function extractToolMessageError(requestBody: JsonValue | undefined): {
+  name?: string;
+  toolCallId?: string;
+  message: string;
+} | undefined {
+  if (!isJsonRecord(requestBody) || !Array.isArray(requestBody.messages)) {
+    return undefined;
+  }
+
+  for (const rawMessage of requestBody.messages) {
+    if (!isJsonRecord(rawMessage) || rawMessage.role !== "tool") {
+      continue;
+    }
+
+    const errorMessage = extractErrorMessageFromToolContent(rawMessage.content);
+    if (!errorMessage) {
+      continue;
+    }
+
+    return {
+      name: typeof rawMessage.name === "string" && rawMessage.name.length > 0 ? rawMessage.name : undefined,
+      toolCallId: typeof rawMessage.tool_call_id === "string" && rawMessage.tool_call_id.length > 0 ? rawMessage.tool_call_id : undefined,
+      message: errorMessage,
+    };
+  }
+
+  return undefined;
+}
+
+function extractErrorMessageFromToolContent(value: JsonValue | undefined): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    try {
+      return extractErrorMessageFromToolContent(JSON.parse(trimmed) as JsonValue);
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    for (const part of value) {
+      const nested = extractErrorMessageFromToolContent(part);
+      if (nested) {
+        return nested;
+      }
+    }
+
+    return undefined;
+  }
+
+  if (!isJsonRecord(value)) {
+    return undefined;
+  }
+
+  if (isJsonRecord(value.error)) {
+    const directMessage = readStringField(value.error, ["message", "detail", "text"]);
+    if (directMessage) {
+      return directMessage;
+    }
+  }
+
+  return readStringField(value, ["error", "message", "detail"]);
+}
+
+function readToolCallName(toolCall: Record<string, JsonValue>): string | undefined {
+  if (!isJsonRecord(toolCall.function)) {
+    return undefined;
+  }
+
+  return typeof toolCall.function.name === "string" && toolCall.function.name.trim().length > 0
+    ? toolCall.function.name.trim()
+    : undefined;
+}
+
+function readToolCallArguments(toolCall: Record<string, JsonValue>): string | undefined {
+  if (!isJsonRecord(toolCall.function) || typeof toolCall.function.arguments !== "string") {
+    return undefined;
+  }
+
+  const trimmed = toolCall.function.arguments.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function readStringField(value: Record<string, JsonValue>, keys: string[]): string | undefined {

@@ -41,6 +41,7 @@ After that:
 - Chat: `http://localhost:4100/dashboard/chat`
 - Diagnostics: `http://localhost:4100/dashboard/diagnostics`
 - Config: `http://localhost:4100/dashboard/config`
+- Every completed or rejected request is also emitted as one NDJSON line on `stdout`, using the same stored request-detail JSON shape that powers the dashboard diagnostics and MCP tools.
 
 The backend serves the built Vue dashboard app directly on the `/dashboard` routes, so frontend and backend stay separated while deployment still stays simple.
 

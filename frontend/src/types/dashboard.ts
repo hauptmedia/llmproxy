@@ -118,6 +118,9 @@ export interface RequestLogEntry {
   effectiveCompletionTokenLimit?: number;
   timeToFirstTokenMs?: number;
   finishReason?: string;
+  diagnosticSeverity?: "warn" | "bad";
+  diagnosticTitle?: string;
+  diagnosticSummary?: string;
   metricsExact?: boolean;
   hasDetail?: boolean;
 }
@@ -390,6 +393,9 @@ export interface DiagnosticReport {
   signals: {
     maxTokensReached: boolean;
     repetitionDetected: boolean;
+    malformedToolCall: boolean;
+    toolResultError: boolean;
+    interruptedResponse: boolean;
     requestRejected: boolean;
     upstreamError: boolean;
   };

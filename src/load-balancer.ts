@@ -15,6 +15,7 @@ import {
 import { getBackendConnector, getDefaultHealthPaths } from "./backend-connectors";
 import { joinUrl, toErrorMessage } from "./utils";
 import { resolveBackendHeaders } from "./config-store";
+import { buildDiagnosticReport, selectPrimaryDiagnosticIssue } from "./diagnostics";
 
 interface BackendRuntime {
   config: ProxyConfig["backends"][number];
@@ -44,6 +45,7 @@ interface PendingRequest {
 
 interface LoadBalancerOptions {
   fetcher?: typeof fetch;
+  requestLogWriter?: (line: string) => void;
 }
 
 interface BackendSelection {
@@ -53,12 +55,14 @@ interface BackendSelection {
 
 export class LoadBalancer extends EventEmitter {
   private readonly fetcher: typeof fetch;
+  private readonly requestLogWriter: (line: string) => void;
   private readonly startedAt = new Date().toISOString();
   private config: ProxyConfig;
   private backends: BackendRuntime[] = [];
   private queue: PendingRequest[] = [];
   private recentRequests: RequestLogEntry[] = [];
   private recentRequestDetails = new Map<string, Omit<RequestLogDetail, "entry">>();
+  private diagnosedRequestIds = new Set<string>();
   private rejectedRequests = 0;
   private nextIndex = 0;
   private healthTimer?: NodeJS.Timeout;
@@ -67,6 +71,7 @@ export class LoadBalancer extends EventEmitter {
   public constructor(config: ProxyConfig, options: LoadBalancerOptions = {}) {
     super();
     this.fetcher = options.fetcher ?? fetch;
+    this.requestLogWriter = options.requestLogWriter ?? (() => {});
     this.config = config;
     this.replaceConfig(config);
   }
@@ -322,7 +327,7 @@ export class LoadBalancer extends EventEmitter {
           }
         }
 
-        this.recentRequests.unshift({
+        const entry: RequestLogEntry = {
           id: route.id,
           time: new Date().toISOString(),
           method: route.method,
@@ -351,9 +356,12 @@ export class LoadBalancer extends EventEmitter {
           finishReason: result.finishReason,
           metricsExact: result.metricsExact,
           hasDetail: route.requestBody !== undefined || result.responseBody !== undefined,
-        });
+        };
+        this.annotateRequestDiagnosticsOnce(entry, route.requestBody, result.responseBody);
+        this.recentRequests.unshift(entry);
         this.trimRecentRequests();
         this.storeRecentRequestDetail(route.id, route.requestBody, result.responseBody);
+        this.emitFinalRequestLogLine(route.id);
 
         this.pumpQueue();
         this.emitSnapshot();
@@ -593,7 +601,7 @@ export class LoadBalancer extends EventEmitter {
     queuedMs = 0,
   ): void {
     this.rejectedRequests += 1;
-    this.recentRequests.unshift({
+    const entry: RequestLogEntry = {
       id: route.id,
       time: new Date().toISOString(),
       method: route.method,
@@ -606,9 +614,12 @@ export class LoadBalancer extends EventEmitter {
       error,
       effectiveCompletionTokenLimit: resolveRequestedCompletionLimit(route.requestBody),
       hasDetail: route.requestBody !== undefined,
-    });
+    };
+    this.annotateRequestDiagnosticsOnce(entry, route.requestBody, undefined);
+    this.recentRequests.unshift(entry);
     this.trimRecentRequests();
     this.storeRecentRequestDetail(route.id, route.requestBody, undefined);
+    this.emitFinalRequestLogLine(route.id);
   }
 
   private trimRecentRequests(): void {
@@ -618,6 +629,12 @@ export class LoadBalancer extends EventEmitter {
     for (const id of Array.from(this.recentRequestDetails.keys())) {
       if (!activeIds.has(id)) {
         this.recentRequestDetails.delete(id);
+      }
+    }
+
+    for (const id of Array.from(this.diagnosedRequestIds)) {
+      if (!activeIds.has(id)) {
+        this.diagnosedRequestIds.delete(id);
       }
     }
   }
@@ -637,6 +654,52 @@ export class LoadBalancer extends EventEmitter {
     }
 
     this.trimRecentRequests();
+  }
+
+  private emitFinalRequestLogLine(requestId: string): void {
+    const detail = this.getRequestLogDetail(requestId);
+    if (!detail) {
+      return;
+    }
+
+    try {
+      this.requestLogWriter(JSON.stringify(detail));
+    } catch (error) {
+      console.error(`Failed to write request log line for ${requestId}:`, error);
+    }
+  }
+
+  private annotateRequestDiagnosticsOnce(
+    entry: RequestLogEntry,
+    requestBody: ProxyRouteRequest["requestBody"],
+    responseBody: LeaseReleaseResult["responseBody"],
+  ): void {
+    if (this.diagnosedRequestIds.has(entry.id)) {
+      return;
+    }
+
+    // The automatic post-request heuristic check should run exactly once per
+    // retained request. Later UIs reuse these stored summary fields instead of
+    // recomputing them for the request list on every render.
+    const report = buildDiagnosticReport(
+      {
+        entry: { ...entry },
+        requestBody,
+        responseBody,
+      },
+      this.getSnapshot(),
+    );
+    const issue = selectPrimaryDiagnosticIssue(report);
+
+    if (!issue) {
+      this.diagnosedRequestIds.add(entry.id);
+      return;
+    }
+
+    entry.diagnosticSeverity = issue.severity;
+    entry.diagnosticTitle = issue.title;
+    entry.diagnosticSummary = issue.summary;
+    this.diagnosedRequestIds.add(entry.id);
   }
 }
 

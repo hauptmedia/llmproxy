@@ -141,6 +141,7 @@ function parseOptionalPositiveInteger(value: unknown, fieldName: string): number
   return value;
 }
 
+
 function parseOptionalStringArray(value: unknown, fieldName: string): string[] | undefined {
   if (value === null || value === undefined) {
     return undefined;

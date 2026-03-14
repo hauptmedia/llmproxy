@@ -3,6 +3,7 @@ import { formatDate, formatTokenRate } from "./formatters";
 import type { RequestCatalogRow } from "./request-catalog";
 
 export type RequestFilterKey =
+  | "issues"
   | "time"
   | "outcome"
   | "request"
@@ -19,6 +20,7 @@ export type RequestSortKey = RequestFilterKey;
 export type RequestSortDirection = "asc" | "desc" | "";
 
 export interface RequestTableFilters {
+  issues: string;
   time: string;
   outcome: string;
   request: string;
@@ -73,10 +75,17 @@ export const requestNumericComparatorOptions = [
   { value: "lt", label: "<" },
 ];
 
+export const requestIssueFilterOptions = [
+  { value: "all", label: "All" },
+  { value: "problematic", label: "Problematic" },
+  { value: "clean", label: "No issue" },
+];
+
 export const requestColumnTitles: Record<RequestFilterKey | "action", string> = {
+  issues: "Whether llmproxy's built-in heuristic diagnostics flagged this stored request as likely problematic.",
   time: "When llmproxy first saw this request. Live rows update in place until they finish and move into retained history.",
   outcome: "Current live state or final request result. Finished successful requests show their backend finish reason instead of a generic success label.",
-  request: "Short request identifier plus the proxied API route that was called.",
+  request: "Short request identifier plus the proxied API route that was called. A yellow warning triangle marks requests where llmproxy's built-in heuristic diagnostics found a likely problem.",
   model: "Model that llmproxy actually routed this request to.",
   backend: "Backend that currently handles or finally handled the request.",
   queue: "Time the request spent waiting for a free backend slot before execution began, or the current wait time while it is still queued.",
@@ -89,6 +98,7 @@ export const requestColumnTitles: Record<RequestFilterKey | "action", string> = 
 };
 
 export const requestSortLabels: Record<RequestSortKey, string> = {
+  issues: "problem state",
   time: "time",
   outcome: "status",
   request: "request",
@@ -104,6 +114,7 @@ export const requestSortLabels: Record<RequestSortKey, string> = {
 
 export function createRequestTableFilters(): RequestTableFilters {
   return {
+    issues: "all",
     time: "",
     outcome: "all",
     request: "",
@@ -264,6 +275,24 @@ export function entryTokenCount(entry: RequestCatalogRow): number | null {
 
 export function noteSummary(entry: RequestCatalogRow): string {
   return entry.error || "";
+}
+
+export function hasDiagnosticIssue(entry: RequestCatalogRow): boolean {
+  return entry.diagnosticSeverity === "warn" || entry.diagnosticSeverity === "bad";
+}
+
+export function diagnosticIssueTitle(entry: RequestCatalogRow): string {
+  if (!hasDiagnosticIssue(entry)) {
+    return "No heuristic issue detected for this stored request.";
+  }
+
+  const title = entry.diagnosticTitle?.trim();
+  const summary = entry.diagnosticSummary?.trim();
+  if (title && summary) {
+    return `${title}: ${summary}`;
+  }
+
+  return summary || title || "llmproxy's heuristic diagnostics found a likely issue for this request.";
 }
 
 export function matchesOutcomeFilter(entry: RequestCatalogRow, filterValue: string): boolean {
@@ -555,6 +584,14 @@ export function filterRequestEntries(
   shortId: (value: string) => string,
 ): RequestCatalogRow[] {
   return entries.filter((entry) => {
+    if (filters.issues === "problematic" && !hasDiagnosticIssue(entry)) {
+      return false;
+    }
+
+    if (filters.issues === "clean" && hasDiagnosticIssue(entry)) {
+      return false;
+    }
+
     if (!matchesText(filters.time, [formatDate(entry.time), formatLogDate(entry.time), formatLogTime(entry.time), entry.time])) {
       return false;
     }
@@ -628,6 +665,7 @@ export function sortRequestEntries(
 
 export function hasActiveRequestFilters(filters: RequestTableFilters): boolean {
   return (
+    filters.issues !== "all" ||
     filters.time.trim().length > 0 ||
     filters.outcome !== "all" ||
     filters.request.trim().length > 0 ||
@@ -648,6 +686,10 @@ export function hasActiveRequestFilters(filters: RequestTableFilters): boolean {
 }
 
 export function isRequestFilterActive(filters: RequestTableFilters, filterKey: RequestFilterKey): boolean {
+  if (filterKey === "issues") {
+    return filters.issues !== "all";
+  }
+
   if (filterKey === "time") {
     return filters.time.trim().length > 0;
   }
@@ -692,13 +734,15 @@ export function isRequestFilterActive(filters: RequestTableFilters, filterKey: R
 }
 
 export function resetRequestFilters(filters: RequestTableFilters): void {
-  const nextFilters = createRequestTableFilters();
-  for (const key of Object.keys(nextFilters) as Array<keyof RequestTableFilters>) {
-    filters[key] = nextFilters[key];
-  }
+  Object.assign(filters, createRequestTableFilters());
 }
 
 export function clearRequestFilter(filters: RequestTableFilters, filterKey: RequestFilterKey): void {
+  if (filterKey === "issues") {
+    filters.issues = "all";
+    return;
+  }
+
   if (filterKey === "time") {
     filters.time = "";
     return;

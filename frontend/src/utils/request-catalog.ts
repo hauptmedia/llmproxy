@@ -27,6 +27,9 @@ export interface RequestCatalogRow {
   completionTokensPerSecond?: number;
   effectiveCompletionTokenLimit?: number;
   finishReason?: string;
+  diagnosticSeverity?: "warn" | "bad";
+  diagnosticTitle?: string;
+  diagnosticSummary?: string;
   hasDetail: boolean;
   live: boolean;
 }
@@ -63,6 +66,9 @@ export function normalizeRequestLogRow(entry: RequestLogEntry): RequestCatalogRo
     completionTokensPerSecond: entry.completionTokensPerSecond,
     effectiveCompletionTokenLimit: entry.effectiveCompletionTokenLimit,
     finishReason: entry.finishReason,
+    diagnosticSeverity: entry.diagnosticSeverity,
+    diagnosticTitle: entry.diagnosticTitle,
+    diagnosticSummary: entry.diagnosticSummary,
     hasDetail: Boolean(entry.hasDetail),
     live: false,
   };
@@ -90,6 +96,9 @@ export function normalizeActiveConnectionRow(connection: ActiveConnectionSnapsho
     completionTokensPerSecond: connection.completionTokensPerSecond,
     effectiveCompletionTokenLimit: connection.effectiveCompletionTokenLimit,
     finishReason: connection.finishReason,
+    diagnosticSeverity: undefined,
+    diagnosticTitle: undefined,
+    diagnosticSummary: undefined,
     hasDetail: Boolean(connection.hasDetail),
     live: true,
   };

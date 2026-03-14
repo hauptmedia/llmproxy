@@ -141,6 +141,217 @@ test("diagnostics detect repeated output patterns", () => {
   assert.ok(report.findings.some((finding) => finding.code === "endless_repetition"));
 });
 
+test("diagnostics detect malformed tool call arguments", () => {
+  const snapshot = createSnapshot();
+  const detail: RequestLogDetail = {
+    entry: {
+      id: "request-bad-tool-call",
+      time: new Date().toISOString(),
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "demo-model",
+      backendId: "backend-a",
+      backendName: "Backend A",
+      outcome: "success",
+      latencyMs: 900,
+      queuedMs: 0,
+      finishReason: "tool_calls",
+      hasDetail: true,
+    },
+    requestBody: {
+      model: "demo-model",
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "diagnose_request",
+          },
+        },
+      ],
+    },
+    responseBody: {
+      choices: [
+        {
+          finish_reason: "tool_calls",
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [
+              {
+                id: "call_bad",
+                type: "function",
+                function: {
+                  name: "diagnose_request",
+                  arguments: "{\"request_id\":",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+
+  const report = buildDiagnosticReport(detail, snapshot);
+
+  assert.equal(report.signals.malformedToolCall, true);
+  assert.ok(report.findings.some((finding) => finding.code === "malformed_tool_call"));
+});
+
+test("diagnostics detect tool-result errors in the next assistant turn", () => {
+  const snapshot = createSnapshot();
+  const detail: RequestLogDetail = {
+    entry: {
+      id: "request-tool-error",
+      time: new Date().toISOString(),
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "demo-model",
+      backendId: "backend-a",
+      backendName: "Backend A",
+      outcome: "success",
+      latencyMs: 1100,
+      queuedMs: 0,
+      finishReason: "stop",
+      hasDetail: true,
+    },
+    requestBody: {
+      model: "demo-model",
+      messages: [
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            {
+              id: "call_diag",
+              type: "function",
+              function: {
+                name: "diagnose_request",
+                arguments: "{\"request_id\":\"abc\"}",
+              },
+            },
+          ],
+        },
+        {
+          role: "tool",
+          name: "diagnose_request",
+          tool_call_id: "call_diag",
+          content: JSON.stringify({
+            error: {
+              message: "Invalid request_id.",
+            },
+          }),
+        },
+      ],
+    },
+    responseBody: {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: "I could not inspect that request because the tool call failed.",
+          },
+        },
+      ],
+    },
+  };
+
+  const report = buildDiagnosticReport(detail, snapshot);
+
+  assert.equal(report.signals.toolResultError, true);
+  assert.ok(report.findings.some((finding) => finding.code === "tool_result_error"));
+});
+
+test("diagnostics detect interrupted responses after a cancellation", () => {
+  const snapshot = createSnapshot();
+  const detail: RequestLogDetail = {
+    entry: {
+      id: "request-cancelled-mid-response",
+      time: new Date().toISOString(),
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "demo-model",
+      backendId: "backend-a",
+      backendName: "Backend A",
+      outcome: "cancelled",
+      latencyMs: 750,
+      queuedMs: 0,
+      error: "Client cancelled request.",
+      hasDetail: true,
+    },
+    requestBody: {
+      model: "demo-model",
+      messages: [
+        {
+          role: "user",
+          content: "Keep writing until I stop you.",
+        },
+      ],
+    },
+    responseBody: {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: "This is only the beginning of the answer before the stream was interrupted.",
+          },
+        },
+      ],
+    },
+  };
+
+  const report = buildDiagnosticReport(detail, snapshot);
+
+  assert.equal(report.signals.interruptedResponse, true);
+  assert.ok(report.findings.some((finding) => finding.code === "interrupted_response"));
+});
+
+test("diagnostics detect interrupted responses that only retained reasoning", () => {
+  const snapshot = createSnapshot();
+  const detail: RequestLogDetail = {
+    entry: {
+      id: "request-cancelled-reasoning-only",
+      time: new Date().toISOString(),
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "demo-model",
+      backendId: "backend-a",
+      backendName: "Backend A",
+      outcome: "cancelled",
+      latencyMs: 820,
+      queuedMs: 0,
+      error: "Client disconnected.",
+      completionTokens: 1,
+      hasDetail: true,
+    },
+    requestBody: {
+      model: "demo-model",
+      messages: [
+        {
+          role: "user",
+          content: "Think first.",
+        },
+      ],
+    },
+    responseBody: {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: "",
+            reasoning_content: "Okay",
+          },
+        },
+      ],
+    },
+  };
+
+  const report = buildDiagnosticReport(detail, snapshot);
+
+  assert.equal(report.signals.interruptedResponse, true);
+  assert.ok(report.findings.some((finding) => finding.code === "interrupted_response"));
+});
+
 test("diagnostics prompts expose a general request diagnosis playbook", () => {
   const snapshot = createSnapshot();
   const detail: RequestLogDetail = {

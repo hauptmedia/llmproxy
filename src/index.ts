@@ -5,15 +5,19 @@ import { LlmProxyServer } from "./server";
 async function main(): Promise<void> {
   const configStore = new ConfigStore();
   const config = await configStore.load();
-  const loadBalancer = new LoadBalancer(config);
+  const loadBalancer = new LoadBalancer(config, {
+    requestLogWriter: (line) => {
+      process.stdout.write(`${line}\n`);
+    },
+  });
   await loadBalancer.start();
 
   const server = new LlmProxyServer(configStore, loadBalancer);
   await server.start();
 
   const { host, port, dashboardPath } = loadBalancer.getServerConfig();
-  console.log(`llmproxy listening on http://${host}:${port}`);
-  console.log(`dashboard available on http://${host}:${port}${dashboardPath}`);
+  process.stderr.write(`llmproxy listening on http://${host}:${port}\n`);
+  process.stderr.write(`dashboard available on http://${host}:${port}${dashboardPath}\n`);
 
   const shutdown = async () => {
     await server.stop();

@@ -407,6 +407,189 @@ test("missing model selects the first free backend with a concrete model", async
   await balancer.stop();
 });
 
+test("completed requests store heuristic diagnostics when the built-in checks find a likely issue", async () => {
+  const balancer = new LoadBalancer(TEST_CONFIG, {
+    fetcher: async () => jsonResponse({ object: "list", data: [] }),
+  });
+
+  const lease = await balancer.acquire({
+    id: "req-heuristic-warning",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "chat-local",
+    stream: true,
+    requestBody: {
+      model: "chat-local",
+      max_completion_tokens: 256,
+      messages: [
+        {
+          role: "user",
+          content: "Write a very long answer.",
+        },
+      ],
+    },
+  });
+
+  lease.release({
+    outcome: "success",
+    latencyMs: 140,
+    statusCode: 200,
+    queuedMs: lease.queueMs,
+    completionTokens: 256,
+    effectiveCompletionTokenLimit: 256,
+    finishReason: "length",
+    responseBody: {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: "The answer was cut off before it finished.",
+          },
+        },
+      ],
+    },
+  });
+
+  const entry = balancer.getSnapshot().recentRequests[0];
+  assert.equal(entry?.diagnosticSeverity, "warn");
+  assert.match(entry?.diagnosticTitle ?? "", /token ceiling/i);
+  assert.match(entry?.diagnosticSummary ?? "", /completion budget was exhausted|cut off by the token budget/i);
+});
+
+test("completed requests emit one final request log line on stdout using the stored detail shape", async () => {
+  const requestLogLines: string[] = [];
+  const balancer = new LoadBalancer(TEST_CONFIG, {
+    fetcher: async () => jsonResponse({ object: "list", data: [] }),
+    requestLogWriter: (line) => {
+      requestLogLines.push(line);
+    },
+  });
+
+  const lease = await balancer.acquire({
+    id: "req-stdout-log",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "chat-local",
+    stream: true,
+    requestBody: {
+      model: "chat-local",
+      messages: [
+        {
+          role: "user",
+          content: "Say hello once.",
+        },
+      ],
+    },
+  });
+
+  lease.release({
+    outcome: "success",
+    latencyMs: 80,
+    statusCode: 200,
+    queuedMs: lease.queueMs,
+    finishReason: "stop",
+    responseBody: {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: "Hello there.",
+          },
+        },
+      ],
+    },
+  });
+
+  assert.equal(requestLogLines.length, 1);
+  assert.deepEqual(
+    JSON.parse(requestLogLines[0] ?? "{}"),
+    JSON.parse(JSON.stringify(balancer.getRequestLogDetail("req-stdout-log"))),
+  );
+});
+
+test("rejected requests also emit one final request log line", async () => {
+  const requestLogLines: string[] = [];
+  const balancer = new LoadBalancer({
+    ...TEST_CONFIG,
+    backends: [],
+  }, {
+    fetcher: async () => jsonResponse({ object: "list", data: [] }),
+    requestLogWriter: (line) => {
+      requestLogLines.push(line);
+    },
+  });
+
+  await assert.rejects(
+    () => balancer.acquire({
+      id: "req-stdout-rejected",
+      receivedAt: Date.now(),
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "chat-local",
+      stream: true,
+      requestBody: {
+        model: "chat-local",
+      },
+    }),
+    /No backends configured\./,
+  );
+
+  assert.equal(requestLogLines.length, 1);
+  assert.deepEqual(
+    JSON.parse(requestLogLines[0] ?? "{}"),
+    JSON.parse(JSON.stringify(balancer.getRequestLogDetail("req-stdout-rejected"))),
+  );
+});
+
+test("completed requests without a clear heuristic problem remain unflagged", async () => {
+  const balancer = new LoadBalancer(TEST_CONFIG, {
+    fetcher: async () => jsonResponse({ object: "list", data: [] }),
+  });
+
+  const lease = await balancer.acquire({
+    id: "req-heuristic-clean",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "chat-local",
+    stream: true,
+    requestBody: {
+      model: "chat-local",
+      messages: [
+        {
+          role: "user",
+          content: "Say hello once.",
+        },
+      ],
+    },
+  });
+
+  lease.release({
+    outcome: "success",
+    latencyMs: 80,
+    statusCode: 200,
+    queuedMs: lease.queueMs,
+    finishReason: "stop",
+    responseBody: {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: "Hello there.",
+          },
+        },
+      ],
+    },
+  });
+
+  const entry = balancer.getSnapshot().recentRequests[0];
+  assert.equal(entry?.diagnosticSeverity, undefined);
+  assert.equal(entry?.diagnosticTitle, undefined);
+  assert.equal(entry?.diagnosticSummary, undefined);
+});
+
 test("missing allowedModels behaves like a wildcard allowlist", async () => {
   const config: ProxyConfig = {
     server: {

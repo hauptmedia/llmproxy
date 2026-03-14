@@ -8,15 +8,19 @@ const {
   backendOptions,
   clearFilter,
   columnTitles,
+  diagnosticIssueTitle,
   filterIconPath,
   filters,
   filteredEntries,
   formatLogDate,
   formatLogTime,
   hasActiveFilters,
+  hasDiagnosticIssue,
+  issueFilterOptions,
   isFilterActive,
   isFilterOpen,
   isSortedBy,
+  issuesFilterTitle,
   maxTokensSummary,
   modelOptions,
   noteSummary,
@@ -26,7 +30,6 @@ const {
   outcomeOptions,
   outcomeTitle,
   resetFilters,
-  sortIndicator,
   sortTitle,
   sortedEntries,
   tableEntries,
@@ -70,14 +73,15 @@ const {
       <div v-if="sortedEntries.length" class="table-wrap log-table-wrap">
         <table class="backend-table log-table">
           <colgroup>
+            <col class="log-col-issue">
             <col class="log-col-time">
             <col class="log-col-outcome">
-          <col class="log-col-request">
-          <col class="log-col-model">
-          <col class="log-col-backend">
-          <col class="log-col-queue">
-          <col class="log-col-latency">
-          <col class="log-col-tokens">
+            <col class="log-col-request">
+            <col class="log-col-model">
+            <col class="log-col-backend">
+            <col class="log-col-queue">
+            <col class="log-col-latency">
+            <col class="log-col-tokens">
             <col class="log-col-max-tokens">
             <col class="log-col-token-rate">
             <col class="log-col-note">
@@ -85,12 +89,37 @@ const {
           </colgroup>
           <thead>
             <tr>
-              <th>
+              <th class="log-issue-header-cell" :title="columnTitles.issues">
+                <div class="log-header-filter">
+                  <div class="log-header-cell log-issue-header-content">
+                    <button
+                      type="button"
+                      class="log-filter-trigger log-issue-filter-trigger"
+                      :class="{ active: isFilterActive('issues') }"
+                      :title="issuesFilterTitle"
+                      aria-label="Filter problematic requests"
+                      @click.stop="toggleFilter('issues')"
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="segment in filterIconPath" :key="segment" :d="segment"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <div v-if="isFilterOpen('issues')" class="table-filter-popover" @click.stop>
+                    <select v-model="filters.issues" class="table-filter-select">
+                      <option v-for="option in issueFilterOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                    <div class="table-filter-actions">
+                      <button type="button" class="button secondary small" @click="clearFilter('issues')">Clear</button>
+                    </div>
+                  </div>
+                </div>
+              </th>
+              <th :title="columnTitles.time">
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('time') }" :title="sortTitle('time')" @click="toggleSort('time')">
-                      <span class="log-header-label" :title="columnTitles.time">Time</span>
-                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('time') }}</span>
+                      <span class="log-header-label">Time</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('time') }" title="Filter time" @click.stop="toggleFilter('time')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -106,12 +135,11 @@ const {
                   </div>
                 </div>
               </th>
-              <th>
+              <th :title="columnTitles.outcome">
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('outcome') }" :title="sortTitle('outcome')" @click="toggleSort('outcome')">
-                      <span class="log-header-label" :title="columnTitles.outcome">Status</span>
-                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('outcome') }}</span>
+                      <span class="log-header-label">Status</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('outcome') }" title="Filter outcome" @click.stop="toggleFilter('outcome')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -129,12 +157,11 @@ const {
                   </div>
                 </div>
               </th>
-              <th>
+              <th :title="columnTitles.request">
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('request') }" :title="sortTitle('request')" @click="toggleSort('request')">
-                      <span class="log-header-label" :title="columnTitles.request">Request</span>
-                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('request') }}</span>
+                      <span class="log-header-label">Request</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('request') }" title="Filter request" @click.stop="toggleFilter('request')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -150,12 +177,11 @@ const {
                   </div>
                 </div>
               </th>
-              <th>
+              <th :title="columnTitles.model">
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('model') }" :title="sortTitle('model')" @click="toggleSort('model')">
-                      <span class="log-header-label" :title="columnTitles.model">Model</span>
-                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('model') }}</span>
+                      <span class="log-header-label">Model</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('model') }" title="Filter model" @click.stop="toggleFilter('model')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -173,12 +199,11 @@ const {
                   </div>
                 </div>
               </th>
-              <th>
+              <th :title="columnTitles.backend">
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('backend') }" :title="sortTitle('backend')" @click="toggleSort('backend')">
-                      <span class="log-header-label" :title="columnTitles.backend">Backend</span>
-                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('backend') }}</span>
+                      <span class="log-header-label">Backend</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('backend') }" title="Filter backend" @click.stop="toggleFilter('backend')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -196,12 +221,11 @@ const {
                   </div>
                 </div>
               </th>
-              <th>
+              <th :title="columnTitles.queue">
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('queue') }" :title="sortTitle('queue')" @click="toggleSort('queue')">
-                      <span class="log-header-label" :title="columnTitles.queue">Queued</span>
-                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('queue') }}</span>
+                      <span class="log-header-label">Queued</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('queue') }" title="Filter queue" @click.stop="toggleFilter('queue')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -222,12 +246,11 @@ const {
                   </div>
                 </div>
               </th>
-              <th>
+              <th :title="columnTitles.latency">
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('latency') }" :title="sortTitle('latency')" @click="toggleSort('latency')">
-                      <span class="log-header-label" :title="columnTitles.latency">Latency</span>
-                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('latency') }}</span>
+                      <span class="log-header-label">Latency</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('latency') }" title="Filter latency" @click.stop="toggleFilter('latency')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -248,12 +271,11 @@ const {
                   </div>
                 </div>
               </th>
-              <th>
+              <th :title="columnTitles.tokens">
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('tokens') }" :title="sortTitle('tokens')" @click="toggleSort('tokens')">
-                      <span class="log-header-label" :title="columnTitles.tokens">Tokens</span>
-                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('tokens') }}</span>
+                      <span class="log-header-label">Tokens</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('tokens') }" title="Filter tokens" @click.stop="toggleFilter('tokens')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -274,12 +296,11 @@ const {
                   </div>
                 </div>
               </th>
-              <th>
+              <th :title="columnTitles.maxTokens">
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('maxTokens') }" :title="sortTitle('maxTokens')" @click="toggleSort('maxTokens')">
-                      <span class="log-header-label" :title="columnTitles.maxTokens">Max tokens</span>
-                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('maxTokens') }}</span>
+                      <span class="log-header-label">Max tokens</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('maxTokens') }" title="Filter max tokens" @click.stop="toggleFilter('maxTokens')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -300,12 +321,11 @@ const {
                   </div>
                 </div>
               </th>
-              <th>
+              <th :title="columnTitles.rate">
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('rate') }" :title="sortTitle('rate')" @click="toggleSort('rate')">
-                      <span class="log-header-label" :title="columnTitles.rate">tok/s</span>
-                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('rate') }}</span>
+                      <span class="log-header-label">tok/s</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('rate') }" title="Filter token rate" @click.stop="toggleFilter('rate')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -326,12 +346,11 @@ const {
                   </div>
                 </div>
               </th>
-              <th>
+              <th :title="columnTitles.note">
                 <div class="log-header-filter">
                   <div class="log-header-cell">
                     <button type="button" class="log-sort-trigger" :class="{ active: isSortedBy('note') }" :title="sortTitle('note')" @click="toggleSort('note')">
-                      <span class="log-header-label" :title="columnTitles.note">Note</span>
-                      <span class="log-sort-indicator" aria-hidden="true">{{ sortIndicator('note') }}</span>
+                      <span class="log-header-label">Note</span>
                     </button>
                     <button type="button" class="log-filter-trigger" :class="{ active: isFilterActive('note') }" title="Filter note" @click.stop="toggleFilter('note')">
                       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -347,9 +366,7 @@ const {
                   </div>
                 </div>
               </th>
-              <th class="log-action-header" :title="columnTitles.action">
-                <span class="log-action-head-content">Action</span>
-              </th>
+              <th class="log-action-header" :title="columnTitles.action"></th>
             </tr>
           </thead>
           <tbody>
@@ -357,6 +374,21 @@ const {
               v-for="entry in sortedEntries"
               :key="entry.id"
             >
+              <td class="log-cell-tight log-issue-cell">
+                <span
+                  v-if="hasDiagnosticIssue(entry)"
+                  class="log-warning-indicator"
+                  :title="diagnosticIssueTitle(entry)"
+                  aria-label="Heuristic issue detected"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3.5 21 19H3L12 3.5Z"></path>
+                    <path d="M12 9v4.5"></path>
+                    <circle cx="12" cy="16.75" r="0.75" fill="currentColor" stroke="none"></circle>
+                  </svg>
+                </span>
+                <span v-else class="log-warning-placeholder" aria-hidden="true"></span>
+              </td>
               <td class="log-cell-tight">
                 <div class="log-time-stack">
                   <div class="log-time-date">{{ formatLogDate(entry.time) }}</div>
