@@ -8,7 +8,6 @@ export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue
 export interface ServerConfig {
   host: string;
   port: number;
-  dashboardPath: string;
   requestTimeoutMs: number;
   queueTimeoutMs: number;
   healthCheckIntervalMs: number;

@@ -108,21 +108,21 @@ function handlePromptKeydown(event: KeyboardEvent): void {
           class="chat-composer-tool-toggle"
           :for="`${modelId}-diagnostic-tools`"
           :title="mcpServerEnabled
-            ? 'When enabled, chat requests include the diagnostics MCP tools and automatically execute their tool calls during the conversation.'
-            : 'Diagnostics MCP server is disabled in config.'"
+            ? 'When enabled, chat requests include llmproxy functions from the MCP server and automatically execute their tool calls during the conversation.'
+            : 'MCP server is disabled in config.'"
         >
           <input
             :id="`${modelId}-diagnostic-tools`"
             type="checkbox"
             :checked="enableDiagnosticTools"
             :disabled="!mcpServerEnabled"
-            aria-label="Enable diagnostics MCP tools for this chat"
+            aria-label="Enable llmproxy functions for this chat"
             :title="mcpServerEnabled
-              ? 'When enabled, chat requests include the diagnostics MCP tools and automatically execute their tool calls during the conversation.'
-              : 'Diagnostics MCP server is disabled in config.'"
+              ? 'When enabled, chat requests include llmproxy functions from the MCP server and automatically execute their tool calls during the conversation.'
+              : 'MCP server is disabled in config.'"
             @change="emit('update:enableDiagnosticTools', ($event.target as HTMLInputElement).checked)"
           >
-          <span>Enable diagnostic tools</span>
+          <span>Provide llmproxy MCP Tools</span>
         </label>
       </div>
       <div class="chat-composer-primary-actions">

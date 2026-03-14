@@ -4,7 +4,6 @@ export type JsonValue = string | number | boolean | null | JsonValue[] | { [key:
 export interface EditableServerConfig {
   host: string;
   port: number;
-  dashboardPath: string;
   requestTimeoutMs: number;
   queueTimeoutMs: number;
   healthCheckIntervalMs: number;
@@ -205,7 +204,6 @@ export interface BackendEditorState {
 export interface ServerEditorFields {
   host: string;
   port: string;
-  dashboardPath: string;
   requestTimeoutMs: string;
   queueTimeoutMs: string;
   healthCheckIntervalMs: string;
@@ -269,6 +267,7 @@ export interface DebugState {
   model: string;
   systemPrompt: string;
   prompt: string;
+  defaultPromptDismissed: boolean;
   queuedMessages: DebugQueuedMessage[];
   enableDiagnosticTools: boolean;
   stream: boolean;
@@ -346,6 +345,7 @@ export interface RenderMessageOptions {
   reasoningCollapsed?: boolean;
   extraBadges?: UiBadge[];
   hideRoleBadge?: boolean;
+  hideToolMetaBadges?: boolean;
 }
 
 export interface ConversationTranscriptItem {
@@ -423,23 +423,52 @@ export interface DiagnosticReport {
   };
 }
 
-export interface DiagnosticPromptDefinition {
+export interface McpPromptArgumentDefinition {
+  name: string;
+  description: string;
+  required: boolean;
+}
+
+export interface McpPromptDefinition {
   name: string;
   title: string;
   description: string;
-  arguments: Array<{
-    name: string;
-    description: string;
-    required: boolean;
-  }>;
+  arguments: McpPromptArgumentDefinition[];
 }
 
-export interface DiagnosticsToolDefinition {
+export interface McpToolDefinition {
   name: string;
   title: string;
   description: string;
   inputSchema?: Record<string, unknown>;
 }
+
+export interface McpHelperRouteDefinition {
+  method: "GET" | "POST";
+  path: string;
+  title: string;
+  description: string;
+}
+
+export interface McpServiceDefinition {
+  id: string;
+  title: string;
+  description: string;
+  helperRoutes: McpHelperRouteDefinition[];
+  tools: McpToolDefinition[];
+  prompts: McpPromptDefinition[];
+}
+
+export interface McpManifest {
+  endpoint: string;
+  services: McpServiceDefinition[];
+  helperRoutes: McpHelperRouteDefinition[];
+  tools: McpToolDefinition[];
+  prompts: McpPromptDefinition[];
+}
+
+export type DiagnosticPromptDefinition = McpPromptDefinition;
+export type DiagnosticsToolDefinition = McpToolDefinition;
 
 export interface DiagnosticPromptMessage {
   role: "system" | "user";

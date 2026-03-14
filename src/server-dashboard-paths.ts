@@ -1,13 +1,15 @@
 import { existsSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 import type { ProxySnapshot } from "./types";
+
+export const FIXED_DASHBOARD_PATH = "/dashboard";
 export interface DashboardRoute {
   page: "overview" | "chat" | "logs" | "config";
 }
 
 export function normalizeDashboardPath(pathname: string): string {
   if (!pathname || pathname === "/") {
-    return "/dashboard";
+    return FIXED_DASHBOARD_PATH;
   }
 
   return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;

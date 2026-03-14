@@ -21,6 +21,7 @@ import {
   parseServerConfigSavePayload,
 } from "./server-config-payloads";
 import {
+  FIXED_DASHBOARD_PATH,
   assetContentType,
   matchDashboardRoute,
   normalizeDashboardPath,
@@ -41,7 +42,13 @@ import {
   resolveRequestedCompletionLimit,
   selectProxyStatus,
 } from "./server-request-utils";
-import { handleDiagnosticsMcpRequest } from "./server-diagnostics-mcp";
+import {
+  buildMcpManifest,
+  handleMcpRequest,
+  isMcpEndpointPath,
+  isMcpManifestPath,
+  MCP_DISABLED_MESSAGE,
+} from "./server-mcp";
 import {
   ActiveConnectionKind,
   ActiveConnectionPhase,
@@ -123,18 +130,6 @@ export function isSupportedProxyRoute(method: string, pathname: string): boolean
   }
 
   return pathname === "/v1/chat/completions";
-}
-
-function resolveDiagnosticsMcpProxyPath(pathname: string): string | undefined {
-  if (pathname === "/api/diagnostics/mcp/v1/models") {
-    return "/v1/models";
-  }
-
-  if (pathname === "/api/diagnostics/mcp/v1/chat/completions") {
-    return "/v1/chat/completions";
-  }
-
-  return undefined;
 }
 
 export class LlmProxyServer {
@@ -231,7 +226,7 @@ export class LlmProxyServer {
     }
 
     const url = new URL(request.url, "http://127.0.0.1");
-    const dashboardPath = normalizeDashboardPath(this.loadBalancer.getServerConfig().dashboardPath);
+    const dashboardPath = normalizeDashboardPath(FIXED_DASHBOARD_PATH);
     const method = request.method?.toUpperCase() ?? "GET";
 
     if (method === "GET" && url.pathname === "/") {
@@ -286,42 +281,28 @@ export class LlmProxyServer {
       return;
     }
 
-    const diagnosticsMcpProxyPath = resolveDiagnosticsMcpProxyPath(url.pathname);
-    if (diagnosticsMcpProxyPath) {
+    if (method === "GET" && isMcpManifestPath(url.pathname)) {
       if (!this.loadBalancer.getServerConfig().mcpServerEnabled) {
-        sendJson(response, 503, proxyError("Diagnostics MCP server is disabled in config."));
+        sendJson(response, 503, proxyError(MCP_DISABLED_MESSAGE));
         return;
       }
 
-      if (method === "GET" && diagnosticsMcpProxyPath === "/v1/models") {
-        this.handleModels(response, this.loadBalancer.listKnownModels());
-        return;
-      }
-
-      if (!isSupportedProxyRoute(method, diagnosticsMcpProxyPath)) {
-        sendJson(
-          response,
-          501,
-          proxyError(
-            `Route "${method} ${url.pathname}" is not implemented. Supported MCP proxy routes: GET /api/diagnostics/mcp/v1/models, POST /api/diagnostics/mcp/v1/chat/completions.`,
-          ),
-        );
-        return;
-      }
-
-      const proxyUrl = new URL(url.toString());
-      proxyUrl.pathname = diagnosticsMcpProxyPath;
-      await this.handleProxy(request, response, proxyUrl);
+      sendJson(response, 200, buildMcpManifest({
+        snapshot: this.getSnapshot(),
+        getRequestDetail: (requestId) => this.getRequestDetail(requestId),
+        listModelsPayload: () => this.buildModelsPayload(this.loadBalancer.listKnownModels()),
+        runChatCompletion: (payload) => this.runMcpChatCompletion(payload),
+      }));
       return;
     }
 
-    if (method === "POST" && url.pathname === "/api/diagnostics/mcp") {
+    if (method === "POST" && isMcpEndpointPath(url.pathname)) {
       if (!this.loadBalancer.getServerConfig().mcpServerEnabled) {
-        sendJson(response, 503, proxyError("Diagnostics MCP server is disabled in config."));
+        sendJson(response, 503, proxyError(MCP_DISABLED_MESSAGE));
         return;
       }
 
-      await this.handleDiagnosticsMcp(request, response);
+      await this.handleMcp(request, response);
       return;
     }
 
@@ -479,7 +460,7 @@ export class LlmProxyServer {
     });
   }
 
-  private async handleDiagnosticsMcp(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  private async handleMcp(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const body = await readRequestBody(request);
     const parsed = tryParseJsonBuffer(body, request.headers["content-type"]);
 
@@ -498,9 +479,11 @@ export class LlmProxyServer {
     sendJson(
       response,
       200,
-      handleDiagnosticsMcpRequest(parsed, {
+      await handleMcpRequest(parsed, {
         snapshot: this.getSnapshot(),
         getRequestDetail: (requestId) => this.getRequestDetail(requestId),
+        listModelsPayload: () => this.buildModelsPayload(this.loadBalancer.listKnownModels()),
+        runChatCompletion: (payload) => this.runMcpChatCompletion(payload),
       }),
     );
   }
@@ -524,7 +507,11 @@ export class LlmProxyServer {
   }
 
   private handleModels(response: ServerResponse, models: KnownModel[]): void {
-    sendJson(response, 200, {
+    sendJson(response, 200, this.buildModelsPayload(models));
+  }
+
+  private buildModelsPayload(models: KnownModel[]): Record<string, unknown> {
+    return {
       object: "list",
       data: models.map((model) => ({
         id: model.id,
@@ -536,7 +523,7 @@ export class LlmProxyServer {
           source: model.source,
         },
       })),
-    });
+    };
   }
 
   private async handleBackendList(response: ServerResponse): Promise<void> {
@@ -698,6 +685,88 @@ export class LlmProxyServer {
     } catch (error) {
       sendJson(response, 404, proxyError(toErrorMessage(error)));
     }
+  }
+
+  private async runMcpChatCompletion(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const { port } = this.loadBalancer.getServerConfig();
+    const response = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const raw = await response.text();
+      let parsedMessage = "";
+
+      try {
+        const parsed = JSON.parse(raw) as {
+          error?: {
+            message?: unknown;
+          };
+        };
+        if (typeof parsed.error?.message === "string" && parsed.error.message.trim().length > 0) {
+          parsedMessage = parsed.error.message.trim();
+        }
+      } catch {
+        parsedMessage = "";
+      }
+
+      throw new Error(parsedMessage || raw || `Chat completion failed with HTTP ${response.status}.`);
+    }
+
+    if (isEventStream(response.headers) && response.body) {
+      const accumulator = new StreamingAccumulator("chat.completions");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const next = await reader.read();
+        if (next.done) {
+          break;
+        }
+
+        buffer += decoder.decode(next.value, { stream: true });
+        const split = splitSseBlocks(buffer, false);
+        buffer = split.remainder;
+
+        for (const block of split.blocks) {
+          const payloadText = extractSseDataPayload(block);
+          if (!payloadText || payloadText === "[DONE]") {
+            continue;
+          }
+
+          accumulator.applyPayload(JSON.parse(payloadText) as Record<string, unknown>);
+        }
+      }
+
+      buffer += decoder.decode();
+      const trailing = splitSseBlocks(buffer, true);
+      for (const block of trailing.blocks) {
+        const payloadText = extractSseDataPayload(block);
+        if (!payloadText || payloadText === "[DONE]") {
+          continue;
+        }
+
+        accumulator.applyPayload(JSON.parse(payloadText) as Record<string, unknown>);
+      }
+
+      if (!accumulator.hasPayload) {
+        throw new Error("Chat completion stream produced no JSON payload.");
+      }
+
+      return accumulator.buildResponse();
+    }
+
+    const parsed = await response.json();
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("Chat completion returned a non-object JSON payload.");
+    }
+
+    return parsed as Record<string, unknown>;
   }
 
   private async handleProxy(request: IncomingMessage, response: ServerResponse, url: URL): Promise<void> {

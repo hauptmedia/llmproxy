@@ -2,14 +2,16 @@ import { computed, readonly, ref, watch } from "vue";
 import type {
   DiagnosticPromptDefinition,
   DiagnosticsToolDefinition,
+  McpServiceDefinition,
 } from "../types/dashboard";
-import { listDiagnosticPrompts, listDiagnosticsTools } from "../utils/diagnostics-mcp";
+import { listMcpManifest } from "../utils/diagnostics-mcp";
 import { useDashboardStore } from "./useDashboardStore";
 
 const loadingCapabilitiesState = ref(false);
 const toolDefinitionsState = ref<DiagnosticsToolDefinition[]>([]);
 const promptDefinitionsState = ref<DiagnosticPromptDefinition[]>([]);
-const endpointUrl = `${window.location.origin}/api/diagnostics/mcp`;
+const serviceDefinitionsState = ref<McpServiceDefinition[]>([]);
+const endpointUrlState = ref(`${window.location.origin}/mcp`);
 
 let capabilitiesLoaded = false;
 let loadPromise: Promise<void> | null = null;
@@ -26,6 +28,8 @@ export function useDiagnosticsCapabilities() {
     if (mcpServerEnabled.value !== true) {
       toolDefinitionsState.value = [];
       promptDefinitionsState.value = [];
+      serviceDefinitionsState.value = [];
+      endpointUrlState.value = `${window.location.origin}/mcp`;
       loadingCapabilitiesState.value = false;
       capabilitiesLoaded = false;
       return;
@@ -43,15 +47,31 @@ export function useDiagnosticsCapabilities() {
     loadingCapabilitiesState.value = true;
     loadPromise = (async () => {
       try {
-        const [tools, prompts] = await Promise.all([
-          listDiagnosticsTools(),
-          listDiagnosticPrompts(),
-        ]);
-        toolDefinitionsState.value = tools;
-        promptDefinitionsState.value = prompts;
+        const manifest = await listMcpManifest();
+        endpointUrlState.value = `${window.location.origin}${manifest.endpoint}`;
+        serviceDefinitionsState.value = manifest.services.map((service) => ({
+          ...service,
+          helperRoutes: service.helperRoutes.map((route) => ({ ...route })),
+          tools: service.tools.map((tool) => ({
+            ...tool,
+            ...(tool.inputSchema ? { inputSchema: { ...tool.inputSchema } } : {}),
+          })),
+          prompts: service.prompts.map((prompt) => ({
+            ...prompt,
+            arguments: prompt.arguments.map((argument) => ({ ...argument })),
+          })),
+        }));
+        toolDefinitionsState.value = manifest.tools.map((tool) => ({
+          ...tool,
+          ...(tool.inputSchema ? { inputSchema: { ...tool.inputSchema } } : {}),
+        }));
+        promptDefinitionsState.value = manifest.prompts.map((prompt) => ({
+          ...prompt,
+          arguments: prompt.arguments.map((argument) => ({ ...argument })),
+        }));
         capabilitiesLoaded = true;
       } catch (error) {
-        store.showToast("Diagnostics", error instanceof Error ? error.message : String(error));
+        store.showToast("MCP server", error instanceof Error ? error.message : String(error));
       } finally {
         loadingCapabilitiesState.value = false;
         loadPromise = null;
@@ -67,6 +87,8 @@ export function useDiagnosticsCapabilities() {
       if (enabled !== true) {
         toolDefinitionsState.value = [];
         promptDefinitionsState.value = [];
+        serviceDefinitionsState.value = [];
+        endpointUrlState.value = `${window.location.origin}/mcp`;
         loadingCapabilitiesState.value = false;
         capabilitiesLoaded = false;
         return;
@@ -78,9 +100,10 @@ export function useDiagnosticsCapabilities() {
   );
 
   return {
-    endpointUrl,
+    endpointUrl: readonly(endpointUrlState),
     loadingCapabilities: readonly(loadingCapabilitiesState),
     mcpServerEnabled,
+    serviceDefinitions: readonly(serviceDefinitionsState),
     toolDefinitions: readonly(toolDefinitionsState),
     promptDefinitions: readonly(promptDefinitionsState),
     loadCapabilities,

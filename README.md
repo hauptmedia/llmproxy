@@ -95,7 +95,7 @@ After the first start, add your backends either through the `Config` page in the
 Important configuration fields:
 
 - `recentRequestLimit`: maximum number of recent request log entries to retain in memory and show in the dashboard, default `1000`
-- `mcpServerEnabled`: enables or disables the built-in diagnostics MCP endpoint and the diagnostics tools exposed to the dashboard chat, default `true`
+- `mcpServerEnabled`: enables or disables the built-in MCP endpoint and the MCP tools exposed to the dashboard chat, default `true`
 - `baseUrl`: target URL of the OpenAI-compatible backend
 - `connector`: backend adapter to use, currently `openai` or `ollama`
 - `maxConcurrency`: concurrent requests allowed for that backend
@@ -104,7 +104,9 @@ Important configuration fields:
 - `apiKey` or `apiKeyEnv`: optional upstream authentication
 
 The `Config` page opens in a read-only view by default. Use the pencil button in the `Config` panel to edit the main `llmproxy` server config, or the backend actions on the page to edit backend entries and write changes back to your local `llmproxy.config.json`.
-Backend changes become active immediately after saving. For the main server config, `requestTimeoutMs`, `queueTimeoutMs`, `healthCheckIntervalMs`, `recentRequestLimit`, and `mcpServerEnabled` apply immediately; `host`, `port`, and `dashboardPath` are saved right away but require an `llmproxy` restart to take effect.
+Backend changes become active immediately after saving. For the main server config, `requestTimeoutMs`, `queueTimeoutMs`, `healthCheckIntervalMs`, `recentRequestLimit`, and `mcpServerEnabled` apply immediately; `host` and `port` are saved right away but require an `llmproxy` restart to take effect.
+
+The dashboard is always served under `/dashboard`.
 Existing `models` entries are still accepted for backwards compatibility, but `allowedModels` is the preferred config key going forward.
 If `allowedModels` is omitted entirely, llmproxy treats that backend like `["*"]`, meaning all models are allowed.
 
@@ -120,8 +122,8 @@ For a short architecture overview of connectors, routing, retention, and config 
 - The proxy is intentionally limited to the completion routes listed above; other `/v1/*` routes return `501`.
 - The `Active Connections` dashboard section shows live `chat.completions` requests in real time, including queue state, streaming mode, token counts, and `tok/s`.
 - The `Chat` page lets you send debug requests to `/v1/chat/completions`, inspect the conversation, and jump straight into the stored request debugger for the last request.
-- The `Diagnostics` page exposes MCP-compatible tools and prompts under `/api/diagnostics/mcp` so LLMs can inspect retained requests, fetch stored request details, and run built-in diagnosis heuristics.
-- The built-in MCP server also mirrors two OpenAI-compatible helper routes under the same namespace: `GET /api/diagnostics/mcp/v1/models` and `POST /api/diagnostics/mcp/v1/chat/completions`.
-- If `mcpServerEnabled` is turned off, the diagnostics MCP endpoint returns `503`, the dashboard chat stops attaching diagnostics tools, and MCP prompt previews are disabled until the server is enabled again.
+- The built-in MCP server exposes JSON-RPC tools and prompts under `POST /mcp` so LLMs can inspect retained requests, fetch stored request details, and run built-in diagnosis heuristics.
+- The MCP endpoint also exposes tools for listing models and running chat completions through the same JSON-RPC `tools/call` flow.
+- If `mcpServerEnabled` is turned off, the MCP endpoint returns `503`, the dashboard chat stops attaching MCP tools, and MCP prompt previews are disabled until the server is enabled again.
 - Built-in diagnostics currently include signals such as `finish_reason=length`, effective completion-token-limit hits, endless repetition patterns, rejected requests before backend assignment, and upstream/backend failures.
 - `GET /api/diagnostics/requests/:id` returns a precomputed diagnostics report plus the stored request detail for one retained request.

@@ -472,13 +472,13 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
     metaBits.push(buildModelIdentityBadge(message.model));
   }
 
-  if (role === "tool" && typeof message?.name === "string" && message.name.length > 0) {
+  if (!options.hideToolMetaBadges && role === "tool" && typeof message?.name === "string" && message.name.length > 0) {
     metaBits.push(badgeSpec(`tool ${message.name}`, "warn", "Tool name associated with this tool response."));
-  } else if (typeof message?.name === "string" && message.name.length > 0) {
+  } else if (role !== "tool" && typeof message?.name === "string" && message.name.length > 0) {
     metaBits.push(badgeSpec(`name ${message.name}`, "warn", "Optional message name field."));
   }
 
-  if (role === "tool" && typeof message?.tool_call_id === "string" && message.tool_call_id.length > 0) {
+  if (!options.hideToolMetaBadges && role === "tool" && typeof message?.tool_call_id === "string" && message.tool_call_id.length > 0) {
     metaBits.push(badgeSpec(`call ${message.tool_call_id}`, "neutral", "Tool call id that this tool response belongs to."));
   }
 

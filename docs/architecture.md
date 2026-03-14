@@ -86,7 +86,7 @@ Two classes of settings exist:
 At the moment:
 
 - backend edits apply immediately after saving
-- some main server fields such as `host`, `port`, and `dashboardPath` are saved immediately but still require restart
+- some main server fields such as `host` and `port` are saved immediately but still require restart
 
 ## Diagnostics And MCP
 
@@ -95,8 +95,8 @@ At the moment:
 Two entry points exist:
 
 - `GET /api/diagnostics/requests/:id` for a ready-made heuristics report plus the stored request/response payloads
-- `POST /api/diagnostics/mcp` for MCP-style JSON-RPC calls such as `initialize`, `tools/list`, `tools/call`, `prompts/list`, and `prompts/get`
-- `GET /api/diagnostics/mcp/v1/models` and `POST /api/diagnostics/mcp/v1/chat/completions` as OpenAI-compatible helper routes under the same MCP namespace
+- `POST /mcp` for MCP-style JSON-RPC calls such as `initialize`, `tools/list`, `tools/call`, `prompts/list`, and `prompts/get`
+- MCP tools for listing models and running chat completions, exposed through the normal `tools/call` flow on `POST /mcp`
 
 The built-in diagnostics engine currently looks for signals such as:
 

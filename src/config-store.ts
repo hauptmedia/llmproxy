@@ -5,7 +5,6 @@ import { BackendConfig, BackendConnector, BackendEditorConfig, BackendSavePayloa
 const DEFAULT_SERVER_CONFIG: ServerConfig = {
   host: "0.0.0.0",
   port: 4100,
-  dashboardPath: "/dashboard",
   requestTimeoutMs: 10 * 60 * 1000,
   queueTimeoutMs: 30 * 1000,
   healthCheckIntervalMs: 10 * 1000,
@@ -194,10 +193,6 @@ function normalizeServerConfig(config?: Partial<ServerConfig>): ServerConfig {
   return {
     host: typeof config?.host === "string" && config.host.trim().length > 0 ? config.host.trim() : DEFAULT_SERVER_CONFIG.host,
     port: typeof config?.port === "number" && config.port > 0 ? config.port : DEFAULT_SERVER_CONFIG.port,
-    dashboardPath:
-      typeof config?.dashboardPath === "string" && config.dashboardPath.startsWith("/")
-        ? config.dashboardPath
-        : DEFAULT_SERVER_CONFIG.dashboardPath,
     requestTimeoutMs:
       typeof config?.requestTimeoutMs === "number" && config.requestTimeoutMs > 0
         ? config.requestTimeoutMs

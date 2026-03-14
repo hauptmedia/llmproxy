@@ -40,7 +40,8 @@ const html = computed(() => renderMessageHtml(props.message, props.index, {
   finishReason: props.finishReason || "",
   reasoningCollapsed: reasoningExpanded.value ? false : props.reasoningCollapsed,
   extraBadges: props.extraBadges,
-  hideRoleBadge: props.bubbleLayout && role.value === "system",
+  hideRoleBadge: props.bubbleLayout && (role.value === "system" || role.value === "tool"),
+  hideToolMetaBadges: props.bubbleLayout && role.value === "tool",
 }));
 
 const role = computed(() => (
@@ -49,7 +50,7 @@ const role = computed(() => (
     : "unknown"
 ));
 
-const showAvatar = computed(() => props.bubbleLayout && (role.value === "user" || role.value === "assistant" || role.value === "system"));
+const showAvatar = computed(() => props.bubbleLayout && (role.value === "user" || role.value === "assistant" || role.value === "system" || role.value === "tool"));
 
 const assistantAvatarTitle = computed(() => {
   if (role.value !== "assistant") {
@@ -62,6 +63,34 @@ const assistantAvatarTitle = computed(() => {
       : "";
 
   return model ? `Model: ${model}` : "";
+});
+
+const toolAvatarTitle = computed(() => {
+  if (role.value !== "tool") {
+    return "";
+  }
+
+  const parts: string[] = [];
+  const toolName =
+    typeof props.message.name === "string" && props.message.name.trim().length > 0
+      ? props.message.name.trim()
+      : "";
+  const toolCallId =
+    typeof props.message.tool_call_id === "string" && props.message.tool_call_id.trim().length > 0
+      ? props.message.tool_call_id.trim()
+      : "";
+
+  if (toolName) {
+    parts.push(`Tool: ${toolName}`);
+  } else {
+    parts.push("Tool result");
+  }
+
+  if (toolCallId) {
+    parts.push(`Call ID: ${toolCallId}`);
+  }
+
+  return parts.join("\n");
 });
 
 const hostClass = computed(() => {
@@ -124,6 +153,22 @@ onBeforeUnmount(() => {
         <circle cx="10" cy="11.5" r="0.9" fill="currentColor" stroke="none"></circle>
         <circle cx="14" cy="11.5" r="0.9" fill="currentColor" stroke="none"></circle>
         <path d="M9.5 14.2c.8.5 1.7.8 2.5.8s1.7-.3 2.5-.8"></path>
+      </svg>
+    </div>
+
+    <div
+      v-if="showAvatar && role === 'tool'"
+      class="message-avatar"
+      :class="`role-${role}`"
+      :title="toolAvatarTitle || undefined"
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 7V6a3 3 0 0 1 6 0v1"></path>
+        <path d="M4.75 8.5h14.5"></path>
+        <path d="M6.25 8.5h11.5a1.5 1.5 0 0 1 1.5 1.5v6.75a2 2 0 0 1-2 2H6.75a2 2 0 0 1-2-2V10a1.5 1.5 0 0 1 1.5-1.5Z"></path>
+        <path d="M10 12h4"></path>
+        <path d="M12 10v4"></path>
       </svg>
     </div>
 

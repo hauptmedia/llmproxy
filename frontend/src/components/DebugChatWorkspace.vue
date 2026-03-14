@@ -7,6 +7,10 @@ import DialogCloseButton from "./DialogCloseButton.vue";
 import SuggestionActionCards from "./SuggestionActionCards.vue";
 import type { ConversationTranscriptItem, DebugTranscriptEntry, UiBadge } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
+import {
+  debugChatFirstMessageSuggestions,
+  debugChatSystemPromptSuggestions,
+} from "../utils/debug-chat-suggestions";
 import { hasVisibleMessageContent } from "../utils/message-rendering";
 
 const props = withDefaults(defineProps<{
@@ -47,66 +51,11 @@ const advancedParamHelp = {
   min_p: "Filters out very unlikely tokens whose probability falls below a relative threshold. Range: 0.0 to 1.0.",
   repeat_penalty: "Penalizes repeated tokens. 1.0 means no penalty. Typical range: 1.0 to 1.5. This UI accepts values > 0.",
   max_tokens: "Maximum completion tokens to generate for the response. This UI accepts integers >= 1. The effective limit may still be lower if the backend or model enforces a smaller cap.",
-  tool_choice: "Controls how the model uses diagnostic tools. Auto lets the model decide, required forces at least one tool call before answering, and none forbids tool calls even when tools are available.",
+  tool_choice: "Controls how the model uses llmproxy functions. Auto lets the model decide, required forces at least one tool call before answering, and none forbids tool calls even when functions are available.",
 } as const;
 
-const systemPromptSuggestions = [
-  {
-    key: "troubleshoot",
-    title: "Troubleshooting copilot",
-    description: "Focus on likely request issues, cite evidence, and suggest the next routing or parameter changes to try.",
-    value: "You are a concise llmproxy troubleshooting assistant. Explain likely issues, cite the concrete evidence you see, and suggest the next parameter or routing changes to try.",
-  },
-  {
-    key: "compare",
-    title: "Model comparison guide",
-    description: "Help compare multiple models and call out quality, latency, and behavioral differences.",
-    value: "You are a careful model comparison assistant. Compare outputs across candidate models, point out behavior differences, and highlight the tradeoffs that matter for latency, quality, and stability.",
-  },
-  {
-    key: "prompt-coach",
-    title: "Prompt coach",
-    description: "Turn rough prompts into clearer requests and suggest tighter follow-ups.",
-    value: "You are a prompt design coach. Rewrite unclear prompts into sharper requests, explain why they are better, and suggest useful follow-up questions.",
-  },
-  {
-    key: "structured-analyst",
-    title: "Structured analyst",
-    description: "Answer in a clean structure with assumptions, findings, and clear next steps.",
-    value: "You are a structured analysis assistant. Organize answers into assumptions, findings, and next steps, and keep the response concise but actionable.",
-  },
-] as const;
-
-const firstMessageSuggestions = [
-  {
-    key: "hello",
-    title: "Quick hello",
-    description: "Simple sanity check that confirms which model actually answered.",
-    value: "Say hello briefly and mention the model you are using.",
-    highlighted: true,
-  },
-  {
-    key: "diagnose",
-    title: "Diagnose a request",
-    description: "Ask the model to inspect a request end-to-end and explain what likely went wrong.",
-    value: "Analyze the current request, explain the most likely issue, and suggest the next changes I should try.",
-  },
-  {
-    key: "compare",
-    title: "Compare outputs",
-    description: "Use the chat as a quick A/B space for testing how different models respond.",
-    value: "Answer this request, then explain how the response might differ on a smaller, faster model versus a larger reasoning model.",
-  },
-  {
-    key: "repetition",
-    title: "Fix repetition",
-    description: "Probe looping behavior and get concrete sampling changes to try next.",
-    value: "Look for signs of repetition or degeneration in the response and recommend safer sampling settings to reduce looping.",
-  },
-] as const;
-
 const systemPromptSuggestionItems = computed(() => (
-  systemPromptSuggestions.map((entry) => ({
+  debugChatSystemPromptSuggestions.map((entry) => ({
     key: entry.key,
     title: entry.title,
     description: entry.description,
@@ -115,7 +64,7 @@ const systemPromptSuggestionItems = computed(() => (
 ));
 
 const firstMessageSuggestionItems = computed(() => (
-  firstMessageSuggestions.map((entry) => ({
+  debugChatFirstMessageSuggestions.map((entry) => ({
     key: entry.key,
     title: entry.title,
     description: entry.description,
@@ -125,7 +74,7 @@ const firstMessageSuggestionItems = computed(() => (
 ));
 
 function applySystemPromptSuggestion(key: string): void {
-  const match = systemPromptSuggestions.find((entry) => entry.key === key);
+  const match = debugChatSystemPromptSuggestions.find((entry) => entry.key === key);
   if (!match) {
     return;
   }
@@ -134,13 +83,16 @@ function applySystemPromptSuggestion(key: string): void {
 }
 
 function applyFirstMessageSuggestion(key: string): void {
-  const match = firstMessageSuggestions.find((entry) => entry.key === key);
+  const match = debugChatFirstMessageSuggestions.find((entry) => entry.key === key);
   if (!match) {
     return;
   }
 
   store.state.debug.prompt = match.value;
+  store.state.debug.defaultPromptDismissed = false;
 }
+
+store.ensureDefaultDebugPrompt();
 
 function shouldCollapseDebugReasoning(entry: DebugTranscriptEntry, index: number): boolean {
   void entry;
@@ -174,7 +126,7 @@ function getPendingAssistantCopy(entry: DebugTranscriptEntry, index: number): Re
   }
 
   const waitingMessage = store.state.debug.status.startsWith("Running ")
-    ? "Running diagnostic tools and waiting for the next model response..."
+    ? "Running llmproxy functions and waiting for the next model response..."
     : "Waiting for model response...";
 
   return {

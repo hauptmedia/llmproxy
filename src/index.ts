@@ -1,5 +1,6 @@
 import { ConfigStore } from "./config-store";
 import { LoadBalancer } from "./load-balancer";
+import { FIXED_DASHBOARD_PATH } from "./server-dashboard-paths";
 import { LlmProxyServer } from "./server";
 
 async function main(): Promise<void> {
@@ -15,9 +16,9 @@ async function main(): Promise<void> {
   const server = new LlmProxyServer(configStore, loadBalancer);
   await server.start();
 
-  const { host, port, dashboardPath } = loadBalancer.getServerConfig();
+  const { host, port } = loadBalancer.getServerConfig();
   process.stderr.write(`llmproxy listening on http://${host}:${port}\n`);
-  process.stderr.write(`dashboard available on http://${host}:${port}${dashboardPath}\n`);
+  process.stderr.write(`dashboard available on http://${host}:${port}${FIXED_DASHBOARD_PATH}\n`);
 
   const shutdown = async () => {
     await server.stop();

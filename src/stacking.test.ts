@@ -776,7 +776,6 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
     server: {
       host: "127.0.0.1",
       port: innerPort,
-      dashboardPath: "/dashboard",
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
@@ -806,7 +805,6 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
     server: {
       host: "127.0.0.1",
       port: outerPort,
-      dashboardPath: "/dashboard",
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
@@ -993,7 +991,6 @@ test("proxy rewrites auto model requests to the selected backend model", async (
     server: {
       host: "127.0.0.1",
       port: proxyPort,
-      dashboardPath: "/dashboard",
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
@@ -1083,7 +1080,6 @@ test("proxy rewrites missing model requests to the selected backend model", asyn
     server: {
       host: "127.0.0.1",
       port: proxyPort,
-      dashboardPath: "/dashboard",
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
@@ -1172,7 +1168,6 @@ test("ollama connector keeps the client surface OpenAI-compatible", async (t) =>
     server: {
       host: "127.0.0.1",
       port: proxyPort,
-      dashboardPath: "/dashboard",
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
@@ -1305,7 +1300,6 @@ test("proxy preserves max_tokens and tool calls for non-streaming chat clients",
     server: {
       host: "127.0.0.1",
       port: routerPort,
-      dashboardPath: "/dashboard",
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
@@ -1517,7 +1511,6 @@ test("active connections expose live request details for chat history inspection
     server: {
       host: "127.0.0.1",
       port: routerPort,
-      dashboardPath: "/dashboard",
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
@@ -1663,7 +1656,6 @@ test("cancelled requests retain the partial streamed response in request history
     server: {
       host: "127.0.0.1",
       port: routerPort,
-      dashboardPath: "/dashboard",
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
@@ -1784,7 +1776,6 @@ test("dashboard can cancel a live connection and retain the partial response in 
     server: {
       host: "127.0.0.1",
       port: routerPort,
-      dashboardPath: "/dashboard",
       requestTimeoutMs: 15_000,
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,

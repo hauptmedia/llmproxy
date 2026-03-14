@@ -553,6 +553,23 @@
     @apply space-y-3;
   }
 
+  .config-tab-bar {
+    @apply mb-0 flex-wrap justify-start;
+    max-width: 100%;
+  }
+
+  .config-panel-header {
+    justify-content: flex-start;
+  }
+
+  .config-tab-panel {
+    @apply grid gap-[18px];
+  }
+
+  .config-section-head {
+    @apply mb-0;
+  }
+
   .mcp-endpoint-card {
     @apply rounded-[1.15rem] border border-amber-900/10 bg-stone-50/80 px-4 py-3;
   }
@@ -564,6 +581,59 @@
   .mcp-endpoint-value {
     @apply mt-2 text-sm leading-relaxed text-stone-900;
     word-break: break-word;
+  }
+
+  .mcp-service-card {
+    @apply rounded-[1.25rem] border border-amber-900/10 bg-stone-50/70 px-4 py-4;
+  }
+
+  .mcp-service-card + .mcp-service-card {
+    @apply mt-3;
+  }
+
+  .mcp-service-head {
+    @apply grid gap-1.5;
+  }
+
+  .mcp-service-title {
+    @apply m-0 text-base font-semibold text-stone-900;
+  }
+
+  .mcp-service-description {
+    @apply m-0 text-sm leading-relaxed text-stone-600;
+  }
+
+  .mcp-service-section {
+    @apply mt-4 grid gap-2.5;
+  }
+
+  .mcp-route-title {
+    @apply block text-sm font-semibold text-stone-900;
+  }
+
+  .mcp-route-description {
+    @apply mt-1 block text-sm leading-relaxed text-stone-600;
+  }
+
+  .mcp-prompt-grid {
+    @apply grid gap-3;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .mcp-prompt-card {
+    @apply rounded-[1.1rem] border border-amber-900/10 bg-white/78 px-4 py-3;
+  }
+
+  .mcp-prompt-title {
+    @apply text-sm font-semibold text-stone-900;
+  }
+
+  .mcp-prompt-description {
+    @apply mt-1 text-sm leading-relaxed text-stone-600;
+  }
+
+  .mcp-prompt-args {
+    @apply mt-2 text-xs leading-relaxed text-stone-500;
   }
 
   .diagnostics-tool-row {
@@ -1841,13 +1911,13 @@
   }
 
   .conversation-bubble-transcript .message-card-host.role-assistant,
-  .conversation-bubble-transcript .message-card-host.role-tool,
   .conversation-bubble-transcript .message-card-host.role-developer,
   .conversation-bubble-transcript .message-card-host.role-unknown {
     justify-content: flex-start;
   }
 
-  .conversation-bubble-transcript .message-card-host.role-system {
+  .conversation-bubble-transcript .message-card-host.role-system,
+  .conversation-bubble-transcript .message-card-host.role-tool {
     justify-content: flex-start;
     align-items: flex-start;
   }
@@ -1885,6 +1955,12 @@
     grid-column: 1;
   }
 
+  .conversation-bubble-transcript .message-card-host.role-tool .message-avatar {
+    grid-column: 1;
+    align-self: flex-start;
+    margin-top: 0.2rem;
+  }
+
   .conversation-bubble-transcript .message-card-host.role-system .message-avatar {
     grid-column: 1;
     align-self: flex-start;
@@ -1892,6 +1968,11 @@
   }
 
   .conversation-bubble-transcript .message-card-host.role-assistant .message-card-body {
+    grid-column: 2 / 3;
+    justify-content: flex-start;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-tool .message-card-body {
     grid-column: 2 / 3;
     justify-content: flex-start;
   }
@@ -1910,7 +1991,6 @@
     grid-column: 3;
   }
 
-  .conversation-bubble-transcript .message-card-host.role-tool .message-card-body,
   .conversation-bubble-transcript .message-card-host.role-developer .message-card-body,
   .conversation-bubble-transcript .message-card-host.role-unknown .message-card-body {
     grid-column: 2 / 4;
@@ -1949,6 +2029,12 @@
     background: rgba(250, 245, 255, 0.96);
     border-color: rgba(124, 58, 237, 0.14);
     color: #7c3aed;
+  }
+
+  .message-avatar.role-tool {
+    background: rgba(255, 247, 237, 0.96);
+    border-color: rgba(180, 83, 9, 0.16);
+    color: #b45309;
   }
 
   .chat-editor-turn {

@@ -118,7 +118,7 @@ async function openPromptInChat(): Promise<void> {
       :items="promptCardItems"
       @select="loadPrompt"
     />
-    <div v-else-if="mcpServerEnabled === false" class="empty">Diagnostics MCP server is disabled in config.</div>
+    <div v-else-if="mcpServerEnabled === false" class="empty">MCP server is disabled in config.</div>
     <div v-else class="empty">Loading MCP capabilities...</div>
 
     <div class="mt-3 flex justify-start">

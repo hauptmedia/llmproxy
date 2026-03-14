@@ -45,7 +45,6 @@ function createServerFields(config?: EditableServerConfig | null): ServerEditorF
   return {
     host: config?.host ?? "",
     port: config ? String(config.port) : "",
-    dashboardPath: config?.dashboardPath ?? "/dashboard",
     requestTimeoutMs: config ? String(config.requestTimeoutMs) : "",
     queueTimeoutMs: config ? String(config.queueTimeoutMs) : "",
     healthCheckIntervalMs: config ? String(config.healthCheckIntervalMs) : "",
@@ -175,10 +174,6 @@ function formatServerFieldLabel(field: string): string {
 
   if (field === "port") {
     return "port";
-  }
-
-  if (field === "dashboardPath") {
-    return "dashboard path";
   }
 
   if (field === "requestTimeoutMs") {
@@ -332,7 +327,6 @@ export function useBackendControls(
       const requestBody = {
         host: state.serverEditor.fields.host.trim(),
         port: parsePositiveIntegerField(state.serverEditor.fields.port, "port"),
-        dashboardPath: state.serverEditor.fields.dashboardPath.trim(),
         requestTimeoutMs: parsePositiveIntegerField(state.serverEditor.fields.requestTimeoutMs, "requestTimeoutMs"),
         queueTimeoutMs: parsePositiveIntegerField(state.serverEditor.fields.queueTimeoutMs, "queueTimeoutMs"),
         healthCheckIntervalMs: parsePositiveIntegerField(state.serverEditor.fields.healthCheckIntervalMs, "healthCheckIntervalMs"),

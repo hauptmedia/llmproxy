@@ -1,18 +1,12 @@
 import type { BackendSavePayload, ProxyConfig, ServerConfig } from "./types";
 import { isPositiveInteger } from "./utils";
 
-export const RESTART_REQUIRED_SERVER_FIELDS: Array<keyof ServerConfig> = ["host", "port", "dashboardPath"];
+export const RESTART_REQUIRED_SERVER_FIELDS: Array<keyof ServerConfig> = ["host", "port"];
 
 export function parseServerConfigSavePayload(input: Record<string, unknown>): ServerConfig {
-  const dashboardPath = parseRequiredTrimmedString(input.dashboardPath, "dashboardPath");
-  if (!dashboardPath.startsWith("/")) {
-    throw new Error('"dashboardPath" must start with "/".');
-  }
-
   return {
     host: parseRequiredTrimmedString(input.host, "host"),
     port: parseRequiredPositiveInteger(input.port, "port"),
-    dashboardPath,
     requestTimeoutMs: parseRequiredPositiveInteger(input.requestTimeoutMs, "requestTimeoutMs"),
     queueTimeoutMs: parseRequiredPositiveInteger(input.queueTimeoutMs, "queueTimeoutMs"),
     healthCheckIntervalMs: parseRequiredPositiveInteger(input.healthCheckIntervalMs, "healthCheckIntervalMs"),
@@ -43,7 +37,6 @@ export function buildRuntimeAppliedConfig(
       ...nextConfig.server,
       host: currentRuntimeServer.host,
       port: currentRuntimeServer.port,
-      dashboardPath: currentRuntimeServer.dashboardPath,
     },
   };
 }

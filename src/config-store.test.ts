@@ -10,7 +10,6 @@ const TEST_CONFIG: ProxyConfig = {
   server: {
     host: "127.0.0.1",
     port: 4100,
-    dashboardPath: "/dashboard",
     requestTimeoutMs: 600_000,
     queueTimeoutMs: 30_000,
     healthCheckIntervalMs: 10_000,
@@ -199,7 +198,6 @@ test("updates server config and persists it", async () => {
     const next = await store.updateServerConfig({
       host: "0.0.0.0",
       port: 4200,
-      dashboardPath: "/ops",
       requestTimeoutMs: 120_000,
       queueTimeoutMs: 45_000,
       healthCheckIntervalMs: 5_000,
@@ -210,7 +208,6 @@ test("updates server config and persists it", async () => {
     assert.deepEqual(next.server, {
       host: "0.0.0.0",
       port: 4200,
-      dashboardPath: "/ops",
       requestTimeoutMs: 120_000,
       queueTimeoutMs: 45_000,
       healthCheckIntervalMs: 5_000,
@@ -236,7 +233,6 @@ test("creates a default config file when llmproxy.config.json is missing", async
       server: {
         host: "0.0.0.0",
         port: 4100,
-        dashboardPath: "/dashboard",
         requestTimeoutMs: 600_000,
         queueTimeoutMs: 30_000,
         healthCheckIntervalMs: 10_000,

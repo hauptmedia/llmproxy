@@ -1,5 +1,6 @@
 import type { DashboardState, DebugQueuedMessage, DebugTranscriptEntry } from "../types/dashboard";
 import { buildDiagnosticsChatTools } from "../utils/diagnostics-mcp";
+import { defaultDebugChatPrompt } from "../utils/debug-chat-suggestions";
 import { readErrorResponse } from "../utils/http";
 import {
   consumeStreamingResponse,
@@ -28,6 +29,22 @@ export function useDebugChat(
 ) {
   let metricsTicker: number | undefined;
   let activeRunId = 0;
+
+  function ensureDefaultDebugPrompt(): void {
+    if (state.debug.defaultPromptDismissed) {
+      return;
+    }
+
+    if (state.debug.transcript.length > 0 || state.debug.queuedMessages.length > 0) {
+      return;
+    }
+
+    if (state.debug.systemPrompt.trim().length > 0 || state.debug.prompt.trim().length > 0) {
+      return;
+    }
+
+    state.debug.prompt = defaultDebugChatPrompt;
+  }
 
   function isExpectedDebugAbort(error: unknown): boolean {
     return error instanceof DOMException
@@ -192,7 +209,7 @@ export function useDebugChat(
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         state.debug.error = message;
-        onErrorToast("Diagnostics tools", message);
+        onErrorToast("llmproxy functions", message);
         return;
       }
     }
@@ -282,7 +299,7 @@ export function useDebugChat(
           break;
         }
 
-        state.debug.status = `Running ${toolCalls.length} diagnostic tool call${toolCalls.length === 1 ? "" : "s"}...`;
+        state.debug.status = `Running ${toolCalls.length} llmproxy function call${toolCalls.length === 1 ? "" : "s"}...`;
         const toolTurns = await executeDebugToolCalls(toolCalls);
 
         for (const toolTurn of toolTurns) {
@@ -294,7 +311,7 @@ export function useDebugChat(
         }
 
         if (round === 5) {
-          onErrorToast("Diagnostics tools", "Maximum diagnostic tool rounds reached.");
+          onErrorToast("llmproxy functions", "Maximum llmproxy function rounds reached.");
           break;
         }
 
@@ -360,6 +377,7 @@ export function useDebugChat(
     state.debug.lastRequestId = "";
     state.debug.systemPrompt = "";
     state.debug.prompt = "";
+    state.debug.defaultPromptDismissed = true;
     resetDebugMetrics();
   }
 
@@ -380,11 +398,13 @@ export function useDebugChat(
     state.debug.lastRequestId = "";
     state.debug.systemPrompt = systemPrompt.trim();
     state.debug.prompt = prompt;
+    state.debug.defaultPromptDismissed = false;
     resetDebugMetrics();
   }
 
   return {
     clearDebugChat,
+    ensureDefaultDebugPrompt,
     prepareDebugChatDraft,
     sendDebugChat,
     stopDebugChat,

@@ -13,10 +13,9 @@ const emit = defineEmits<{
   (event: "save"): void;
 }>();
 
-const restartFieldLabels: Record<"host" | "port" | "dashboardPath", string> = {
+const restartFieldLabels: Record<"host" | "port", string> = {
   host: "host",
   port: "port",
-  dashboardPath: "dashboard path",
 };
 
 const noticeClass = computed(() => {
@@ -61,10 +60,6 @@ const pendingRestartFields = computed(() => {
 
   if (normalizeStringValue(props.state.fields.port) !== String(current.port)) {
     changed.push("port");
-  }
-
-  if (normalizeStringValue(props.state.fields.dashboardPath) !== normalizeStringValue(current.dashboardPath)) {
-    changed.push("dashboardPath");
   }
 
   return changed;
@@ -118,11 +113,6 @@ const hasPendingRestartEdits = computed(() => pendingRestartFields.value.length 
                 <input v-model="state.fields.port" type="number" min="1" step="1" inputmode="numeric" />
               </label>
 
-              <label class="field field-span-2">
-                <span class="field-label">Dashboard path</span>
-                <input v-model="state.fields.dashboardPath" type="text" autocomplete="off" spellcheck="false" placeholder="/dashboard" />
-              </label>
-
               <label class="field">
                 <span class="field-label">Request timeout (ms)</span>
                 <input v-model="state.fields.requestTimeoutMs" type="number" min="1" step="1" inputmode="numeric" />
@@ -144,13 +134,13 @@ const hasPendingRestartEdits = computed(() => pendingRestartFields.value.length 
               </label>
 
               <label class="field field-span-2">
-                <span class="field-label">Diagnostics MCP server</span>
+                <span class="field-label">MCP server</span>
                 <label class="chat-composer-tool-toggle server-editor-toggle">
                   <input
                     v-model="state.fields.mcpServerEnabled"
                     type="checkbox"
                   >
-                  <span>Enable diagnostics MCP endpoint and tools</span>
+                  <span>Enable MCP endpoint and tools</span>
                 </label>
               </label>
             </div>

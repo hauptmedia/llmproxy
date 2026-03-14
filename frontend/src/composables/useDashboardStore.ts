@@ -71,7 +71,6 @@ function createInitialState(): DashboardState {
       fields: {
         host: "",
         port: "",
-        dashboardPath: "",
         requestTimeoutMs: "",
         queueTimeoutMs: "",
         healthCheckIntervalMs: "",
@@ -83,6 +82,7 @@ function createInitialState(): DashboardState {
       model: "auto",
       systemPrompt: "",
       prompt: "",
+      defaultPromptDismissed: false,
       queuedMessages: [],
       enableDiagnosticTools: true,
       stream: true,
@@ -311,8 +311,10 @@ function createDashboardStoreInternal() {
     sendDebugChat: debugChat.sendDebugChat,
     stopDebugChat: debugChat.stopDebugChat,
     clearDebugChat: debugChat.clearDebugChat,
+    ensureDefaultDebugPrompt: debugChat.ensureDefaultDebugPrompt,
     prepareDebugChatDraft: debugChat.prepareDebugChatDraft,
     openDebugChatDialog: () => {
+      debugChat.ensureDefaultDebugPrompt();
       state.debug.dialogOpen = true;
     },
     startDebugChatDialog: (systemPrompt: string, prompt: string) => {

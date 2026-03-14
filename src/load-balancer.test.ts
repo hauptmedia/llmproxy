@@ -8,7 +8,6 @@ const TEST_CONFIG: ProxyConfig = {
   server: {
     host: "127.0.0.1",
     port: 4000,
-    dashboardPath: "/dashboard",
     requestTimeoutMs: 5_000,
     queueTimeoutMs: 500,
     healthCheckIntervalMs: 10_000,
@@ -636,7 +635,6 @@ test("captures discovered model metadata from /v1/models for backend snapshots",
     server: {
       host: "127.0.0.1",
       port: 4001,
-      dashboardPath: "/dashboard",
       requestTimeoutMs: 5_000,
       queueTimeoutMs: 500,
       healthCheckIntervalMs: 10_000,
