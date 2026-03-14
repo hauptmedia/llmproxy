@@ -500,8 +500,15 @@ const {
                     @click="store.openRequestDetail(entry.id)"
                   >
                     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M2.5 12s3.7-6 9.5-6 9.5 6 9.5 6-3.7 6-9.5 6-9.5-6-9.5-6Z"></path>
-                      <circle cx="12" cy="12" r="2.8"></circle>
+                      <path d="M9 6.5V5.25a3 3 0 0 1 6 0V6.5"></path>
+                      <path d="M8.5 8h7A1.5 1.5 0 0 1 17 9.5v4.9a5 5 0 0 1-10 0V9.5A1.5 1.5 0 0 1 8.5 8Z"></path>
+                      <path d="M12 3.5v1.75"></path>
+                      <path d="M7 11.75H4.75"></path>
+                      <path d="M19.25 11.75H17"></path>
+                      <path d="M7.2 9.35 5.25 7.8"></path>
+                      <path d="M16.8 9.35 18.75 7.8"></path>
+                      <path d="M7.2 15.65 5.25 17.2"></path>
+                      <path d="M16.8 15.65 18.75 17.2"></path>
                     </svg>
                   </button>
                 </div>
