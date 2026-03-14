@@ -34,7 +34,7 @@ export function matchDashboardRoute(
     return { page: landingPage };
   }
 
-  if (normalizedPathname === `${dashboardPath}/chat`) {
+  if (normalizedPathname === `${dashboardPath}/chatbox` || normalizedPathname === `${dashboardPath}/chat`) {
     return { page: "chat" };
   }
 

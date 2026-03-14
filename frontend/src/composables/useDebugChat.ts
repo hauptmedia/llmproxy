@@ -1,4 +1,4 @@
-import type { DashboardState, DebugTranscriptEntry } from "../types/dashboard";
+import type { DashboardState, DebugQueuedMessage, DebugTranscriptEntry } from "../types/dashboard";
 import { buildDiagnosticsChatTools } from "../utils/diagnostics-mcp";
 import { readErrorResponse } from "../utils/http";
 import {
@@ -37,6 +37,39 @@ export function useDebugChat(
 
   function replaceTranscriptEntry(entry: DebugTranscriptEntry): DebugTranscriptEntry {
     return replaceDebugTranscriptEntry(state.debug.transcript, entry);
+  }
+
+  function cloneDebugParams(source = state.debug.params) {
+    return {
+      temperature: source.temperature,
+      top_p: source.top_p,
+      top_k: source.top_k,
+      min_p: source.min_p,
+      repeat_penalty: source.repeat_penalty,
+      max_tokens: source.max_tokens,
+      tool_choice: source.tool_choice,
+    };
+  }
+
+  function queueCurrentDebugMessage(): boolean {
+    const prompt = state.debug.prompt.trim();
+    if (!prompt) {
+      return false;
+    }
+
+    state.debug.queuedMessages.push({
+      prompt,
+      model: state.debug.model,
+      enableDiagnosticTools: state.debug.enableDiagnosticTools,
+      params: cloneDebugParams(),
+    });
+    state.debug.prompt = "";
+    return true;
+  }
+
+  function shiftQueuedDebugMessage(): DebugQueuedMessage | null {
+    const next = state.debug.queuedMessages.shift();
+    return next ?? null;
   }
 
   function resetDebugMetrics(): void {
@@ -104,8 +137,9 @@ export function useDebugChat(
     );
   }
 
-  async function sendDebugChat(): Promise<void> {
+  async function sendDebugChat(queuedMessage: DebugQueuedMessage | null = null): Promise<void> {
     if (state.debug.sending) {
+      queueCurrentDebugMessage();
       return;
     }
 
@@ -114,9 +148,13 @@ export function useDebugChat(
 
     state.debug.stream = true;
 
-    const prompt = state.debug.prompt.trim();
+    const prompt = (queuedMessage?.prompt ?? state.debug.prompt).trim();
+    const model = queuedMessage?.model ?? state.debug.model;
+    const enableDiagnosticTools = queuedMessage?.enableDiagnosticTools ?? state.debug.enableDiagnosticTools;
+    const params = queuedMessage?.params ?? state.debug.params;
     const lastTranscriptEntry = state.debug.transcript[state.debug.transcript.length - 1];
     const regenerateAssistantReply =
+      queuedMessage === null &&
       prompt.length === 0 &&
       state.debug.transcript.length > 0 &&
       typeof lastTranscriptEntry?.role === "string" &&
@@ -125,7 +163,7 @@ export function useDebugChat(
       ? state.debug.transcript.slice(0, -1)
       : state.debug.transcript;
 
-    if (!state.debug.model) {
+    if (!model) {
       state.debug.error = "Please select a model first.";
       return;
     }
@@ -148,7 +186,7 @@ export function useDebugChat(
 
     const diagnosticsAllowed = state.serverConfig?.mcpServerEnabled === true;
     let diagnosticTools: Array<Record<string, unknown>> | undefined;
-    if (state.debug.enableDiagnosticTools && diagnosticsAllowed) {
+    if (enableDiagnosticTools && diagnosticsAllowed) {
       try {
         diagnosticTools = await buildDiagnosticsChatTools();
       } catch (error) {
@@ -192,7 +230,9 @@ export function useDebugChat(
     state.debug.lastRequestId = requestId;
     state.debug.rawRequest = "";
     state.debug.rawResponse = "";
-    state.debug.prompt = "";
+    if (!queuedMessage) {
+      state.debug.prompt = "";
+    }
     state.debug.abortController = new AbortController();
     startDebugMetricsTicker();
 
@@ -202,7 +242,7 @@ export function useDebugChat(
 
       for (let round = 0; round < 6; round += 1) {
         const currentPayload = {
-          model: state.debug.model,
+          model,
           messages: [
             ...(state.debug.systemPrompt.trim()
               ? [{
@@ -213,14 +253,14 @@ export function useDebugChat(
             ...history,
           ],
           stream: true,
-          temperature: state.debug.params.temperature,
-          top_p: state.debug.params.top_p,
-          top_k: Math.round(state.debug.params.top_k),
-          min_p: state.debug.params.min_p,
-          repeat_penalty: state.debug.params.repeat_penalty,
-          max_tokens: Math.max(1, Math.round(state.debug.params.max_tokens)),
+          temperature: params.temperature,
+          top_p: params.top_p,
+          top_k: Math.round(params.top_k),
+          min_p: params.min_p,
+          repeat_penalty: params.repeat_penalty,
+          max_tokens: Math.max(1, Math.round(params.max_tokens)),
           ...(diagnosticTools ? { tools: diagnosticTools } : {}),
-          ...(diagnosticTools ? { tool_choice: state.debug.params.tool_choice } : {}),
+          ...(diagnosticTools ? { tool_choice: params.tool_choice } : {}),
         };
 
         state.debug.lastRequestId = currentRequestId;
@@ -233,7 +273,7 @@ export function useDebugChat(
           history.push(assistantHistoryMessage);
         }
 
-        if (!state.debug.enableDiagnosticTools || !diagnosticsAllowed) {
+        if (!enableDiagnosticTools || !diagnosticsAllowed) {
           break;
         }
 
@@ -285,6 +325,11 @@ export function useDebugChat(
         state.debug.sending = false;
         state.debug.abortController = null;
         stopDebugMetricsTicker();
+
+        const nextQueuedMessage = shiftQueuedDebugMessage();
+        if (nextQueuedMessage) {
+          void sendDebugChat(nextQueuedMessage);
+        }
       }
     }
   }
@@ -294,6 +339,7 @@ export function useDebugChat(
     state.debug.abortController?.abort(new Error("Request cancelled from dashboard."));
     state.debug.sending = false;
     state.debug.abortController = null;
+    state.debug.queuedMessages.splice(0);
     stopDebugMetricsTicker();
   }
 
@@ -304,6 +350,7 @@ export function useDebugChat(
     state.debug.abortController = null;
     stopDebugMetricsTicker();
     state.debug.transcript = [];
+    state.debug.queuedMessages.splice(0);
     state.debug.rawRequest = "";
     state.debug.rawResponse = "";
     state.debug.status = "";
@@ -322,6 +369,7 @@ export function useDebugChat(
     state.debug.sending = false;
     state.debug.abortController = null;
     state.debug.transcript = [];
+    state.debug.queuedMessages.splice(0);
     state.debug.rawRequest = "";
     state.debug.rawResponse = "";
     state.debug.status = "";

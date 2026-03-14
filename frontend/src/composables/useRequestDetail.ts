@@ -45,11 +45,11 @@ export function useRequestDetail(
     return state.requestDetail.detail.live === true;
   }
 
-  async function loadRequestDetail(requestId: string, useCache = true): Promise<void> {
+  async function loadRequestDetail(requestId: string, useCache = true): Promise<boolean> {
     if (useCache && !isActiveRequestId(requestId) && state.requestDetail.cache[requestId]) {
       state.requestDetail.detail = state.requestDetail.cache[requestId];
       state.requestDetail.loading = false;
-      return;
+      return true;
     }
 
     state.requestDetail.loading = true;
@@ -63,7 +63,7 @@ export function useRequestDetail(
 
       const detail = await response.json() as RequestLogDetail;
       if (state.requestDetail.requestId !== requestId) {
-        return;
+        return false;
       }
 
       state.requestDetail.detail = detail;
@@ -73,15 +73,18 @@ export function useRequestDetail(
       if (!detail.live) {
         state.requestDetail.cache[requestId] = detail;
       }
+
+      return true;
     } catch (error) {
       if (state.requestDetail.requestId !== requestId) {
-        return;
+        return false;
       }
 
       const message = error instanceof Error ? error.message : String(error);
       state.requestDetail.loading = false;
       state.requestDetail.error = message;
       onErrorToast("Request details", message);
+      return false;
     }
   }
 
@@ -89,13 +92,37 @@ export function useRequestDetail(
     requestId: string,
     tab: "request" | "response" | "tools" | "diagnosis" = "request",
   ): Promise<void> {
-    state.requestDetail.open = true;
+    const previousState = {
+      open: state.requestDetail.open,
+      requestId: state.requestDetail.requestId,
+      tab: state.requestDetail.tab,
+      error: state.requestDetail.error,
+      detail: state.requestDetail.detail,
+      loading: state.requestDetail.loading,
+      lastFetchedAt: state.requestDetail.lastFetchedAt,
+    };
+
     state.requestDetail.requestId = requestId;
     state.requestDetail.tab = tab;
     state.requestDetail.error = "";
-    state.requestDetail.detail = null;
+    if (!previousState.open) {
+      state.requestDetail.detail = null;
+    }
     state.requestDetail.loading = true;
-    await loadRequestDetail(requestId);
+    const loaded = await loadRequestDetail(requestId);
+
+    if (loaded) {
+      state.requestDetail.open = true;
+      return;
+    }
+
+    state.requestDetail.open = previousState.open;
+    state.requestDetail.requestId = previousState.requestId;
+    state.requestDetail.tab = previousState.tab;
+    state.requestDetail.error = previousState.error;
+    state.requestDetail.detail = previousState.detail;
+    state.requestDetail.loading = previousState.loading;
+    state.requestDetail.lastFetchedAt = previousState.lastFetchedAt;
   }
 
   async function refreshRequestDetail(requestId = state.requestDetail.requestId, useCache = false): Promise<void> {

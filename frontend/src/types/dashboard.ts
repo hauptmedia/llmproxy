@@ -258,10 +258,18 @@ export interface DebugMetrics {
   finishReason: string;
 }
 
+export interface DebugQueuedMessage {
+  prompt: string;
+  model: string;
+  enableDiagnosticTools: boolean;
+  params: DebugParams;
+}
+
 export interface DebugState {
   model: string;
   systemPrompt: string;
   prompt: string;
+  queuedMessages: DebugQueuedMessage[];
   enableDiagnosticTools: boolean;
   stream: boolean;
   sending: boolean;
@@ -337,6 +345,7 @@ export interface RenderMessageOptions {
   finishReason?: string;
   reasoningCollapsed?: boolean;
   extraBadges?: UiBadge[];
+  hideRoleBadge?: boolean;
 }
 
 export interface ConversationTranscriptItem {

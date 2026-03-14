@@ -4,6 +4,7 @@ import ChatComposer from "./ChatComposer.vue";
 import ConversationTranscript from "./ConversationTranscript.vue";
 import ConversationSurface from "./ConversationSurface.vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
+import SuggestionActionCards from "./SuggestionActionCards.vue";
 import type { ConversationTranscriptItem, DebugTranscriptEntry, UiBadge } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import { hasVisibleMessageContent } from "../utils/message-rendering";
@@ -24,7 +25,9 @@ const store = useDashboardStore();
 const mcpServerEnabled = computed(() => store.state.serverConfig?.mcpServerEnabled !== false);
 const hasTranscript = computed(() => store.state.debug.transcript.length > 0);
 const trimmedSystemPrompt = computed(() => store.state.debug.systemPrompt.trim());
-const debugSubmitLabel = "Send message";
+const debugSubmitLabel = computed(() => (
+  store.state.debug.sending ? "Queue message" : "Send message"
+));
 const clearChatTitle = computed(() => (
   store.state.debug.sending
     ? "Cancel the current request and clear the chat conversation"
@@ -41,16 +44,90 @@ const advancedParamHelp = {
   tool_choice: "Controls how the model uses diagnostic tools. Auto lets the model decide, required forces at least one tool call before answering, and none forbids tool calls even when tools are available.",
 } as const;
 
-function handleChatPromptKeydown(event: KeyboardEvent): void {
-  if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+const systemPromptSuggestions = [
+  {
+    key: "troubleshoot",
+    title: "Troubleshooting copilot",
+    description: "Focus on likely request issues, cite evidence, and suggest the next routing or parameter changes to try.",
+    value: "You are a concise llmproxy troubleshooting assistant. Explain likely issues, cite the concrete evidence you see, and suggest the next parameter or routing changes to try.",
+  },
+  {
+    key: "compare",
+    title: "Model comparison guide",
+    description: "Help compare multiple models and call out quality, latency, and behavioral differences.",
+    value: "You are a careful model comparison assistant. Compare outputs across candidate models, point out behavior differences, and highlight the tradeoffs that matter for latency, quality, and stability.",
+  },
+  {
+    key: "prompt-coach",
+    title: "Prompt coach",
+    description: "Turn rough prompts into clearer requests and suggest tighter follow-ups.",
+    value: "You are a prompt design coach. Rewrite unclear prompts into sharper requests, explain why they are better, and suggest useful follow-up questions.",
+  },
+] as const;
+
+const firstMessageSuggestions = [
+  {
+    key: "hello",
+    title: "Quick hello",
+    description: "Simple sanity check that confirms which model actually answered.",
+    value: "Say hello briefly and mention the model you are using.",
+    highlighted: true,
+  },
+  {
+    key: "diagnose",
+    title: "Diagnose a request",
+    description: "Ask the model to inspect a request end-to-end and explain what likely went wrong.",
+    value: "Analyze the current request, explain the most likely issue, and suggest the next changes I should try.",
+  },
+  {
+    key: "compare",
+    title: "Compare outputs",
+    description: "Use the chat as a quick A/B space for testing how different models respond.",
+    value: "Answer this request, then explain how the response might differ on a smaller, faster model versus a larger reasoning model.",
+  },
+  {
+    key: "repetition",
+    title: "Fix repetition",
+    description: "Probe looping behavior and get concrete sampling changes to try next.",
+    value: "Look for signs of repetition or degeneration in the response and recommend safer sampling settings to reduce looping.",
+  },
+] as const;
+
+const systemPromptSuggestionItems = computed(() => (
+  systemPromptSuggestions.map((entry) => ({
+    key: entry.key,
+    title: entry.title,
+    description: entry.description,
+    active: store.state.debug.systemPrompt.trim() === entry.value.trim(),
+  }))
+));
+
+const firstMessageSuggestionItems = computed(() => (
+  firstMessageSuggestions.map((entry) => ({
+    key: entry.key,
+    title: entry.title,
+    description: entry.description,
+    active: store.state.debug.prompt.trim() === entry.value.trim(),
+    highlighted: "highlighted" in entry && entry.highlighted === true,
+  }))
+));
+
+function applySystemPromptSuggestion(key: string): void {
+  const match = systemPromptSuggestions.find((entry) => entry.key === key);
+  if (!match) {
     return;
   }
 
-  event.preventDefault();
+  store.state.debug.systemPrompt = match.value;
+}
 
-  if (!store.state.debug.sending) {
-    void store.sendDebugChat();
+function applyFirstMessageSuggestion(key: string): void {
+  const match = firstMessageSuggestions.find((entry) => entry.key === key);
+  if (!match) {
+    return;
   }
+
+  store.state.debug.prompt = match.value;
 }
 
 function shouldCollapseDebugReasoning(entry: DebugTranscriptEntry, index: number): boolean {
@@ -129,11 +206,16 @@ const chatConversationSignature = computed<string>(() => {
     transcriptBits.push(getTranscriptEntrySignature(transcript[index] as DebugTranscriptEntry));
   }
 
+  const queuedBits = store.state.debug.queuedMessages.map((entry, index) => (
+    `${index}:${entry.model}:${entry.enableDiagnosticTools ? "tools" : "plain"}:${entry.prompt.length}`
+  ));
+
   return [
     hasTranscript.value ? "ready" : "initial",
     trimmedSystemPrompt.value,
     store.state.debug.sending ? "sending" : "idle",
     transcriptBits.join("|"),
+    queuedBits.join("|"),
   ].join("|");
 });
 
@@ -165,7 +247,25 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
     });
   }
 
-  return [...items, ...transcriptItems];
+  const queuedOffset = offset + transcriptItems.length;
+  const queuedItems: ConversationTranscriptItem[] = store.state.debug.queuedMessages.map((entry, index) => ({
+    key: `queued:${index}:${entry.model}:${entry.prompt.length}`,
+    message: {
+      role: "user",
+      content: entry.prompt,
+    },
+    index: queuedOffset + index,
+    reasoningCollapsed: true,
+    extraBadges: [{
+      text: index === 0 ? "queued next" : `queued ${index + 1}`,
+      tone: "neutral",
+      title: index === 0
+        ? "This message is queued and will be sent automatically as soon as the current assistant turn finishes."
+        : `This message is queued in position ${index + 1} and will be sent automatically in order.`,
+    }],
+  }));
+
+  return [...items, ...transcriptItems, ...queuedItems];
 });
 
 </script>
@@ -175,10 +275,8 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
     <div class="chat-thread">
       <div class="panel chat-conversation-shell">
         <div class="panel-header">
-          <div>
-            <h2 :id="props.headingId || undefined" class="panel-title">Conversation</h2>
-          </div>
-          <div class="conversation-surface-actions">
+          <h2 v-if="props.headingId" :id="props.headingId" class="sr-only">Chatbox</h2>
+          <div class="conversation-surface-actions ml-auto">
             <button
               v-if="store.state.debug.lastRequestId"
               class="icon-button compact"
@@ -225,45 +323,8 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
           follow-mode="latest-turn-start"
           :follow-anchor-active="store.state.debug.sending"
         >
-          <div v-if="!hasTranscript" class="transcript chat-transcript">
-            <div v-if="!hasTranscript" class="turn system chat-editor-turn">
-              <textarea
-                id="debug-system-prompt"
-                v-model="store.state.debug.systemPrompt"
-                class="chat-editor-textarea"
-                placeholder="Optional high-level instruction (System Prompt) for the model."
-              ></textarea>
-            </div>
-
-            <ChatComposer
-              v-if="!hasTranscript"
-              class="turn user chat-editor-turn"
-              :prompt="store.state.debug.prompt"
-              :model="store.state.debug.model"
-              :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
-              :mcp-server-enabled="mcpServerEnabled"
-              :params="store.state.debug.params"
-              :models="store.state.models"
-              :sending="store.state.debug.sending"
-              :show-advanced-parameters="showAdvancedParameters"
-              :submit-label="debugSubmitLabel"
-              prompt-placeholder="Enter the first user message to send through the proxy."
-              prompt-id="debug-prompt"
-              model-id="debug-model"
-              advanced-id-prefix="debug"
-              :advanced-param-help="advancedParamHelp"
-              @update:prompt="store.state.debug.prompt = $event"
-              @update:model="store.state.debug.model = $event"
-              @update:enable-diagnostic-tools="store.state.debug.enableDiagnosticTools = $event"
-              @submit="store.sendDebugChat()"
-              @toggle-advanced="showAdvancedParameters = !showAdvancedParameters"
-              @keydown-prompt="handleChatPromptKeydown"
-            />
-
-          </div>
-
           <ConversationTranscript
-            v-else
+            v-if="hasTranscript"
             :items="debugTranscriptItems"
             empty-text=""
             bubble-layout
@@ -271,8 +332,54 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
           />
 
           <template #footer>
+            <div v-if="!hasTranscript" class="chat-initial-footer">
+              <div class="chat-suggestion-section">
+                <div class="diagnostics-section-label">System prompt ideas</div>
+                <SuggestionActionCards
+                  :items="systemPromptSuggestionItems"
+                  @select="applySystemPromptSuggestion"
+                />
+              </div>
+
+              <textarea
+                id="debug-system-prompt"
+                v-model="store.state.debug.systemPrompt"
+                class="chat-editor-textarea"
+                placeholder="Optional high-level instruction (System Prompt) for the model."
+              ></textarea>
+
+              <div class="chat-suggestion-section">
+                <div class="diagnostics-section-label">Message ideas</div>
+                <SuggestionActionCards
+                  :items="firstMessageSuggestionItems"
+                  @select="applyFirstMessageSuggestion"
+                />
+              </div>
+
+              <ChatComposer
+                :prompt="store.state.debug.prompt"
+                :model="store.state.debug.model"
+                :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
+                :mcp-server-enabled="mcpServerEnabled"
+                :params="store.state.debug.params"
+                :models="store.state.models"
+                :sending="store.state.debug.sending"
+                :show-advanced-parameters="showAdvancedParameters"
+                :submit-label="debugSubmitLabel"
+                prompt-placeholder="Enter the first user message to send through the proxy."
+                prompt-id="debug-prompt"
+                model-id="debug-model"
+                advanced-id-prefix="debug"
+                :advanced-param-help="advancedParamHelp"
+                @update:prompt="store.state.debug.prompt = $event"
+                @update:model="store.state.debug.model = $event"
+                @update:enable-diagnostic-tools="store.state.debug.enableDiagnosticTools = $event"
+                @submit="store.sendDebugChat()"
+                @toggle-advanced="showAdvancedParameters = !showAdvancedParameters"
+              />
+            </div>
             <ChatComposer
-              v-if="hasTranscript && !store.state.debug.sending"
+              v-if="hasTranscript"
               :prompt="store.state.debug.prompt"
               :model="store.state.debug.model"
               :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
@@ -292,7 +399,6 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
               @update:enable-diagnostic-tools="store.state.debug.enableDiagnosticTools = $event"
               @submit="store.sendDebugChat()"
               @toggle-advanced="showAdvancedParameters = !showAdvancedParameters"
-              @keydown-prompt="handleChatPromptKeydown"
             />
           </template>
         </ConversationSurface>

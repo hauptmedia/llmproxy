@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import SuggestionActionCards from "./SuggestionActionCards.vue";
 import type {
   DiagnosticPromptPayload,
   DiagnosticReport,
@@ -31,6 +32,16 @@ const promptButtons = computed(() => {
     return leftRecommended ? -1 : 1;
   });
 });
+
+const promptCardItems = computed(() => (
+  promptButtons.value.map((prompt) => ({
+    key: prompt.name,
+    title: prompt.title,
+    description: prompt.description,
+    active: selectedPromptName.value === prompt.name,
+    highlighted: props.report?.recommendedPrompts.includes(prompt.name) === true,
+  }))
+));
 
 watch(
   () => [props.requestId, props.report?.requestId, mcpServerEnabled.value] as const,
@@ -103,26 +114,13 @@ async function openPromptInChat(): Promise<void> {
       <div class="diagnostics-section-label">LLM followup</div>
     </div>
 
-    <div class="diagnostics-actions">
-      <template v-if="mcpServerEnabled === true">
-        <button
-          v-for="prompt in promptButtons"
-          :key="prompt.name"
-          type="button"
-          class="diagnostics-action-card"
-          :class="{ active: selectedPromptName === prompt.name, recommended: report?.recommendedPrompts.includes(prompt.name) }"
-          @click="loadPrompt(prompt.name)"
-        >
-          <div class="diagnostics-action-title">
-            {{ prompt.title }}
-            <span v-if="report?.recommendedPrompts.includes(prompt.name)" class="diagnostics-action-badge">Suggested</span>
-          </div>
-          <div class="diagnostics-action-description">{{ prompt.description }}</div>
-        </button>
-      </template>
-      <div v-else-if="mcpServerEnabled === false" class="empty">Diagnostics MCP server is disabled in config.</div>
-      <div v-else class="empty">Loading MCP capabilities...</div>
-    </div>
+    <SuggestionActionCards
+      v-if="mcpServerEnabled === true"
+      :items="promptCardItems"
+      @select="loadPrompt"
+    />
+    <div v-else-if="mcpServerEnabled === false" class="empty">Diagnostics MCP server is disabled in config.</div>
+    <div v-else class="empty">Loading MCP capabilities...</div>
 
     <div class="mt-3 flex justify-start">
       <button

@@ -37,7 +37,7 @@ const pageLinks: Array<{ page: DashboardPage; label: string; icon: string[] }> =
   },
   {
     page: "chat",
-    label: "Chat",
+    label: "Chatbox",
     icon: [
       "M5.5 7.5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H11l-3.5 3v-3H7.5a2 2 0 0 1-2-2z",
     ],

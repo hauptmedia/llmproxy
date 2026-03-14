@@ -83,6 +83,7 @@ function createInitialState(): DashboardState {
       model: "auto",
       systemPrompt: "",
       prompt: "Say hello briefly and mention the model you are using.",
+      queuedMessages: [],
       enableDiagnosticTools: true,
       stream: true,
       sending: false,

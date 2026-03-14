@@ -1746,6 +1746,10 @@
     min-height: 0;
   }
 
+  .chat-suggestion-section {
+    @apply grid gap-2;
+  }
+
   .chat-conversation-shell {
     @apply flex flex-col;
     flex: 1 1 auto;
@@ -1803,13 +1807,21 @@
     @apply gap-4;
   }
 
+  .chat-initial-footer {
+    @apply grid gap-3;
+  }
+
   .conversation-bubble-transcript .message-card-host {
-    display: flex;
+    display: grid;
+    grid-template-columns: 2.35rem minmax(0, 1fr) 2.35rem;
     width: 100%;
+    align-items: flex-end;
+    column-gap: 0.7rem;
+    padding-inline: 0.2rem;
   }
 
   .conversation-bubble-transcript .message-card-host.role-user {
-    justify-content: flex-end;
+    justify-content: stretch;
   }
 
   .conversation-bubble-transcript .message-card-host.role-assistant,
@@ -1821,6 +1833,7 @@
   }
 
   .conversation-bubble-transcript .message-card-host .turn {
+    position: relative;
     width: auto;
     max-width: min(82%, 52rem);
     box-shadow: 0 14px 28px rgba(120, 53, 15, 0.08);
@@ -1831,9 +1844,35 @@
     background-image: linear-gradient(180deg, rgba(255, 244, 214, 0.98), rgba(255, 251, 239, 0.92));
   }
 
+  .conversation-bubble-transcript .message-card-host.role-user .turn::after {
+    content: "";
+    position: absolute;
+    right: -0.28rem;
+    bottom: 0.72rem;
+    width: 0.82rem;
+    height: 0.82rem;
+    background-image: linear-gradient(180deg, rgba(255, 244, 214, 0.98), rgba(255, 251, 239, 0.92));
+    border-right: 1px solid rgba(120, 53, 15, 0.1);
+    border-bottom: 1px solid rgba(120, 53, 15, 0.1);
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+  }
+
   .conversation-bubble-transcript .message-card-host.role-assistant .turn {
     border-top-left-radius: 1rem;
     background-image: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.92));
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-assistant .turn::after {
+    content: "";
+    position: absolute;
+    left: -0.28rem;
+    bottom: 0.72rem;
+    width: 0.82rem;
+    height: 0.82rem;
+    background-image: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.92));
+    border-left: 1px solid rgba(120, 53, 15, 0.1);
+    border-bottom: 1px solid rgba(120, 53, 15, 0.1);
+    clip-path: polygon(100% 0, 0 50%, 100% 100%);
   }
 
   .conversation-bubble-transcript .message-card-host.role-system .turn,
@@ -1841,6 +1880,79 @@
   .conversation-bubble-transcript .message-card-host.role-developer .turn,
   .conversation-bubble-transcript .message-card-host.role-unknown .turn {
     max-width: min(88%, 56rem);
+  }
+
+  .conversation-bubble-transcript .message-card-body {
+    min-width: 0;
+    display: flex;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-assistant .message-avatar {
+    grid-column: 1;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-system .message-avatar {
+    grid-column: 1;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-assistant .message-card-body {
+    grid-column: 2 / 3;
+    justify-content: flex-start;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-system .message-card-body {
+    grid-column: 2 / 3;
+    justify-content: flex-start;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-user .message-card-body {
+    grid-column: 2 / 3;
+    justify-content: flex-end;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-user .message-avatar {
+    grid-column: 3;
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-tool .message-card-body,
+  .conversation-bubble-transcript .message-card-host.role-developer .message-card-body,
+  .conversation-bubble-transcript .message-card-host.role-unknown .message-card-body {
+    grid-column: 2 / 4;
+    justify-content: flex-start;
+  }
+
+  .message-avatar {
+    @apply inline-flex items-center justify-center rounded-full border shadow-sm;
+    width: 2.35rem;
+    height: 2.35rem;
+    flex: 0 0 auto;
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(120, 53, 15, 0.12);
+    color: #44403c;
+  }
+
+  .message-avatar svg {
+    width: 1.18rem;
+    height: 1.18rem;
+    display: block;
+  }
+
+  .message-avatar.role-assistant {
+    background: rgba(240, 249, 255, 0.96);
+    border-color: rgba(14, 116, 144, 0.14);
+    color: #0f766e;
+  }
+
+  .message-avatar.role-user {
+    background: rgba(255, 247, 237, 0.96);
+    border-color: rgba(194, 65, 12, 0.14);
+    color: #c2410c;
+  }
+
+  .message-avatar.role-system {
+    background: rgba(250, 245, 255, 0.96);
+    border-color: rgba(124, 58, 237, 0.14);
+    color: #7c3aed;
   }
 
   .chat-editor-turn {
@@ -1965,22 +2077,34 @@
     width: 1.1rem;
     height: 1.1rem;
     flex: 0 0 auto;
+    font-size: 0;
+  }
+
+  .reasoning-icon::before {
+    content: "\01F9E0";
+    display: inline-block;
+    font-size: 1.05rem;
+    line-height: 1;
+    will-change: opacity, text-shadow;
   }
 
   .reasoning-icon svg {
-    width: 1.1rem;
-    height: 1.1rem;
-    display: block;
+    display: none;
   }
 
-  .reasoning-panel.reasoning-live .reasoning-icon::after {
-    content: "";
-    position: absolute;
-    inset: -0.2rem;
+  .reasoning-panel.reasoning-live .reasoning-icon {
     border-radius: 999px;
-    border: 1px solid rgba(217, 119, 6, 0.38);
-    animation: brand-sonar 1.8s ease-out infinite;
-    pointer-events: none;
+    background: radial-gradient(circle, rgba(253, 230, 138, 0.7) 0%, rgba(251, 191, 36, 0.28) 60%, rgba(245, 158, 11, 0) 100%);
+    filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.5));
+    animation: reasoning-sonar 1.55s ease-in-out infinite;
+  }
+
+  .reasoning-panel.reasoning-live .reasoning-icon::before {
+    animation: reasoning-brain-glow 1.15s ease-in-out infinite;
+    text-shadow:
+      0 0 12px rgba(251, 191, 36, 0.82),
+      0 0 24px rgba(245, 158, 11, 0.58),
+      0 0 36px rgba(245, 158, 11, 0.3);
   }
 
   .reasoning-summary::-webkit-details-marker {
@@ -1989,13 +2113,97 @@
 
   .reasoning-chevron {
     @apply ml-auto transition duration-150;
-    font-size: 0.76rem;
-    line-height: 1;
+    position: relative;
+    width: 0.72rem;
+    height: 0.72rem;
+    flex: 0 0 auto;
+    font-size: 0;
+    line-height: 0;
     transform: rotate(180deg);
+  }
+
+  .reasoning-chevron::before {
+    content: "";
+    position: absolute;
+    top: 0.06rem;
+    left: 0.14rem;
+    width: 0.38rem;
+    height: 0.38rem;
+    border-right: 1.6px solid currentColor;
+    border-bottom: 1.6px solid currentColor;
+    transform: rotate(45deg);
   }
 
   .reasoning-panel[open] .reasoning-chevron {
     transform: rotate(0deg);
+  }
+
+  @keyframes reasoning-sonar {
+    0% {
+      filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.32));
+      box-shadow:
+        0 0 0 3px rgba(245, 158, 11, 0.16),
+        0 0 14px rgba(251, 191, 36, 0.22),
+        0 0 0 0 rgba(245, 158, 11, 0.18);
+    }
+
+    45% {
+      filter: drop-shadow(0 0 18px rgba(245, 158, 11, 0.62));
+      box-shadow:
+        0 0 0 4px rgba(245, 158, 11, 0.28),
+        0 0 34px rgba(251, 191, 36, 0.48),
+        0 0 0 9px rgba(245, 158, 11, 0.12);
+    }
+
+    78% {
+      filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.24));
+      box-shadow:
+        0 0 0 3px rgba(245, 158, 11, 0.12),
+        0 0 16px rgba(251, 191, 36, 0.16),
+        0 0 0 12px rgba(245, 158, 11, 0);
+    }
+
+    100% {
+      filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.3));
+      box-shadow:
+        0 0 0 3px rgba(245, 158, 11, 0.16),
+        0 0 14px rgba(251, 191, 36, 0.18),
+        0 0 0 0 rgba(245, 158, 11, 0);
+    }
+  }
+
+  @keyframes reasoning-brain-glow {
+    0% {
+      opacity: 0.88;
+      text-shadow:
+        0 0 8px rgba(251, 191, 36, 0.42),
+        0 0 14px rgba(245, 158, 11, 0.24),
+        0 0 20px rgba(245, 158, 11, 0.14);
+    }
+
+    40% {
+      opacity: 1;
+      text-shadow:
+        0 0 16px rgba(253, 224, 71, 0.95),
+        0 0 30px rgba(245, 158, 11, 0.74),
+        0 0 50px rgba(245, 158, 11, 0.42);
+    }
+
+    72% {
+      opacity: 0.93;
+      text-shadow:
+        0 0 9px rgba(251, 191, 36, 0.5),
+        0 0 16px rgba(245, 158, 11, 0.3),
+        0 0 24px rgba(245, 158, 11, 0.16);
+    }
+
+    100% {
+      opacity: 0.88;
+      text-shadow:
+        0 0 8px rgba(251, 191, 36, 0.42),
+        0 0 14px rgba(245, 158, 11, 0.24),
+        0 0 20px rgba(245, 158, 11, 0.14);
+    }
   }
 
   .reasoning-content {

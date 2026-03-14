@@ -462,9 +462,11 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
     typeof message?.reasoning_content === "string" &&
     message.reasoning_content.length > 0 &&
     !(typeof options.finishReason === "string" && options.finishReason.length > 0);
-  const metaBits: UiBadge[] = [
-    buildMessageRoleBadgeSpec(message, role),
-  ];
+  const metaBits: UiBadge[] = [];
+
+  if (!options.hideRoleBadge && role !== "user" && role !== "assistant") {
+    metaBits.push(buildMessageRoleBadgeSpec(message, role));
+  }
 
   if (role === "assistant" && typeof message?.model === "string" && message.model.length > 0) {
     metaBits.push(buildModelIdentityBadge(message.model));
@@ -488,18 +490,24 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
     metaBits.push(...options.extraBadges);
   }
 
+  const hasHead = Boolean(options.heading) || metaBits.length > 0;
+
   return (
     `<article class="turn ${escapeHtml(role)}">` +
-      `<div class="turn-head">` +
-        (options.heading
-          ? `<span class="turn-role">${escapeHtml(options.heading)}</span>`
-          : "") +
-        `<div class="message-meta">` +
-          metaBits.map((bit) => (
-            `<span class="badge ${escapeHtml(bit.tone ?? "neutral")}" title="${escapeHtml(bit.title ?? "")}">${escapeHtml(bit.text)}</span>`
-          )).join("") +
-        `</div>` +
-      `</div>` +
+      (hasHead
+        ? (
+          `<div class="turn-head">` +
+            (options.heading
+              ? `<span class="turn-role">${escapeHtml(options.heading)}</span>`
+              : "") +
+            `<div class="message-meta">` +
+              metaBits.map((bit) => (
+                `<span class="badge ${escapeHtml(bit.tone ?? "neutral")}" title="${escapeHtml(bit.title ?? "")}">${escapeHtml(bit.text)}</span>`
+              )).join("") +
+            `</div>` +
+          `</div>`
+        )
+        : "") +
       renderReasoningPanelLive(message?.reasoning_content, options.reasoningCollapsed ?? true, reasoningLive) +
       ((hasVisibleMessageContent(message?.content) || !message?.reasoning_content)
         ? renderMessageContentHtml(message?.content)
@@ -715,14 +723,13 @@ function renderInvocationValueHtml(value: unknown): string {
   return `<div class="tool-parameter-description">${escapeHtml(formatUiValue(value) || "n/a")}</div>`;
 }
 
-  function renderInvocationNodeHtml(name: string, value: unknown): string {
-    return (
-      `<div class="tool-parameter-row">` +
-        `<div class="tool-parameter-head">` +
-          `<span class="tool-parameter-name">${renderParameterIconHtml()}<span>${escapeHtml(name)}</span></span>` +
-          `${renderTypeBadgeHtml(valueTypeLabel(value))}` +
-        `</div>` +
-        renderInvocationValueHtml(value) +
+function renderInvocationNodeHtml(name: string, value: unknown): string {
+  return (
+    `<div class="tool-parameter-row">` +
+      `<div class="tool-parameter-head">` +
+        `<span class="tool-parameter-name"><span class="tool-parameter-type-label">${escapeHtml(valueTypeLabel(value))}</span><span>${escapeHtml(name)}</span></span>` +
+      `</div>` +
+      renderInvocationValueHtml(value) +
     `</div>`
   );
 }
@@ -747,26 +754,25 @@ function renderInvocationArgumentListHtml(value: unknown): string {
   if (isClientRecord(value)) {
     const entries = Object.entries(value);
     if (entries.length === 0) {
-      return '<div class="tool-parameter-note">No arguments were provided.</div>';
+      return "";
     }
 
     return (
-      `<div class="detail-table-wrap tool-invocation-table-wrap">` +
-        `<table class="detail-table tool-invocation-table">` +
-          `<tbody>` +
-            entries.map(([key, item]) => (
-              `<tr>` +
-                `<td class="detail-table-key">${escapeHtml(key)}</td>` +
-                `<td class="detail-table-value">${renderInvocationTableValueHtml(item)}</td>` +
-              `</tr>`
-            )).join("") +
-          `</tbody>` +
-        `</table>` +
+      `<div class="tool-parameter-list">` +
+        entries.map(([key, item]) => renderInvocationNodeHtml(key, item)).join("") +
       `</div>`
     );
   }
 
-  return renderInvocationNodeHtml("value", value);
+  if (value === undefined || value === null || value === "") {
+    return "";
+  }
+
+  return (
+    `<div class="tool-parameter-list">` +
+      renderInvocationNodeHtml("value", value) +
+    `</div>`
+  );
 }
 
 function renderFunctionInvocationHtml(
@@ -778,26 +784,30 @@ function renderFunctionInvocationHtml(
     typeof payload.name === "string" && payload.name.trim().length > 0
       ? payload.name.trim()
       : label;
-  const summaryBadges = [
-    options.id ? `<span class="badge neutral">id ${escapeHtml(options.id)}</span>` : "",
-    options.type && options.type !== "function" ? `<span class="badge neutral">${escapeHtml(options.type)}</span>` : "",
-  ].filter(Boolean).join("");
+  const hoverDetails = [
+    options.id ? `call id: ${options.id}` : "",
+    options.type && options.type !== "function" ? `type: ${options.type}` : "",
+  ].filter(Boolean).join("\n");
   const argumentsValue = parseStructuredArguments(payload.arguments);
   const argumentRows = renderInvocationArgumentListHtml(argumentsValue);
+  const argumentCount = isClientRecord(argumentsValue)
+    ? Object.keys(argumentsValue).length
+    : (argumentsValue === undefined || argumentsValue === null || argumentsValue === "" ? 0 : 1);
 
-    return (
-      `<article class="tool-definition-card">` +
-        `<div class="tool-definition-head">` +
-          `<div>` +
-            `<div class="tool-definition-title">${renderToolTitleMarkerHtml()}<span>${escapeHtml(name)}</span></div>` +
-            (options.note ? `<div class="tool-definition-subtitle">${escapeHtml(options.note)}</div>` : "") +
-          `</div>` +
-          (summaryBadges ? `<div class="message-meta">${summaryBadges}</div>` : "") +
+  return (
+    `<article class="tool-definition-card"${hoverDetails ? ` title="${escapeHtml(hoverDetails)}"` : ""}>` +
+      `<div class="tool-definition-head">` +
+        `<div>` +
+          `<div class="tool-definition-title">${renderToolTitleMarkerHtml()}<span>${escapeHtml(name)}</span></div>` +
+          (options.note ? `<div class="tool-definition-subtitle">${escapeHtml(options.note)}</div>` : "") +
+        `</div>` +
       `</div>` +
-      `<div class="tool-parameter-list">` +
-        `<div class="tool-definition-subtitle">Arguments</div>` +
-        argumentRows +
-      `</div>` +
+      renderToolDisclosureHtml(
+        "Arguments",
+        argumentRows,
+        argumentCount,
+        "No arguments were provided.",
+      ) +
     `</article>`
   );
 }

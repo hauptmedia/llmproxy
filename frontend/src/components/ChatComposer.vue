@@ -35,8 +35,16 @@ const emit = defineEmits<{
   (event: "update:enableDiagnosticTools", value: boolean): void;
   (event: "submit"): void;
   (event: "toggle-advanced"): void;
-  (event: "keydown-prompt", value: KeyboardEvent): void;
 }>();
+
+function handlePromptKeydown(event: KeyboardEvent): void {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+    return;
+  }
+
+  event.preventDefault();
+  emit("submit");
+}
 </script>
 
 <template>
@@ -47,7 +55,7 @@ const emit = defineEmits<{
       class="chat-editor-textarea"
       :placeholder="promptPlaceholder"
       @input="emit('update:prompt', ($event.target as HTMLTextAreaElement).value)"
-      @keydown="emit('keydown-prompt', $event)"
+      @keydown="handlePromptKeydown"
     ></textarea>
 
     <ChatAdvancedParametersFields
@@ -118,8 +126,8 @@ const emit = defineEmits<{
         </label>
       </div>
       <div class="chat-composer-primary-actions">
-        <button class="button" type="submit" :disabled="sending">
-          {{ sending ? "Sending..." : submitLabel }}
+        <button class="button" type="submit">
+          {{ submitLabel }}
         </button>
       </div>
     </div>

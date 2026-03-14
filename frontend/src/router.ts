@@ -42,9 +42,13 @@ export function createDashboardRouter() {
         component: LogsPage,
       },
       {
-        path: "/chat",
+        path: "/chatbox",
         name: "chat",
         component: ChatDebuggerPage,
+      },
+      {
+        path: "/chat",
+        redirect: { name: "chat" },
       },
       {
         path: "/diagnostics",

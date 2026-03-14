@@ -1,9 +1,20 @@
 <script setup lang="ts">
-import DebugChatWorkspace from "../components/DebugChatWorkspace.vue";
+import { useRouter } from "vue-router";
+import DebugChatFrame from "../components/DebugChatFrame.vue";
+
+const router = useRouter();
+
+function closeChatbox(): void {
+  void router.push({ name: "overview" });
+}
 </script>
 
 <template>
-  <section class="page-section chat-page-section">
-    <DebugChatWorkspace />
-  </section>
+  <DebugChatFrame
+    :open="true"
+    :close-on-backdrop="false"
+    show-close-button
+    heading-id="chatbox-dialog-title"
+    @close="closeChatbox"
+  />
 </template>
