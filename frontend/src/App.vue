@@ -94,7 +94,7 @@ watch(
                 :key="link.page"
                 :to="{ name: link.page }"
                 class="page-link"
-                :class="{ active: currentPage === link.page }"
+                :class="[{ active: currentPage === link.page }, `page-link-${link.page}`]"
               >
                 <svg class="page-link-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">
                   <path v-for="pathDef in link.icon" :key="pathDef" :d="pathDef"></path>
