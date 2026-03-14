@@ -111,6 +111,7 @@
     height: 100dvh;
     max-height: 100dvh;
     margin-bottom: 0;
+    padding-bottom: 12px;
     overflow: hidden;
   }
 

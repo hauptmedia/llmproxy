@@ -530,20 +530,31 @@ function renderReasoningBubble(reasoningContent: unknown, collapsed: boolean, li
   });
 }
 
+function renderToolCallIconHtml(): string {
+  return (
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">` +
+      `<path d="M5 12h11"></path>` +
+      `<path d="m12 6 6 6-6 6"></path>` +
+    `</svg>`
+  );
+}
+
+function renderToolReturnIconHtml(): string {
+  return (
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">` +
+      `<path d="M19 12H8"></path>` +
+      `<path d="m12 6-6 6 6 6"></path>` +
+    `</svg>`
+  );
+}
+
 function renderToolResponseBubble(content: unknown, collapsed: boolean, toolName: string, toolCallId: string): string {
   const bodyHtml = renderToolResponseContentHtml(content);
   return renderCompactBubbleDisclosure({
     kindClass: "compact-bubble-panel-tool",
     contentClass: "tool-response-content",
     iconClass: "tool-response-icon",
-    iconHtml:
-      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
-        `<path d="M9 7V6a3 3 0 0 1 6 0v1"></path>` +
-        `<path d="M4.75 8.5h14.5"></path>` +
-        `<path d="M6.25 8.5h11.5a1.5 1.5 0 0 1 1.5 1.5v6.75a2 2 0 0 1-2 2H6.75a2 2 0 0 1-2-2V10a1.5 1.5 0 0 1 1.5-1.5Z"></path>` +
-        `<path d="M10 12h4"></path>` +
-        `<path d="M12 10v4"></path>` +
-      `</svg>`,
+    iconHtml: renderToolReturnIconHtml(),
     labelText: toolName || "Tool response",
     labelTitle: toolCallId ? `Tool call id: ${toolCallId}` : "",
     bodyHtml,
@@ -998,14 +1009,7 @@ function renderFunctionInvocationHtml(
     kindClass: "compact-bubble-panel-tool",
     contentClass: "tool-invocation-content",
     iconClass: "tool-response-icon",
-    iconHtml:
-      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
-        `<path d="M9 7V6a3 3 0 0 1 6 0v1"></path>` +
-        `<path d="M4.75 8.5h14.5"></path>` +
-        `<path d="M6.25 8.5h11.5a1.5 1.5 0 0 1 1.5 1.5v6.75a2 2 0 0 1-2 2H6.75a2 2 0 0 1-2-2V10a1.5 1.5 0 0 1 1.5-1.5Z"></path>` +
-        `<path d="M10 12h4"></path>` +
-        `<path d="M12 10v4"></path>` +
-      `</svg>`,
+    iconHtml: renderToolCallIconHtml(),
     labelText: name,
     labelTitle: hoverDetails || undefined,
     bodyHtml: bodyParts.join(""),

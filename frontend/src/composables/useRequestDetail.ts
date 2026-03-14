@@ -239,6 +239,7 @@ export function useRequestDetail(
       key: `request:${index}:${typeof message?.role === "string" ? message.role : "unknown"}`,
       message: isClientRecord(message) ? message as Record<string, unknown> : { role: "unknown", content: message },
       index,
+      hideFinishBadge: true,
       reasoningCollapsed: true,
     }));
 
@@ -264,6 +265,7 @@ export function useRequestDetail(
           } as Record<string, unknown>,
           index: requestItems.length + choiceIndex,
           finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
+          hideFinishBadge: true,
           reasoningCollapsed: true,
         }];
       }
@@ -278,6 +280,7 @@ export function useRequestDetail(
           },
           index: requestItems.length + choiceIndex,
           finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
+          hideFinishBadge: true,
           reasoningCollapsed: true,
         }];
       }
