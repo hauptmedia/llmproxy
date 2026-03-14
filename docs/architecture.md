@@ -96,6 +96,7 @@ Two entry points exist:
 
 - `GET /api/diagnostics/requests/:id` for a ready-made heuristics report plus the stored request/response payloads
 - `POST /api/diagnostics/mcp` for MCP-style JSON-RPC calls such as `initialize`, `tools/list`, `tools/call`, `prompts/list`, and `prompts/get`
+- `GET /api/diagnostics/mcp/v1/models` and `POST /api/diagnostics/mcp/v1/chat/completions` as OpenAI-compatible helper routes under the same MCP namespace
 
 The built-in diagnostics engine currently looks for signals such as:
 

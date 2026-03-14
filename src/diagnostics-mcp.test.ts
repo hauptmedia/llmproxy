@@ -346,6 +346,117 @@ test("diagnostics MCP tools expose heuristic request reports", async () => {
   }
 });
 
+test("diagnostics MCP OpenAI-style proxy routes expose models and chat completions", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-diagnostics-proxy-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  try {
+    const backendPort = await getFreePort();
+    const routerPort = await getFreePort();
+
+    const backend = await startMockDiagnosticsBackend(backendPort);
+    cleanup.push(async () => {
+      await new Promise<void>((resolve, reject) => {
+        backend.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        });
+      });
+    });
+
+    const config: ProxyConfig = {
+      server: {
+        host: "127.0.0.1",
+        port: routerPort,
+        dashboardPath: "/dashboard",
+        requestTimeoutMs: 10000,
+        queueTimeoutMs: 2000,
+        healthCheckIntervalMs: 60000,
+        recentRequestLimit: 1000,
+        mcpServerEnabled: true,
+      },
+      backends: [
+        {
+          id: "mock-diagnostics-upstream",
+          name: "mock diagnostics upstream",
+          baseUrl: `http://127.0.0.1:${backendPort}`,
+          enabled: true,
+          maxConcurrency: 1,
+          healthPath: "/v1/models",
+          models: ["diagnostics-model"],
+        },
+      ],
+    };
+
+    const router = await startRouter(config, path.join(tempDir, "diagnostics-router-proxy.config.json"));
+    cleanup.push(async () => {
+      await router.server.stop();
+      await router.loadBalancer.stop();
+    });
+
+    const baseUrl = `http://127.0.0.1:${routerPort}`;
+    await waitForHealthyBackend(baseUrl, "mock-diagnostics-upstream");
+
+    const modelsResponse = await fetch(`${baseUrl}/api/diagnostics/mcp/v1/models`);
+    assert.equal(modelsResponse.status, 200);
+    const modelsPayload = await modelsResponse.json() as {
+      object: string;
+      data: Array<{
+        id: string;
+        owned_by: string;
+      }>;
+    };
+
+    assert.equal(modelsPayload.object, "list");
+    assert.deepEqual(modelsPayload.data.map((entry) => entry.id), ["diagnostics-model"]);
+    assert.equal(modelsPayload.data[0]?.owned_by, "mock diagnostics upstream");
+
+    const chatResponse = await fetch(`${baseUrl}/api/diagnostics/mcp/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "diagnostics-model",
+        stream: false,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: "Explain something briefly.",
+          },
+        ],
+      }),
+    });
+    assert.equal(chatResponse.status, 200);
+    assert.ok(chatResponse.headers.get("x-llmproxy-request-id"));
+    const chatPayload = await chatResponse.json() as {
+      object?: string;
+      model?: string;
+      choices?: Array<{
+        finish_reason?: string | null;
+      }>;
+    };
+
+    assert.equal(chatPayload.object, "chat.completion");
+    assert.equal(chatPayload.model, "diagnostics-model");
+    assert.equal(chatPayload.choices?.[0]?.finish_reason, "length");
+  } finally {
+    while (cleanup.length > 0) {
+      const task = cleanup.pop();
+      if (task) {
+        await task();
+      }
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("diagnostics MCP endpoint returns 503 when disabled in server config", async () => {
   const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-diagnostics-disabled-"));
   const cleanup: Array<() => Promise<void>> = [];
@@ -426,6 +537,15 @@ test("diagnostics MCP endpoint returns 503 when disabled in server config", asyn
       };
     };
     assert.equal(payload.error?.message, "Diagnostics MCP server is disabled in config.");
+
+    const modelsResponse = await fetch(`${baseUrl}/api/diagnostics/mcp/v1/models`);
+    assert.equal(modelsResponse.status, 503);
+    const modelsPayload = await modelsResponse.json() as {
+      error?: {
+        message?: string;
+      };
+    };
+    assert.equal(modelsPayload.error?.message, "Diagnostics MCP server is disabled in config.");
   } finally {
     while (cleanup.length > 0) {
       const task = cleanup.pop();

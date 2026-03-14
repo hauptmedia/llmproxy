@@ -125,6 +125,18 @@ export function isSupportedProxyRoute(method: string, pathname: string): boolean
   return pathname === "/v1/chat/completions";
 }
 
+function resolveDiagnosticsMcpProxyPath(pathname: string): string | undefined {
+  if (pathname === "/api/diagnostics/mcp/v1/models") {
+    return "/v1/models";
+  }
+
+  if (pathname === "/api/diagnostics/mcp/v1/chat/completions") {
+    return "/v1/chat/completions";
+  }
+
+  return undefined;
+}
+
 export class LlmProxyServer {
   private server?: Server;
   private readonly sseClients = new Set<ServerResponse>();
@@ -271,6 +283,35 @@ export class LlmProxyServer {
 
     if (method === "GET" && url.pathname.startsWith("/api/diagnostics/requests/")) {
       this.handleDiagnosticsReport(response, url.pathname);
+      return;
+    }
+
+    const diagnosticsMcpProxyPath = resolveDiagnosticsMcpProxyPath(url.pathname);
+    if (diagnosticsMcpProxyPath) {
+      if (!this.loadBalancer.getServerConfig().mcpServerEnabled) {
+        sendJson(response, 503, proxyError("Diagnostics MCP server is disabled in config."));
+        return;
+      }
+
+      if (method === "GET" && diagnosticsMcpProxyPath === "/v1/models") {
+        this.handleModels(response, this.loadBalancer.listKnownModels());
+        return;
+      }
+
+      if (!isSupportedProxyRoute(method, diagnosticsMcpProxyPath)) {
+        sendJson(
+          response,
+          501,
+          proxyError(
+            `Route "${method} ${url.pathname}" is not implemented. Supported MCP proxy routes: GET /api/diagnostics/mcp/v1/models, POST /api/diagnostics/mcp/v1/chat/completions.`,
+          ),
+        );
+        return;
+      }
+
+      const proxyUrl = new URL(url.toString());
+      proxyUrl.pathname = diagnosticsMcpProxyPath;
+      await this.handleProxy(request, response, proxyUrl);
       return;
     }
 
