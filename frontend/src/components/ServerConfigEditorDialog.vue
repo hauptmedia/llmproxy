@@ -142,6 +142,17 @@ const hasPendingRestartEdits = computed(() => pendingRestartFields.value.length 
                 <span class="field-label">Recent request limit</span>
                 <input v-model="state.fields.recentRequestLimit" type="number" min="1" step="1" inputmode="numeric" />
               </label>
+
+              <label class="field field-span-2">
+                <span class="field-label">Diagnostics MCP server</span>
+                <label class="chat-composer-tool-toggle server-editor-toggle">
+                  <input
+                    v-model="state.fields.mcpServerEnabled"
+                    type="checkbox"
+                  >
+                  <span>Enable diagnostics MCP endpoint and tools</span>
+                </label>
+              </label>
             </div>
           </div>
         </section>

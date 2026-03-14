@@ -1,4 +1,4 @@
-import { onMounted, readonly, ref } from "vue";
+import { computed, readonly, ref, watch } from "vue";
 import type {
   DiagnosticPromptDefinition,
   DiagnosticsToolDefinition,
@@ -16,8 +16,21 @@ let loadPromise: Promise<void> | null = null;
 
 export function useDiagnosticsCapabilities() {
   const store = useDashboardStore();
+  const mcpServerEnabled = computed<boolean | null>(() => (
+    store.state.serverConfig
+      ? store.state.serverConfig.mcpServerEnabled
+      : null
+  ));
 
   async function loadCapabilities(): Promise<void> {
+    if (mcpServerEnabled.value !== true) {
+      toolDefinitionsState.value = [];
+      promptDefinitionsState.value = [];
+      loadingCapabilitiesState.value = false;
+      capabilitiesLoaded = false;
+      return;
+    }
+
     if (capabilitiesLoaded) {
       return;
     }
@@ -48,13 +61,26 @@ export function useDiagnosticsCapabilities() {
     await loadPromise;
   }
 
-  onMounted(() => {
-    void loadCapabilities();
-  });
+  watch(
+    mcpServerEnabled,
+    (enabled) => {
+      if (enabled !== true) {
+        toolDefinitionsState.value = [];
+        promptDefinitionsState.value = [];
+        loadingCapabilitiesState.value = false;
+        capabilitiesLoaded = false;
+        return;
+      }
+
+      void loadCapabilities();
+    },
+    { immediate: true },
+  );
 
   return {
     endpointUrl,
     loadingCapabilities: readonly(loadingCapabilitiesState),
+    mcpServerEnabled,
     toolDefinitions: readonly(toolDefinitionsState),
     promptDefinitions: readonly(promptDefinitionsState),
     loadCapabilities,

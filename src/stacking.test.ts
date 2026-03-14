@@ -781,6 +781,7 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
       recentRequestLimit: 1000,
+      mcpServerEnabled: true,
     },
     backends: [
       {
@@ -810,6 +811,7 @@ test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", asyn
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
       recentRequestLimit: 1000,
+      mcpServerEnabled: true,
     },
     backends: [
       {
@@ -996,6 +998,7 @@ test("proxy rewrites auto model requests to the selected backend model", async (
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
       recentRequestLimit: 1000,
+      mcpServerEnabled: true,
     },
     backends: [
       {
@@ -1085,6 +1088,7 @@ test("proxy rewrites missing model requests to the selected backend model", asyn
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
       recentRequestLimit: 1000,
+      mcpServerEnabled: true,
     },
     backends: [
       {
@@ -1173,6 +1177,7 @@ test("ollama connector keeps the client surface OpenAI-compatible", async (t) =>
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
       recentRequestLimit: 1000,
+      mcpServerEnabled: true,
     },
     backends: [
       {
@@ -1305,6 +1310,7 @@ test("proxy preserves max_tokens and tool calls for non-streaming chat clients",
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
       recentRequestLimit: 1000,
+      mcpServerEnabled: true,
     },
     backends: [
       {
@@ -1516,6 +1522,7 @@ test("active connections expose live request details for chat history inspection
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
       recentRequestLimit: 1000,
+      mcpServerEnabled: true,
     },
     backends: [
       {
@@ -1661,6 +1668,7 @@ test("cancelled requests retain the partial streamed response in request history
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
       recentRequestLimit: 1000,
+      mcpServerEnabled: true,
     },
     backends: [
       {
@@ -1781,6 +1789,7 @@ test("dashboard can cancel a live connection and retain the partial response in 
       queueTimeoutMs: 2_000,
       healthCheckIntervalMs: 60_000,
       recentRequestLimit: 1000,
+      mcpServerEnabled: true,
     },
     backends: [
       {

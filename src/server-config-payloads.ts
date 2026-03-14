@@ -17,6 +17,7 @@ export function parseServerConfigSavePayload(input: Record<string, unknown>): Se
     queueTimeoutMs: parseRequiredPositiveInteger(input.queueTimeoutMs, "queueTimeoutMs"),
     healthCheckIntervalMs: parseRequiredPositiveInteger(input.healthCheckIntervalMs, "healthCheckIntervalMs"),
     recentRequestLimit: parseRequiredPositiveInteger(input.recentRequestLimit, "recentRequestLimit"),
+    mcpServerEnabled: parseRequiredBoolean(input.mcpServerEnabled, "mcpServerEnabled"),
   };
 }
 

@@ -15,6 +15,7 @@ defineProps<{
   prompt: string;
   model: string;
   enableDiagnosticTools: boolean;
+  mcpServerEnabled: boolean;
   params: DebugParams;
   models: KnownModel[];
   sending: boolean;
@@ -95,14 +96,19 @@ const emit = defineEmits<{
         <label
           class="chat-composer-tool-toggle"
           :for="`${modelId}-diagnostic-tools`"
-          title="When enabled, chat requests include the diagnostics MCP tools and automatically execute their tool calls during the conversation."
+          :title="mcpServerEnabled
+            ? 'When enabled, chat requests include the diagnostics MCP tools and automatically execute their tool calls during the conversation.'
+            : 'Diagnostics MCP server is disabled in config.'"
         >
           <input
             :id="`${modelId}-diagnostic-tools`"
             type="checkbox"
             :checked="enableDiagnosticTools"
+            :disabled="!mcpServerEnabled"
             aria-label="Enable diagnostics MCP tools for this chat"
-            title="When enabled, chat requests include the diagnostics MCP tools and automatically execute their tool calls during the conversation."
+            :title="mcpServerEnabled
+              ? 'When enabled, chat requests include the diagnostics MCP tools and automatically execute their tool calls during the conversation.'
+              : 'Diagnostics MCP server is disabled in config.'"
             @change="emit('update:enableDiagnosticTools', ($event.target as HTMLInputElement).checked)"
           >
           <span>Enable diagnostic tools</span>

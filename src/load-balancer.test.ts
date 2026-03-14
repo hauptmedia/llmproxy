@@ -13,6 +13,7 @@ const TEST_CONFIG: ProxyConfig = {
     queueTimeoutMs: 500,
     healthCheckIntervalMs: 10_000,
     recentRequestLimit: 1000,
+    mcpServerEnabled: true,
   },
   backends: [
     {
@@ -457,6 +458,7 @@ test("captures discovered model metadata from /v1/models for backend snapshots",
       queueTimeoutMs: 500,
       healthCheckIntervalMs: 10_000,
       recentRequestLimit: 1000,
+      mcpServerEnabled: true,
     },
     backends: [
       {

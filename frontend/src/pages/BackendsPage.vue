@@ -7,7 +7,7 @@ import { useDashboardStore } from "../composables/useDashboardStore";
 import { formatDuration } from "../utils/formatters";
 
 const store = useDashboardStore();
-const { endpointUrl, loadingCapabilities, toolDefinitions } = useDiagnosticsCapabilities();
+const { endpointUrl, loadingCapabilities, mcpServerEnabled, toolDefinitions } = useDiagnosticsCapabilities();
 const currentBackendConfig = computed(() => {
   const backendId = store.state.backendEditor.originalId || store.state.backendEditor.fields.id;
   return backendId ? store.state.backendConfigs[backendId] ?? null : null;
@@ -55,16 +55,14 @@ const serverConfigRows = computed(() => {
       value: String(config.recentRequestLimit),
       title: "Maximum number of retained request rows kept in memory and shown in the dashboard.",
     },
+    {
+      key: "Diagnostics MCP server",
+      value: config.mcpServerEnabled ? "enabled" : "disabled",
+      title: "Controls whether the diagnostics MCP endpoint and its tools are exposed to clients.",
+    },
   ];
 });
 
-const mcpServerRows = computed(() => [
-  {
-    key: "Endpoint",
-    value: endpointUrl,
-    title: "JSON-RPC MCP endpoint exposed by llmproxy diagnostics.",
-  },
-]);
 </script>
 
 <template>
@@ -116,20 +114,8 @@ const mcpServerRows = computed(() => [
         </div>
       </div>
       <div class="detail-table-wrap">
-        <table class="detail-table">
-          <thead>
-            <tr>
-              <th>Field</th>
-              <th>Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in mcpServerRows" :key="row.key">
-              <td :title="row.title" class="detail-table-key">{{ row.key }}</td>
-              <td :title="row.title" class="detail-table-value mono">{{ row.value }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="detail-table-key" title="JSON-RPC MCP endpoint exposed by llmproxy diagnostics.">Endpoint</div>
+        <div class="detail-table-value mono" title="JSON-RPC MCP endpoint exposed by llmproxy diagnostics.">{{ endpointUrl }}</div>
       </div>
       <div class="diagnostics-tools">
         <div class="diagnostics-section-label">Available MCP tools</div>
@@ -140,6 +126,9 @@ const mcpServerRows = computed(() => [
               <div class="diagnostics-tool-description">{{ tool.description }}</div>
             </div>
           </template>
+          <div v-else-if="mcpServerEnabled === false" class="empty">
+            Diagnostics MCP server is disabled in config.
+          </div>
           <div v-else class="empty">
             {{ loadingCapabilities ? "Loading MCP tools..." : "No MCP tool metadata loaded yet." }}
           </div>

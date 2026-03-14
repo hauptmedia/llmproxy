@@ -15,6 +15,7 @@ const TEST_CONFIG: ProxyConfig = {
     queueTimeoutMs: 30_000,
     healthCheckIntervalMs: 10_000,
     recentRequestLimit: 1000,
+    mcpServerEnabled: true,
   },
   backends: [
     {
@@ -203,6 +204,7 @@ test("updates server config and persists it", async () => {
       queueTimeoutMs: 45_000,
       healthCheckIntervalMs: 5_000,
       recentRequestLimit: 250,
+      mcpServerEnabled: false,
     });
 
     assert.deepEqual(next.server, {
@@ -213,10 +215,40 @@ test("updates server config and persists it", async () => {
       queueTimeoutMs: 45_000,
       healthCheckIntervalMs: 5_000,
       recentRequestLimit: 250,
+      mcpServerEnabled: false,
     });
     assert.equal(next.backends.length, 1);
 
     const persisted = JSON.parse(await readFile(configPath, "utf8")) as ProxyConfig;
     assert.deepEqual(persisted.server, next.server);
   });
+});
+
+test("creates a default config file when llmproxy.config.json is missing", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "llmproxy-config-store-missing-"));
+  const configPath = path.join(tempDir, "llmproxy.config.json");
+
+  try {
+    const store = new ConfigStore(configPath);
+    const config = await store.load();
+
+    assert.deepEqual(config, {
+      server: {
+        host: "0.0.0.0",
+        port: 4100,
+        dashboardPath: "/dashboard",
+        requestTimeoutMs: 600_000,
+        queueTimeoutMs: 30_000,
+        healthCheckIntervalMs: 10_000,
+        recentRequestLimit: 1000,
+        mcpServerEnabled: true,
+      },
+      backends: [],
+    });
+
+    const persisted = JSON.parse(await readFile(configPath, "utf8")) as ProxyConfig;
+    assert.deepEqual(persisted, config);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 });

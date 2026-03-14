@@ -10,6 +10,7 @@ import { hasVisibleMessageContent } from "../utils/message-rendering";
 
 const store = useDashboardStore();
 const router = useRouter();
+const mcpServerEnabled = computed(() => store.state.serverConfig?.mcpServerEnabled !== false);
 const hasTranscript = computed(() => store.state.debug.transcript.length > 0);
 const trimmedSystemPrompt = computed(() => store.state.debug.systemPrompt.trim());
 const showAdvancedParameters = ref(false);
@@ -213,6 +214,7 @@ async function openLastDebugRequestInDiagnostics(): Promise<void> {
               :prompt="store.state.debug.prompt"
               :model="store.state.debug.model"
               :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
+              :mcp-server-enabled="mcpServerEnabled"
               :params="store.state.debug.params"
               :models="store.state.models"
               :sending="store.state.debug.sending"
@@ -248,6 +250,7 @@ async function openLastDebugRequestInDiagnostics(): Promise<void> {
               :prompt="store.state.debug.prompt"
               :model="store.state.debug.model"
               :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
+              :mcp-server-enabled="mcpServerEnabled"
               :params="store.state.debug.params"
               :models="store.state.models"
               :sending="store.state.debug.sending"

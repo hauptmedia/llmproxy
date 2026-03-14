@@ -50,6 +50,7 @@ function createServerFields(config?: EditableServerConfig | null): ServerEditorF
     queueTimeoutMs: config ? String(config.queueTimeoutMs) : "",
     healthCheckIntervalMs: config ? String(config.healthCheckIntervalMs) : "",
     recentRequestLimit: config ? String(config.recentRequestLimit) : "",
+    mcpServerEnabled: config?.mcpServerEnabled ?? true,
   };
 }
 
@@ -196,6 +197,10 @@ function formatServerFieldLabel(field: string): string {
     return "recent request limit";
   }
 
+  if (field === "mcpServerEnabled") {
+    return "MCP server";
+  }
+
   return field;
 }
 
@@ -223,6 +228,9 @@ export function useBackendControls(
       const backends = isBackendListResponse(payload) && Array.isArray(payload.data) ? payload.data : [];
       state.serverConfig = isBackendListResponse(payload) && payload.server ? payload.server : null;
       state.backendConfigs = normalizeBackendRecord(backends);
+      if (state.serverConfig?.mcpServerEnabled === false) {
+        state.debug.enableDiagnosticTools = false;
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       state.backendEditor.error = message;
@@ -329,6 +337,7 @@ export function useBackendControls(
         queueTimeoutMs: parsePositiveIntegerField(state.serverEditor.fields.queueTimeoutMs, "queueTimeoutMs"),
         healthCheckIntervalMs: parsePositiveIntegerField(state.serverEditor.fields.healthCheckIntervalMs, "healthCheckIntervalMs"),
         recentRequestLimit: parsePositiveIntegerField(state.serverEditor.fields.recentRequestLimit, "recentRequestLimit"),
+        mcpServerEnabled: state.serverEditor.fields.mcpServerEnabled,
       };
 
       state.serverEditor.saving = true;
@@ -357,6 +366,9 @@ export function useBackendControls(
       await loadBackendConfigs();
       if (persistedServerConfig) {
         state.serverConfig = persistedServerConfig;
+        if (!persistedServerConfig.mcpServerEnabled) {
+          state.debug.enableDiagnosticTools = false;
+        }
       }
 
       state.serverEditor.restartRequiredFields = restartRequiredFields;

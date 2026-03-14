@@ -15,7 +15,7 @@ import { buildDiagnosticsRequestOptions } from "../utils/request-catalog";
 const store = useDashboardStore();
 const route = useRoute();
 const router = useRouter();
-const { promptDefinitions } = useDiagnosticsCapabilities();
+const { mcpServerEnabled, promptDefinitions } = useDiagnosticsCapabilities();
 const selectedRequestId = ref("");
 const loadingReport = ref(false);
 const loadingPrompt = ref(false);
@@ -115,6 +115,25 @@ watch(
   { immediate: true },
 );
 
+watch(
+  mcpServerEnabled,
+  (enabled) => {
+    if (enabled !== true || !selectedRequestId.value || !diagnosticsPayload.value || loadingPrompt.value) {
+      return;
+    }
+
+    if (promptPayload.value) {
+      return;
+    }
+
+    const preferredPrompt = selectedPromptName.value
+      || diagnosticsPayload.value.report.recommendedPrompts[0]
+      || "diagnose-request";
+    void loadPrompt(preferredPrompt);
+  },
+  { immediate: true },
+);
+
 async function loadDiagnosticsReport(requestId: string): Promise<void> {
   loadingReport.value = true;
 
@@ -128,10 +147,15 @@ async function loadDiagnosticsReport(requestId: string): Promise<void> {
     }
 
     diagnosticsPayload.value = await response.json() as DiagnosticsReportPayload;
-    const preferredPrompt = selectedPromptName.value
-      || diagnosticsPayload.value.report.recommendedPrompts[0]
-      || "diagnose-request";
-    await loadPrompt(preferredPrompt);
+    if (mcpServerEnabled.value) {
+      const preferredPrompt = selectedPromptName.value
+        || diagnosticsPayload.value.report.recommendedPrompts[0]
+        || "diagnose-request";
+      await loadPrompt(preferredPrompt);
+    } else {
+      selectedPromptName.value = "";
+      promptPayload.value = null;
+    }
   } catch (error) {
     diagnosticsPayload.value = null;
     promptPayload.value = null;
@@ -142,7 +166,7 @@ async function loadDiagnosticsReport(requestId: string): Promise<void> {
 }
 
 async function loadPrompt(promptName: string): Promise<void> {
-  if (!selectedRequestId.value) {
+  if (!selectedRequestId.value || !mcpServerEnabled.value) {
     return;
   }
 
@@ -354,20 +378,24 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
         </div>
 
         <div class="diagnostics-actions">
-          <button
-            v-for="prompt in promptButtons"
-            :key="prompt.name"
-            type="button"
-            class="diagnostics-action-card"
-            :class="{ active: selectedPromptName === prompt.name, recommended: selectedReport.recommendedPrompts.includes(prompt.name) }"
-            @click="loadPrompt(prompt.name)"
-          >
-            <div class="diagnostics-action-title">
-              {{ prompt.title }}
-              <span v-if="selectedReport.recommendedPrompts.includes(prompt.name)" class="diagnostics-action-badge">Suggested</span>
-            </div>
-            <div class="diagnostics-action-description">{{ prompt.description }}</div>
-          </button>
+          <template v-if="mcpServerEnabled === true">
+            <button
+              v-for="prompt in promptButtons"
+              :key="prompt.name"
+              type="button"
+              class="diagnostics-action-card"
+              :class="{ active: selectedPromptName === prompt.name, recommended: selectedReport.recommendedPrompts.includes(prompt.name) }"
+              @click="loadPrompt(prompt.name)"
+            >
+              <div class="diagnostics-action-title">
+                {{ prompt.title }}
+                <span v-if="selectedReport.recommendedPrompts.includes(prompt.name)" class="diagnostics-action-badge">Suggested</span>
+              </div>
+              <div class="diagnostics-action-description">{{ prompt.description }}</div>
+            </button>
+          </template>
+          <div v-else-if="mcpServerEnabled === false" class="empty">Diagnostics MCP server is disabled in config.</div>
+          <div v-else class="empty">Loading MCP capabilities...</div>
         </div>
 
         <div class="diagnostics-prompt-preview">
@@ -400,6 +428,8 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
             </div>
           </template>
           <div v-else-if="loadingPrompt" class="empty">Loading prompt preview...</div>
+          <div v-else-if="mcpServerEnabled === false" class="empty">Prompt preview is unavailable while the diagnostics MCP server is disabled.</div>
+          <div v-else-if="mcpServerEnabled !== true" class="empty">Loading MCP capabilities...</div>
           <div v-else class="empty">Choose a diagnostics action to preview the stored prompt.</div>
         </div>
       </div>

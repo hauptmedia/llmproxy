@@ -13,6 +13,7 @@ export interface ServerConfig {
   queueTimeoutMs: number;
   healthCheckIntervalMs: number;
   recentRequestLimit: number;
+  mcpServerEnabled: boolean;
 }
 
 export interface BackendConfig {

@@ -30,7 +30,6 @@ Other OpenAI-style routes such as `POST /v1/completions`, `POST /v1/responses`, 
 
 ```bash
 npm install
-cp llmproxy.config.json.dist llmproxy.config.json
 npm start
 ```
 
@@ -71,30 +70,15 @@ In dev mode, those routes load the dashboard code from the Vite dev server autom
 
 ## Configuration
 
-Your real local config lives in `llmproxy.config.json`, which is ignored by Git. The repository ships `llmproxy.config.json.dist` as the tracked example.
-
-Create your local config once before the first start:
-
-```bash
-cp llmproxy.config.json.dist llmproxy.config.json
-```
-
-Or in PowerShell:
-
-```powershell
-Copy-Item llmproxy.config.json.dist llmproxy.config.json
-```
-
 By default, `llmproxy.config.json` is loaded from the project directory. Alternatively, set `LLMPROXY_CONFIG`.
+If the config file does not exist yet, `llmproxy` creates a standard `llmproxy.config.json` automatically on first start. The generated file contains the default server settings and starts with no backends configured.
 
-The example configuration includes:
-
-- one local `llama.cpp` backend at `http://127.0.0.1:8080`
-- `maxConcurrency: 1`, which is a sensible default for most local single-model setups
+After the first start, add your backends either through the `Config` page in the dashboard or by editing `llmproxy.config.json` directly.
 
 Important configuration fields:
 
 - `recentRequestLimit`: maximum number of recent request log entries to retain in memory and show in the dashboard, default `1000`
+- `mcpServerEnabled`: enables or disables the built-in diagnostics MCP endpoint and the diagnostics tools exposed to the dashboard chat, default `true`
 - `baseUrl`: target URL of the OpenAI-compatible backend
 - `connector`: backend adapter to use, currently `openai` or `ollama`
 - `maxConcurrency`: concurrent requests allowed for that backend
@@ -103,7 +87,7 @@ Important configuration fields:
 - `apiKey` or `apiKeyEnv`: optional upstream authentication
 
 The `Config` page opens in a read-only view by default. Use the pencil button in the `Config` panel to edit the main `llmproxy` server config, or the backend actions on the page to edit backend entries and write changes back to your local `llmproxy.config.json`.
-Backend changes become active immediately after saving. For the main server config, `requestTimeoutMs`, `queueTimeoutMs`, `healthCheckIntervalMs`, and `recentRequestLimit` apply immediately; `host`, `port`, and `dashboardPath` are saved right away but require an `llmproxy` restart to take effect.
+Backend changes become active immediately after saving. For the main server config, `requestTimeoutMs`, `queueTimeoutMs`, `healthCheckIntervalMs`, `recentRequestLimit`, and `mcpServerEnabled` apply immediately; `host`, `port`, and `dashboardPath` are saved right away but require an `llmproxy` restart to take effect.
 Existing `models` entries are still accepted for backwards compatibility, but `allowedModels` is the preferred config key going forward.
 If `allowedModels` is omitted entirely, llmproxy treats that backend like `["*"]`, meaning all models are allowed.
 
@@ -120,5 +104,6 @@ For a short architecture overview of connectors, routing, retention, and config 
 - The `Active Connections` dashboard section shows live `chat.completions` requests in real time, including queue state, streaming mode, token counts, and `tok/s`.
 - The `Chat` page lets you send debug requests to `/v1/chat/completions`, inspect the conversation, and jump straight into the stored request debugger for the last request.
 - The `Diagnostics` page exposes MCP-compatible tools and prompts under `/api/diagnostics/mcp` so LLMs can inspect retained requests, fetch stored request details, and run built-in diagnosis heuristics.
+- If `mcpServerEnabled` is turned off, the diagnostics MCP endpoint returns `503`, the dashboard chat stops attaching diagnostics tools, and MCP prompt previews are disabled until the server is enabled again.
 - Built-in diagnostics currently include signals such as `finish_reason=length`, effective completion-token-limit hits, endless repetition patterns, rejected requests before backend assignment, and upstream/backend failures.
 - `GET /api/diagnostics/requests/:id` returns a precomputed diagnostics report plus the stored request detail for one retained request.

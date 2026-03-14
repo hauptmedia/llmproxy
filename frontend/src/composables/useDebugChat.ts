@@ -136,8 +136,9 @@ export function useDebugChat(
       });
     }
 
+    const diagnosticsAllowed = state.serverConfig?.mcpServerEnabled === true;
     let diagnosticTools: Array<Record<string, unknown>> | undefined;
-    if (state.debug.enableDiagnosticTools) {
+    if (state.debug.enableDiagnosticTools && diagnosticsAllowed) {
       try {
         diagnosticTools = await buildDiagnosticsChatTools();
       } catch (error) {
@@ -221,7 +222,7 @@ export function useDebugChat(
           history.push(assistantHistoryMessage);
         }
 
-        if (!state.debug.enableDiagnosticTools) {
+        if (!state.debug.enableDiagnosticTools || !diagnosticsAllowed) {
           break;
         }
 

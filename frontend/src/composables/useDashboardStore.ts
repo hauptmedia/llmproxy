@@ -75,6 +75,7 @@ function createInitialState(): DashboardState {
         queueTimeoutMs: "",
         healthCheckIntervalMs: "",
         recentRequestLimit: "",
+        mcpServerEnabled: true,
       },
     }),
     debug: reactive({

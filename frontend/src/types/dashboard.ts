@@ -9,6 +9,7 @@ export interface EditableServerConfig {
   queueTimeoutMs: number;
   healthCheckIntervalMs: number;
   recentRequestLimit: number;
+  mcpServerEnabled: boolean;
 }
 
 export interface DashboardBootstrap {
@@ -205,6 +206,7 @@ export interface ServerEditorFields {
   queueTimeoutMs: string;
   healthCheckIntervalMs: string;
   recentRequestLimit: string;
+  mcpServerEnabled: boolean;
 }
 
 export interface ServerEditorState {

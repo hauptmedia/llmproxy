@@ -25,6 +25,7 @@ import {
   matchDashboardRoute,
   normalizeDashboardPath,
   normalizeDashboardSubPath,
+  resolveDashboardLandingPage,
   resolveDashboardAssetPath,
 } from "./server-dashboard-paths";
 import {
@@ -241,14 +242,21 @@ export class LlmProxyServer {
       return;
     }
 
-    const dashboardRoute = method === "GET" ? matchDashboardRoute(url.pathname, dashboardPath) : undefined;
+    const dashboardSnapshot = method === "GET" ? this.getSnapshot() : undefined;
+    const dashboardRoute = method === "GET"
+      ? matchDashboardRoute(
+        url.pathname,
+        dashboardPath,
+        resolveDashboardLandingPage(dashboardSnapshot ?? this.getSnapshot()),
+      )
+      : undefined;
 
     if (dashboardRoute) {
       response.statusCode = 200;
       response.setHeader("content-type", "text/html; charset=utf-8");
       response.setHeader("cache-control", "no-store");
       response.end(
-        renderDashboardHtml(this.getSnapshot(), {
+        renderDashboardHtml(dashboardSnapshot ?? this.getSnapshot(), {
           dashboardPath,
           page: dashboardRoute.page,
         }),
@@ -267,6 +275,11 @@ export class LlmProxyServer {
     }
 
     if (method === "POST" && url.pathname === "/api/diagnostics/mcp") {
+      if (!this.loadBalancer.getServerConfig().mcpServerEnabled) {
+        sendJson(response, 503, proxyError("Diagnostics MCP server is disabled in config."));
+        return;
+      }
+
       await this.handleDiagnosticsMcp(request, response);
       return;
     }
