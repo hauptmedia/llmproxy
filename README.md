@@ -44,6 +44,22 @@ After that:
 
 The backend serves the built Vue dashboard app directly on the `/dashboard` routes, so frontend and backend stay separated while deployment still stays simple.
 
+## Docker
+
+Build the image:
+
+```bash
+docker build -t llmproxy .
+```
+
+Run it with a persistent config volume:
+
+```bash
+docker run --rm -p 4100:4100 -v llmproxy-data:/data llmproxy
+```
+
+Inside the container, `LLMPROXY_CONFIG` defaults to `/data/llmproxy.config.json`. On the first container start, `llmproxy` creates that file automatically with the standard default settings if it does not exist yet.
+
 ## Development
 
 Use the dev mode when you want to see frontend changes immediately:
