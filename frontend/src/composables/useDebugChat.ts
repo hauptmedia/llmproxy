@@ -220,6 +220,7 @@ export function useDebugChat(
           repeat_penalty: state.debug.params.repeat_penalty,
           max_tokens: Math.max(1, Math.round(state.debug.params.max_tokens)),
           ...(diagnosticTools ? { tools: diagnosticTools } : {}),
+          ...(diagnosticTools ? { tool_choice: state.debug.params.tool_choice } : {}),
         };
 
         state.debug.lastRequestId = currentRequestId;

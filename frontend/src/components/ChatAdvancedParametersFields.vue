@@ -8,12 +8,15 @@ interface AdvancedParamHelp {
   min_p: string;
   repeat_penalty: string;
   max_tokens: string;
+  tool_choice: string;
 }
 
 defineProps<{
   params: DebugParams;
   help: AdvancedParamHelp;
   idPrefix: string;
+  enableDiagnosticTools: boolean;
+  mcpServerEnabled: boolean;
 }>();
 </script>
 
@@ -106,6 +109,22 @@ defineProps<{
             step="1"
             min="1"
           />
+        </div>
+        <div class="field">
+          <div class="field-label-row">
+            <label class="field-label" :for="`${idPrefix}-tool-choice`">Tool choice</label>
+            <span class="chat-param-help" :title="help.tool_choice" aria-label="Tool choice help">i</span>
+          </div>
+          <select
+            :id="`${idPrefix}-tool-choice`"
+            v-model="params.tool_choice"
+            :title="help.tool_choice"
+            :disabled="!enableDiagnosticTools || !mcpServerEnabled"
+          >
+            <option value="auto">auto</option>
+            <option value="required">force tool</option>
+            <option value="none">none</option>
+          </select>
         </div>
       </div>
     </div>

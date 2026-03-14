@@ -30,6 +30,22 @@ export function useRequestDetail(
     return isActiveRequestId(requestId) || hasRecentRequestDetail(requestId);
   }
 
+  function shouldRefreshOpenDetail(): boolean {
+    if (!state.requestDetail.open || !state.requestDetail.requestId) {
+      return false;
+    }
+
+    if (!hasSnapshotRequestDetail(state.requestDetail.requestId)) {
+      return false;
+    }
+
+    if (!state.requestDetail.detail) {
+      return true;
+    }
+
+    return state.requestDetail.detail.live === true;
+  }
+
   async function loadRequestDetail(requestId: string, useCache = true): Promise<void> {
     if (useCache && !isActiveRequestId(requestId) && state.requestDetail.cache[requestId]) {
       state.requestDetail.detail = state.requestDetail.cache[requestId];
@@ -100,7 +116,7 @@ export function useRequestDetail(
   }
 
   function scheduleOpenDetailRefresh(): void {
-    if (!state.requestDetail.open || !state.requestDetail.requestId || !hasSnapshotRequestDetail(state.requestDetail.requestId)) {
+    if (!shouldRefreshOpenDetail()) {
       return;
     }
 
@@ -159,7 +175,13 @@ export function useRequestDetail(
     Array.isArray(requestBody.value?.messages) ? requestBody.value.messages : []
   ));
 
+  const requestDetailIsLive = computed(() => state.requestDetail.detail?.live === true);
+
   const requestLiveConnection = computed(() => {
+    if (!requestDetailIsLive.value) {
+      return null;
+    }
+
     const requestId = state.requestDetail.requestId;
     if (!requestId) {
       return null;
@@ -179,8 +201,8 @@ export function useRequestDetail(
   const requestResponseMetricRows = computed(() => buildRequestResponseMetricRows(state.requestDetail.detail?.entry, {
     requestBody: state.requestDetail.detail?.requestBody,
     responseBody: state.requestDetail.detail?.responseBody,
-    backends: state.snapshot.backends,
-    live: Boolean(state.requestDetail.detail?.live),
+    backends: requestDetailIsLive.value ? state.snapshot.backends : [],
+    live: requestDetailIsLive.value,
   }));
   const requestParamRows = computed(() => buildRequestParamRows(
     requestBody.value,

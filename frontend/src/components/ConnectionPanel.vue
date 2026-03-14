@@ -74,45 +74,6 @@ function connectionIdentityBadges(connection: ActiveConnectionSnapshot): Array<{
   return badges;
 }
 
-function connectionStatusDotClass(connection: ActiveConnectionSnapshot): string {
-  if (connection.error) {
-    return "bad";
-  }
-
-  if (connection.phase === "queued") {
-    return "warn";
-  }
-
-  if (connection.phase === "streaming" && connection.clientStream) {
-    return "good";
-  }
-
-  if (connection.phase === "connected" || connection.phase === "streaming") {
-    return "warn";
-  }
-
-  return "neutral";
-}
-
-function connectionStatusDotTitle(connection: ActiveConnectionSnapshot): string {
-  if (connection.error) {
-    return `Request is currently failing to reach or use the backend. Error: ${connection.error}`;
-  }
-
-  if (connection.phase === "queued") {
-    return "Request is waiting in the queue for a free backend slot.";
-  }
-
-  if (connection.phase === "connected") {
-    return "A backend is assigned, but the response has not started yet.";
-  }
-
-  if (connection.clientStream) {
-    return "The request is actively streaming data back to the client.";
-  }
-
-  return "The backend is generating while llmproxy is still buffering the response for the client.";
-}
 </script>
 
 <template>
@@ -133,16 +94,6 @@ function connectionStatusDotTitle(connection: ActiveConnectionSnapshot): string 
         <div class="request-main">
           <div class="request-card-body">
             <div class="request-title-row">
-              <span
-                class="request-status-dot-shell"
-                :title="connectionStatusDotTitle(connection)"
-              >
-                <span
-                  class="request-status-dot"
-                  :class="connectionStatusDotClass(connection)"
-                  aria-hidden="true"
-                ></span>
-              </span>
               <span
                 v-for="identityBadge in connectionIdentityBadges(connection)"
                 :key="`${connection.id}-${identityBadge.text}`"

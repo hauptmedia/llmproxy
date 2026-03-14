@@ -239,6 +239,7 @@ export interface DebugParams {
   min_p: number;
   repeat_penalty: number;
   max_tokens: number;
+  tool_choice: "auto" | "required" | "none";
 }
 
 export interface DebugMetrics {

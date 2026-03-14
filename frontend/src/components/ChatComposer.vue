@@ -9,6 +9,7 @@ interface AdvancedParamHelp {
   min_p: string;
   repeat_penalty: string;
   max_tokens: string;
+  tool_choice: string;
 }
 
 defineProps<{
@@ -54,6 +55,8 @@ const emit = defineEmits<{
       :params="params"
       :help="advancedParamHelp"
       :id-prefix="advancedIdPrefix"
+      :enable-diagnostic-tools="enableDiagnosticTools"
+      :mcp-server-enabled="mcpServerEnabled"
     />
 
     <div class="chat-composer-actions">
