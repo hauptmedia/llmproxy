@@ -364,14 +364,14 @@ function renderReasoningPanel(reasoningContent: unknown, collapsed: boolean): st
   }
 
   return (
-    `<details class="reasoning-panel"${collapsed ? "" : " open"}>` +
-      `<summary class="reasoning-summary" title="${escapeHtml(
+    `<details class="compact-bubble-panel compact-bubble-panel-reasoning"${collapsed ? "" : " open"}>` +
+      `<summary class="compact-bubble-summary" title="${escapeHtml(
         collapsed
           ? "Model reasoning captured for this message. Expand it to inspect the reasoning output."
           : "Model reasoning captured for this message. Collapse it to focus on the final content.",
       )}">` +
         `<span aria-hidden="true">🧠</span>` +
-        `<span class="reasoning-chevron" aria-hidden="true">▼</span>` +
+        `<span class="compact-bubble-chevron" aria-hidden="true">▼</span>` +
       `</summary>` +
       `<div class="reasoning-content">` +
         renderMessageStringHtml(reasoningContent) +
@@ -386,8 +386,8 @@ function renderReasoningPanelLive(reasoningContent: unknown, collapsed: boolean,
   }
 
   return (
-    `<details class="reasoning-panel${live ? " reasoning-live" : ""}"${collapsed ? "" : " open"}>` +
-      `<summary class="reasoning-summary" title="${escapeHtml(
+    `<details class="compact-bubble-panel compact-bubble-panel-reasoning${live ? " reasoning-live" : ""}"${collapsed ? "" : " open"}>` +
+      `<summary class="compact-bubble-summary" title="${escapeHtml(
         collapsed
           ? "Model reasoning captured for this message. Expand it to inspect the reasoning output."
           : "Model reasoning captured for this message. Collapse it to focus on the final content.",
@@ -401,13 +401,149 @@ function renderReasoningPanelLive(reasoningContent: unknown, collapsed: boolean,
             `<path d="M13.5 10.5h2"></path>` +
           `</svg>` +
         `</span>` +
-        `<span class="reasoning-chevron" aria-hidden="true">â–¼</span>` +
+        `<span class="compact-bubble-chevron" aria-hidden="true">â–¼</span>` +
       `</summary>` +
       `<div class="reasoning-content">` +
         renderMessageStringHtml(reasoningContent) +
       `</div>` +
     `</details>`
   );
+}
+
+function renderToolResponseContentHtml(content: unknown): string {
+  if (typeof content === "string") {
+    return renderMessageStringHtml(content);
+  }
+
+  if (content === null || content === undefined) {
+    return "";
+  }
+
+  return renderCodeBlockHtml(prettyJson(content), "turn-content");
+}
+
+function renderToolResponsePanel(content: unknown, collapsed: boolean): string {
+  const bodyHtml = renderToolResponseContentHtml(content);
+  if (!bodyHtml) {
+    return "";
+  }
+
+  return (
+    `<details class="compact-bubble-panel compact-bubble-panel-tool"${collapsed ? "" : " open"}>` +
+      `<summary class="compact-bubble-summary" title="${escapeHtml(
+        collapsed
+          ? "Tool response captured for this message. Expand it to inspect the returned payload."
+          : "Tool response captured for this message. Collapse it to focus on the conversation flow.",
+      )}">` +
+        `<span class="tool-response-icon" aria-hidden="true">` +
+          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
+            `<path d="M9 7V6a3 3 0 0 1 6 0v1"></path>` +
+            `<path d="M4.75 8.5h14.5"></path>` +
+            `<path d="M6.25 8.5h11.5a1.5 1.5 0 0 1 1.5 1.5v6.75a2 2 0 0 1-2 2H6.75a2 2 0 0 1-2-2V10a1.5 1.5 0 0 1 1.5-1.5Z"></path>` +
+            `<path d="M10 12h4"></path>` +
+            `<path d="M12 10v4"></path>` +
+          `</svg>` +
+        `</span>` +
+        `<span class="compact-bubble-chevron" aria-hidden="true">▼</span>` +
+      `</summary>` +
+      `<div class="tool-response-content">` +
+        bodyHtml +
+      `</div>` +
+    `</details>`
+  );
+}
+
+type CompactBubbleDisclosureOptions = {
+  kindClass: string;
+  contentClass: string;
+  iconClass: string;
+  iconHtml: string;
+  labelText?: string;
+  labelTitle?: string;
+  bodyHtml: string;
+  collapsed: boolean;
+  collapsedTitle: string;
+  expandedTitle: string;
+  extraRootClasses?: string[];
+};
+
+function renderCompactBubbleDisclosure(options: CompactBubbleDisclosureOptions): string {
+  if (!options.bodyHtml) {
+    return "";
+  }
+
+  const rootClasses = [
+    "compact-bubble-panel",
+    options.kindClass,
+    ...(options.extraRootClasses ?? []),
+  ].filter(Boolean).join(" ");
+
+  return (
+    `<details class="${escapeHtml(rootClasses)}"${options.collapsed ? "" : " open"}>` +
+      `<summary class="compact-bubble-summary" title="${escapeHtml(
+        options.collapsed ? options.collapsedTitle : options.expandedTitle,
+      )}">` +
+        `<span class="compact-bubble-icon ${escapeHtml(options.iconClass)}" aria-hidden="true">` +
+          options.iconHtml +
+        `</span>` +
+        (options.labelText
+          ? `<span class="compact-bubble-label"${options.labelTitle ? ` title="${escapeHtml(options.labelTitle)}"` : ""}>${escapeHtml(options.labelText)}</span>`
+          : "") +
+        `<span class="compact-bubble-chevron" aria-hidden="true"></span>` +
+      `</summary>` +
+      `<div class="compact-bubble-content ${escapeHtml(options.contentClass)}">` +
+        options.bodyHtml +
+      `</div>` +
+    `</details>`
+  );
+}
+
+function renderReasoningBubble(reasoningContent: unknown, collapsed: boolean, live: boolean): string {
+  if (typeof reasoningContent !== "string" || reasoningContent.length === 0) {
+    return "";
+  }
+
+  return renderCompactBubbleDisclosure({
+    kindClass: "compact-bubble-panel-reasoning",
+    contentClass: "reasoning-content",
+    iconClass: "reasoning-icon",
+    iconHtml:
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
+        `<path d="M9 7.5a3 3 0 0 1 5.2-2.05A3.2 3.2 0 0 1 19 8.1c0 1.08-.44 2.06-1.16 2.77.75.58 1.23 1.49 1.23 2.51A3.12 3.12 0 0 1 15.95 16.5H15.5a2.5 2.5 0 0 1-4.78.72A2.8 2.8 0 0 1 8.5 18a3 3 0 0 1-2.96-3.43 3.02 3.02 0 0 1-1.54-2.63c0-1.03.5-1.94 1.27-2.52A3.17 3.17 0 0 1 5 8.1a3.2 3.2 0 0 1 4-3.09"></path>` +
+        `<path d="M10.5 8.75v6.5"></path>` +
+        `<path d="M13.5 8.75v6.5"></path>` +
+        `<path d="M8.5 10.5h2"></path>` +
+        `<path d="M13.5 10.5h2"></path>` +
+      `</svg>`,
+    bodyHtml: renderMessageStringHtml(reasoningContent),
+    collapsed,
+    collapsedTitle: "Model reasoning captured for this message. Expand it to inspect the reasoning output.",
+    expandedTitle: "Model reasoning captured for this message. Collapse it to focus on the final content.",
+    extraRootClasses: live ? ["reasoning-live"] : [],
+  });
+}
+
+function renderToolResponseBubble(content: unknown, collapsed: boolean, toolName: string, toolCallId: string): string {
+  const bodyHtml = renderToolResponseContentHtml(content);
+  return renderCompactBubbleDisclosure({
+    kindClass: "compact-bubble-panel-tool",
+    contentClass: "tool-response-content",
+    iconClass: "tool-response-icon",
+    iconHtml:
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
+        `<path d="M9 7V6a3 3 0 0 1 6 0v1"></path>` +
+        `<path d="M4.75 8.5h14.5"></path>` +
+        `<path d="M6.25 8.5h11.5a1.5 1.5 0 0 1 1.5 1.5v6.75a2 2 0 0 1-2 2H6.75a2 2 0 0 1-2-2V10a1.5 1.5 0 0 1 1.5-1.5Z"></path>` +
+        `<path d="M10 12h4"></path>` +
+        `<path d="M12 10v4"></path>` +
+      `</svg>`,
+    labelText: toolName || "Tool response",
+    labelTitle: toolCallId ? `Tool call id: ${toolCallId}` : "",
+    bodyHtml,
+    collapsed,
+    collapsedTitle: "Tool response captured for this message. Expand it to inspect the returned payload.",
+    expandedTitle: "Tool response captured for this message. Collapse it to focus on the conversation flow.",
+  });
 }
 
 function renderMessageContentHtml(content: unknown): string {
@@ -459,6 +595,20 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
     typeof message?.reasoning_content === "string" &&
     message.reasoning_content.length > 0 &&
     !(typeof options.finishReason === "string" && options.finishReason.length > 0);
+  const reasoningOnly =
+    typeof message?.reasoning_content === "string" &&
+    message.reasoning_content.length > 0 &&
+    !hasVisibleMessageContent(message?.content) &&
+    !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
+    !isClientRecord(message?.function_call) &&
+    !Array.isArray(message?.tool_calls);
+  const toolResponseOnly =
+    role === "tool" &&
+    hasVisibleMessageContent(message?.content) &&
+    !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
+    !isClientRecord(message?.function_call) &&
+    !Array.isArray(message?.tool_calls) &&
+    !(typeof message?.reasoning_content === "string" && message.reasoning_content.length > 0);
   const metaBits: UiBadge[] = [];
 
   if (!options.hideRoleBadge && role !== "user" && role !== "assistant") {
@@ -490,7 +640,7 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
   const hasHead = Boolean(options.heading) || metaBits.length > 0;
 
   return (
-    `<article class="turn ${escapeHtml(role)}">` +
+    `<article class="turn ${escapeHtml(role)}${(reasoningOnly || toolResponseOnly) ? " compact-bubble-only" : ""}${reasoningOnly ? " reasoning-only" : ""}${toolResponseOnly ? " tool-response-only" : ""}">` +
       (hasHead
         ? (
           `<div class="turn-head">` +
@@ -505,9 +655,16 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
           `</div>`
         )
         : "") +
-      renderReasoningPanelLive(message?.reasoning_content, options.reasoningCollapsed ?? true, reasoningLive) +
+      renderReasoningBubble(message?.reasoning_content, options.reasoningCollapsed ?? true, reasoningLive) +
       ((hasVisibleMessageContent(message?.content) || !message?.reasoning_content)
-        ? renderMessageContentHtml(message?.content)
+        ? (role === "tool"
+          ? renderToolResponseBubble(
+              message?.content,
+              true,
+              typeof message?.name === "string" ? message.name : "",
+              typeof message?.tool_call_id === "string" ? message.tool_call_id : "",
+            )
+          : renderMessageContentHtml(message?.content))
         : "") +
       (typeof message?.refusal === "string" && message.refusal.length > 0
         ? renderDetailBlock("Refusal", message.refusal)

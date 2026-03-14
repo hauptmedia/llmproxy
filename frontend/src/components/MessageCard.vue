@@ -28,7 +28,7 @@ const reasoningExpanded = ref(false);
 
 function handleReasoningToggle(event: Event): void {
   const target = event.target;
-  if (!(target instanceof HTMLDetailsElement) || !target.classList.contains("reasoning-panel")) {
+  if (!(target instanceof HTMLDetailsElement) || !target.classList.contains("compact-bubble-panel-reasoning")) {
     return;
   }
 
@@ -64,34 +64,6 @@ const assistantAvatarTitle = computed(() => {
       : "";
 
   return model ? `Model: ${model}` : "";
-});
-
-const toolAvatarTitle = computed(() => {
-  if (role.value !== "tool") {
-    return "";
-  }
-
-  const parts: string[] = [];
-  const toolName =
-    typeof props.message.name === "string" && props.message.name.trim().length > 0
-      ? props.message.name.trim()
-      : "";
-  const toolCallId =
-    typeof props.message.tool_call_id === "string" && props.message.tool_call_id.trim().length > 0
-      ? props.message.tool_call_id.trim()
-      : "";
-
-  if (toolName) {
-    parts.push(`Tool: ${toolName}`);
-  } else {
-    parts.push("Tool result");
-  }
-
-  if (toolCallId) {
-    parts.push(`Call ID: ${toolCallId}`);
-  }
-
-  return parts.join("\n");
 });
 
 const hostClass = computed(() => {
@@ -161,7 +133,6 @@ onBeforeUnmount(() => {
       v-if="showAvatar && role === 'tool'"
       class="message-avatar"
       :class="`role-${role}`"
-      :title="toolAvatarTitle || undefined"
       aria-hidden="true"
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
