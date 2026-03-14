@@ -1,13 +1,32 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import ace, { type Ace } from "ace-builds";
-import "ace-builds/src-noconflict/mode-json";
-import "ace-builds/src-noconflict/theme-textmate";
-import "ace-builds/src-noconflict/ext-searchbox";
-import workerJsonUrl from "ace-builds/src-noconflict/worker-json?url";
+import type { Ace } from "ace-builds";
 import { prettyJson } from "../utils/formatters";
 
-ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
+type AceModule = typeof import("ace-builds");
+
+let aceLoader: Promise<AceModule> | null = null;
+
+async function loadAce(): Promise<AceModule> {
+  if (!aceLoader) {
+    aceLoader = (async () => {
+      const aceModule = await import("ace-builds") as unknown as { default: AceModule };
+      const ace = aceModule.default;
+      const [{ default: workerJsonUrl }] = await Promise.all([
+        import("ace-builds/src-noconflict/worker-json?url"),
+        import("ace-builds/src-noconflict/mode-json"),
+        import("ace-builds/src-noconflict/theme-textmate"),
+        import("ace-builds/src-noconflict/ext-searchbox"),
+      ]);
+
+      ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
+
+      return ace;
+    })();
+  }
+
+  return aceLoader;
+}
 
 const props = withDefaults(defineProps<{
   value?: unknown;
@@ -21,6 +40,7 @@ const props = withDefaults(defineProps<{
 const editorHost = ref<HTMLElement | null>(null);
 let editor: Ace.Editor | null = null;
 let resizeObserver: ResizeObserver | null = null;
+let disposed = false;
 
 const serializedValue = computed(() => {
   const value = props.value;
@@ -62,51 +82,66 @@ function syncEditorValue(): void {
   editor.clearSelection();
 }
 
-onMounted(() => {
+async function initializeEditor(): Promise<void> {
   if (!editorHost.value) {
     return;
   }
 
-  editor = ace.edit(editorHost.value, {
-    mode: "ace/mode/json",
-    theme: "ace/theme/textmate",
-    readOnly: props.readOnly,
-    showPrintMargin: false,
-    highlightActiveLine: false,
-    highlightGutterLine: false,
-    showGutter: true,
-    useWorker: true,
-    displayIndentGuides: true,
-    wrap: true,
-    tabSize: 2,
-    useSoftTabs: true,
-    fontSize: 14,
-    scrollPastEnd: 0.25,
-    fixedWidthGutter: true,
-    showFoldWidgets: true,
-  });
+  try {
+    const ace = await loadAce();
 
-  editor.session.setUseWorker(true);
-  editor.session.setUseWrapMode(true);
-  editor.session.setFoldStyle("markbeginend");
-  editor.renderer.setScrollMargin(12, 12, 12, 12);
-  editor.renderer.setPadding(12);
-  editor.setValue(serializedValue.value, -1);
-  editor.clearSelection();
+    if (disposed || !editorHost.value) {
+      return;
+    }
 
-  if (typeof ResizeObserver !== "undefined") {
-    resizeObserver = new ResizeObserver(() => {
+    editor = ace.edit(editorHost.value, {
+      mode: "ace/mode/json",
+      theme: "ace/theme/textmate",
+      readOnly: props.readOnly,
+      showPrintMargin: false,
+      highlightActiveLine: false,
+      highlightGutterLine: false,
+      showGutter: true,
+      useWorker: true,
+      displayIndentGuides: true,
+      wrap: true,
+      tabSize: 2,
+      useSoftTabs: true,
+      fontSize: 14,
+      scrollPastEnd: 0.25,
+      fixedWidthGutter: true,
+      showFoldWidgets: true,
+    });
+
+    editor.session.setUseWorker(true);
+    editor.session.setUseWrapMode(true);
+    editor.session.setFoldStyle("markbeginend");
+    editor.renderer.setScrollMargin(12, 12, 12, 12);
+    editor.renderer.setPadding(12);
+    editor.setValue(serializedValue.value, -1);
+    editor.clearSelection();
+
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        editor?.resize();
+      });
+      resizeObserver.observe(editorHost.value);
+    }
+
+    window.requestAnimationFrame(() => {
       editor?.resize();
     });
-    resizeObserver.observe(editorHost.value);
+  } catch (error) {
+    console.error("Failed to initialize the JSON editor.", error);
   }
+}
 
-  window.requestAnimationFrame(() => {
-    editor?.resize();
-  });
+onMounted(() => {
+  void initializeEditor();
 });
 
 onBeforeUnmount(() => {
+  disposed = true;
   resizeObserver?.disconnect();
   resizeObserver = null;
   editor?.destroy();
