@@ -10,21 +10,13 @@ import { formatDate, shortId } from "../utils/formatters";
 import { isClientRecord } from "../utils/guards";
 import { readErrorResponse } from "../utils/http";
 import { renderResponseChoicesHtml, renderToolsHtml } from "../utils/message-rendering";
+import { formatClientIp } from "../utils/client-ip";
 
 export function useRequestDetail(
   state: DashboardState,
   onErrorToast: (title: string, message: string) => void,
 ) {
   let detailRefreshTimer: number | undefined;
-
-  function formatClientIp(value?: string): string {
-    const trimmed = value?.trim();
-    if (!trimmed) {
-      return "";
-    }
-
-    return trimmed.startsWith("::ffff:") ? trimmed.slice(7) : trimmed;
-  }
 
   function isActiveRequestId(requestId: string): boolean {
     return state.snapshot.activeConnections.some((connection) => connection.id === requestId);

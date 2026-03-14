@@ -404,6 +404,13 @@ export interface DiagnosticPromptDefinition {
   }>;
 }
 
+export interface DiagnosticsToolDefinition {
+  name: string;
+  title: string;
+  description: string;
+  inputSchema?: Record<string, unknown>;
+}
+
 export interface DiagnosticPromptMessage {
   role: "system" | "user";
   content: {

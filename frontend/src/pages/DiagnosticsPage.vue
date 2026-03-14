@@ -6,26 +6,16 @@ import type {
   DiagnosticPromptDefinition,
   DiagnosticPromptPayload,
   DiagnosticsReportPayload,
-  RequestLogEntry,
+  DiagnosticsToolDefinition,
 } from "../types/dashboard";
-import { readErrorResponse } from "../utils/http";
+import {
+  getDiagnosticPrompt,
+  listDiagnosticPrompts,
+  listDiagnosticsTools,
+} from "../utils/diagnostics-mcp";
 import { formatDuration } from "../utils/formatters";
-
-interface DiagnosticsRequestOption {
-  id: string;
-  time: string;
-  label: string;
-  status: string;
-  model: string;
-  backend: string;
-  live: boolean;
-}
-
-interface DiagnosticsToolDefinition {
-  name: string;
-  title: string;
-  description: string;
-}
+import { readErrorResponse } from "../utils/http";
+import { buildDiagnosticsRequestOptions } from "../utils/request-catalog";
 
 const store = useDashboardStore();
 const router = useRouter();
@@ -40,43 +30,7 @@ const selectedPromptName = ref("");
 const toolDefinitions = ref<DiagnosticsToolDefinition[]>([]);
 const endpointUrl = `${window.location.origin}/api/diagnostics/mcp`;
 
-const availableRequests = computed<DiagnosticsRequestOption[]>(() => {
-  const rows = new Map<string, DiagnosticsRequestOption>();
-
-  for (const connection of store.state.snapshot.activeConnections) {
-    if (!connection.hasDetail) {
-      continue;
-    }
-
-    rows.set(connection.id, {
-      id: connection.id,
-      time: connection.startedAt,
-      label: `${store.shortId(connection.id)} · ${connection.method} ${connection.path}`,
-      status: connection.phase,
-      model: connection.model || "unknown",
-      backend: connection.backendName || "unassigned",
-      live: true,
-    });
-  }
-
-  for (const entry of store.state.snapshot.recentRequests) {
-    if (!entry.hasDetail || rows.has(entry.id)) {
-      continue;
-    }
-
-    rows.set(entry.id, {
-      id: entry.id,
-      time: entry.time,
-      label: `${store.shortId(entry.id)} · ${entry.method} ${entry.path}`,
-      status: normalizeRequestStatus(entry),
-      model: entry.model || "unknown",
-      backend: entry.backendName || "unassigned",
-      live: false,
-    });
-  }
-
-  return Array.from(rows.values()).sort((left, right) => right.time.localeCompare(left.time));
-});
+const availableRequests = computed(() => buildDiagnosticsRequestOptions(store.state.snapshot, store.shortId));
 
 const selectedRequest = computed(() => (
   diagnosticsPayload.value?.detail ?? null
@@ -135,37 +89,8 @@ async function loadCapabilities(): Promise<void> {
   loadingCapabilities.value = true;
 
   try {
-    await callMcp("initialize", {
-      clientInfo: {
-        name: "llmproxy-dashboard",
-        version: "1.0.0",
-      },
-    });
-
-    const toolsPayload = await callMcp("tools/list");
-    toolDefinitions.value = Array.isArray(toolsPayload.tools)
-      ? toolsPayload.tools.map((tool) => ({
-        name: String(tool.name ?? ""),
-        title: String(tool.title ?? tool.name ?? ""),
-        description: String(tool.description ?? ""),
-      }))
-      : [];
-
-    const promptsPayload = await callMcp("prompts/list");
-    promptDefinitions.value = Array.isArray(promptsPayload.prompts)
-      ? promptsPayload.prompts.map((prompt) => ({
-        name: String(prompt.name ?? ""),
-        title: String(prompt.title ?? prompt.name ?? ""),
-        description: String(prompt.description ?? ""),
-        arguments: Array.isArray(prompt.arguments)
-          ? prompt.arguments.map((argument: { name?: unknown; description?: unknown; required?: unknown }) => ({
-            name: String(argument.name ?? ""),
-            description: String(argument.description ?? ""),
-            required: argument.required === true,
-          }))
-          : [],
-      }))
-      : [];
+    toolDefinitions.value = await listDiagnosticsTools();
+    promptDefinitions.value = await listDiagnosticPrompts();
   } catch (error) {
     store.showToast("Diagnostics", error instanceof Error ? error.message : String(error));
   } finally {
@@ -208,86 +133,13 @@ async function loadPrompt(promptName: string): Promise<void> {
   loadingPrompt.value = true;
 
   try {
-    const payload = await callMcp("prompts/get", {
-      name: promptName,
-      arguments: {
-        request_id: selectedRequestId.value,
-      },
-    });
-
-    promptPayload.value = {
-      name: String(payload.name ?? promptName),
-      description: String(payload.description ?? ""),
-      messages: Array.isArray(payload.messages)
-        ? payload.messages
-          .map((message) => normalizePromptMessage(message))
-          .filter((message): message is DiagnosticPromptPayload["messages"][number] => Boolean(message))
-        : [],
-    };
+    promptPayload.value = await getDiagnosticPrompt(promptName, selectedRequestId.value);
   } catch (error) {
     promptPayload.value = null;
     store.showToast("Diagnostics", error instanceof Error ? error.message : String(error));
   } finally {
     loadingPrompt.value = false;
   }
-}
-
-async function callMcp(method: string, params?: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const response = await fetch("/api/diagnostics/mcp", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: Date.now(),
-      method,
-      params,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(await readErrorResponse(response));
-  }
-
-  const payload = await response.json() as {
-    result?: Record<string, unknown>;
-    error?: {
-      message?: string;
-    };
-  };
-
-  if (payload.error?.message) {
-    throw new Error(payload.error.message);
-  }
-
-  return payload.result ?? {};
-}
-
-function normalizePromptMessage(value: unknown): DiagnosticPromptPayload["messages"][number] | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return undefined;
-  }
-
-  const candidate = value as {
-    role?: unknown;
-    content?: {
-      type?: unknown;
-      text?: unknown;
-    };
-  };
-
-  if ((candidate.role !== "system" && candidate.role !== "user") || candidate.content?.type !== "text" || typeof candidate.content.text !== "string") {
-    return undefined;
-  }
-
-  return {
-    role: candidate.role,
-    content: {
-      type: "text",
-      text: candidate.content.text,
-    },
-  };
 }
 
 async function copyPrompt(): Promise<void> {
@@ -338,18 +190,6 @@ function openSelectedRequest(): void {
   }
 
   void store.openRequestDetail(selectedRequestId.value);
-}
-
-function normalizeRequestStatus(entry: RequestLogEntry): string {
-  if (entry.outcome === "success" && entry.finishReason) {
-    return entry.finishReason;
-  }
-
-  if (entry.outcome === "queued_timeout") {
-    return "queue timeout";
-  }
-
-  return entry.outcome;
 }
 
 function severityLabel(severity: "info" | "warn" | "bad"): string {
@@ -596,3 +436,4 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
     </div>
   </section>
 </template>
+

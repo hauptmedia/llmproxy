@@ -1,5 +1,9 @@
 import { toRaw } from "vue";
 import type { DashboardState, DebugMetrics, DebugTranscriptEntry } from "../types/dashboard";
+import {
+  buildDiagnosticsChatTools,
+  callDiagnosticsTool,
+} from "../utils/diagnostics-mcp";
 import { formatTokenRate, prettyJson } from "../utils/formatters";
 import { isClientRecord } from "../utils/guards";
 import { readErrorResponse } from "../utils/http";
@@ -89,7 +93,6 @@ export function useDebugChat(
   onErrorToast: (title: string, message: string) => void,
 ) {
   let metricsTicker: number | undefined;
-  let cachedDiagnosticTools: Array<Record<string, unknown>> | null = null;
 
   function cloneDebugToolCall(value: unknown): unknown {
     if (!isClientRecord(value)) {
@@ -539,105 +542,6 @@ export function useDebugChat(
     return currentAssistantTurn;
   }
 
-  async function loadDiagnosticChatTools(): Promise<Array<Record<string, unknown>>> {
-    if (cachedDiagnosticTools) {
-      return cachedDiagnosticTools.map((tool) => ({ ...tool }));
-    }
-
-    const response = await fetch("/api/diagnostics/mcp", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: Date.now(),
-        method: "tools/list",
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(await readErrorResponse(response));
-    }
-
-    const payload = await response.json() as {
-      result?: {
-        tools?: unknown[];
-      };
-      error?: {
-        message?: string;
-      };
-    };
-
-    if (payload.error?.message) {
-      throw new Error(payload.error.message);
-    }
-
-    const tools = Array.isArray(payload.result?.tools)
-      ? payload.result.tools
-        .filter((tool): tool is Record<string, unknown> => isClientRecord(tool))
-        .map((tool) => ({
-          type: "function",
-          function: {
-            name: typeof tool.name === "string" ? tool.name : "unnamed_tool",
-            description: typeof tool.description === "string" ? tool.description : "",
-            parameters: isClientRecord(tool.inputSchema)
-              ? tool.inputSchema
-              : {
-                type: "object",
-                properties: {},
-                additionalProperties: false,
-              },
-          },
-        }))
-      : [];
-
-    if (tools.length === 0) {
-      throw new Error("Diagnostics MCP endpoint did not return any tools.");
-    }
-
-    cachedDiagnosticTools = tools;
-    return tools.map((tool) => ({ ...tool }));
-  }
-
-  async function callDiagnosticChatTool(
-    name: string,
-    args: Record<string, unknown>,
-  ): Promise<Record<string, unknown>> {
-    const response = await fetch("/api/diagnostics/mcp", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: Date.now(),
-        method: "tools/call",
-        params: {
-          name,
-          arguments: args,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(await readErrorResponse(response));
-    }
-
-    const payload = await response.json() as {
-      result?: Record<string, unknown>;
-      error?: {
-        message?: string;
-      };
-    };
-
-    if (payload.error?.message) {
-      throw new Error(payload.error.message);
-    }
-
-    return payload.result ?? {};
-  }
-
   function extractDebugToolCalls(entry: DebugTranscriptEntry): Array<{
     id: string;
     name: string;
@@ -712,7 +616,7 @@ export function useDebugChat(
 
     for (const toolCall of toolCalls) {
       try {
-        const result = await callDiagnosticChatTool(toolCall.name, toolCall.args);
+        const result = await callDiagnosticsTool(toolCall.name, toolCall.args);
         responses.push({
           role: "tool",
           name: toolCall.name,
@@ -811,7 +715,7 @@ export function useDebugChat(
     let diagnosticTools: Array<Record<string, unknown>> | undefined;
     if (state.debug.enableDiagnosticTools) {
       try {
-        diagnosticTools = await loadDiagnosticChatTools();
+        diagnosticTools = await buildDiagnosticsChatTools();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         state.debug.error = message;

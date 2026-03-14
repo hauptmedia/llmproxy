@@ -3,6 +3,7 @@ import type { PropType } from "vue";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import { badgeClass, buildConnectionTransportBadges, buildModelIdentityBadge } from "../utils/dashboard-badges";
 import type { ActiveConnectionSnapshot } from "../types/dashboard";
+import { formatClientIp } from "../utils/client-ip";
 
 const props = defineProps({
   panelId: {
@@ -28,23 +29,6 @@ const props = defineProps({
 });
 
 const store = useDashboardStore();
-
-function formatClientIp(value?: string): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  if (trimmed.startsWith("::ffff:")) {
-    return trimmed.slice(7);
-  }
-
-  return trimmed;
-}
 
 function connectionIdentityBadges(connection: ActiveConnectionSnapshot): Array<{ text: string; title: string; className: string }> {
   const badges: Array<{ text: string; title: string; className: string }> = [];
