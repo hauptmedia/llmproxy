@@ -74,14 +74,14 @@ function submitDialog(): void {
     baseUrl: draftFields.baseUrl,
     connector: draftFields.connector,
     enabled: draftFields.enabled,
-    maxConcurrency: draftFields.maxConcurrency,
+    maxConcurrency: String(draftFields.maxConcurrency ?? ""),
     healthPath: draftFields.healthPath,
     modelsText: draftFields.modelsText,
     headersText: draftFields.headersText,
     apiKey: draftFields.apiKey,
     apiKeyEnv: draftFields.apiKeyEnv,
     clearApiKey: draftFields.clearApiKey,
-    timeoutMs: draftFields.timeoutMs,
+    timeoutMs: String(draftFields.timeoutMs ?? ""),
   });
 }
 

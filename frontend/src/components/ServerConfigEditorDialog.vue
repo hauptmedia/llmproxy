@@ -80,16 +80,20 @@ function closeDialog(): void {
 function submitDialog(): void {
   emit("save", {
     host: draftFields.host,
-    port: draftFields.port,
-    requestTimeoutMs: draftFields.requestTimeoutMs,
-    queueTimeoutMs: draftFields.queueTimeoutMs,
-    healthCheckIntervalMs: draftFields.healthCheckIntervalMs,
-    recentRequestLimit: draftFields.recentRequestLimit,
+    port: String(draftFields.port ?? ""),
+    requestTimeoutMs: String(draftFields.requestTimeoutMs ?? ""),
+    queueTimeoutMs: String(draftFields.queueTimeoutMs ?? ""),
+    healthCheckIntervalMs: String(draftFields.healthCheckIntervalMs ?? ""),
+    recentRequestLimit: String(draftFields.recentRequestLimit ?? ""),
     mcpServerEnabled: draftFields.mcpServerEnabled,
   });
 }
 
-function normalizeStringValue(value: string | undefined): string {
+function normalizeStringValue(value: string | number | undefined): string {
+  if (typeof value === "number") {
+    return String(value);
+  }
+
   return (value ?? "").trim();
 }
 

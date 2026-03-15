@@ -2459,7 +2459,7 @@ test("raw upstream HTTP 400 responses are retained, noted, and diagnosed as erro
       });
       response.end(JSON.stringify({
         error: {
-          message: "messages[1].content must be a string.",
+          message: "The server had an error while processing your request. Sorry about that! Please retry.",
           type: "invalid_request_error",
           code: "bad_request",
         },
@@ -2559,7 +2559,7 @@ test("raw upstream HTTP 400 responses are retained, noted, and diagnosed as erro
       code?: string;
     };
   };
-  assert.equal(responsePayload.error?.message, "messages[1].content must be a string.");
+  assert.equal(responsePayload.error?.message, "The server had an error while processing your request. Please retry.");
   assert.equal(responsePayload.error?.type, "invalid_request_error");
   assert.equal(responsePayload.error?.code, "bad_request");
 
@@ -2587,7 +2587,7 @@ test("raw upstream HTTP 400 responses are retained, noted, and diagnosed as erro
 
   assert.equal(recentEntry?.outcome, "error");
   assert.equal(recentEntry?.statusCode, 400);
-  assert.equal(recentEntry?.error, "messages[1].content must be a string.");
+  assert.equal(recentEntry?.error, "The server had an error while processing your request. Please retry.");
   assert.equal(backendState?.healthy, false);
   assert.equal(backendState?.failedRequests, 1);
 
@@ -2610,8 +2610,11 @@ test("raw upstream HTTP 400 responses are retained, noted, and diagnosed as erro
 
   assert.equal(detailPayload.entry.outcome, "error");
   assert.equal(detailPayload.entry.statusCode, 400);
-  assert.equal(detailPayload.entry.error, "messages[1].content must be a string.");
-  assert.equal(detailPayload.responseBody?.error?.message, "messages[1].content must be a string.");
+  assert.equal(detailPayload.entry.error, "The server had an error while processing your request. Please retry.");
+  assert.equal(
+    detailPayload.responseBody?.error?.message,
+    "The server had an error while processing your request. Sorry about that! Please retry.",
+  );
   assert.equal(detailPayload.responseBody?.error?.type, "invalid_request_error");
 
   const diagnosticsResponse = await fetch(`${baseUrl}/api/diagnostics/requests/${encodeURIComponent(requestId ?? "")}`);
@@ -2633,7 +2636,7 @@ test("raw upstream HTTP 400 responses are retained, noted, and diagnosed as erro
 
   assert.equal(diagnosticsPayload.report.signals.upstreamError, true);
   assert.match(diagnosticsPayload.report.summary, /HTTP 400/);
-  assert.match(diagnosticsPayload.report.outputPreview, /messages\[1\]\.content must be a string/);
+  assert.match(diagnosticsPayload.report.outputPreview, /The server had an error while processing your request/);
   assert.ok(upstreamFinding);
   assert.match((upstreamFinding?.evidence ?? []).join(" "), /Retained raw response:/);
 });

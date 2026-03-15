@@ -4028,6 +4028,42 @@
     margin-top: 18px;
   }
 
+  .request-detail-note-box {
+    @apply mb-3 rounded-[1.15rem] border px-4 py-3;
+    border-color: rgba(180, 83, 9, 0.18);
+    background: linear-gradient(180deg, rgba(255, 251, 235, 0.95), rgba(255, 247, 237, 0.9));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  }
+
+  .request-detail-note-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em];
+    color: #b45309;
+  }
+
+  .request-detail-note-copy {
+    @apply mt-1.5 mb-0 text-sm leading-relaxed text-stone-700;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .request-detail-status-box.good {
+    border-color: rgba(21, 128, 61, 0.18);
+    background: linear-gradient(180deg, rgba(240, 253, 244, 0.95), rgba(255, 255, 255, 0.9));
+  }
+
+  .request-detail-status-box.good .request-detail-note-label {
+    color: #15803d;
+  }
+
+  .request-detail-status-box.bad {
+    border-color: rgba(185, 28, 28, 0.18);
+    background: linear-gradient(180deg, rgba(254, 242, 242, 0.95), rgba(255, 255, 255, 0.9));
+  }
+
+  .request-detail-status-box.bad .request-detail-note-label {
+    color: #b91c1c;
+  }
+
   .conversation-viewport > .request-detail-response-section {
     margin-top: 8px;
   }

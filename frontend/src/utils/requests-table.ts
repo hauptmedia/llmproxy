@@ -220,6 +220,14 @@ function matchesNumeric(
   return true;
 }
 
+function hasNumericFilterValue(rawFilterValue: string): boolean {
+  return rawFilterValue.trim().length > 0;
+}
+
+function hasActiveNumericFilter(comparator: string, rawFilterValue: string): boolean {
+  return comparator !== "any" && hasNumericFilterValue(rawFilterValue);
+}
+
 function compareNumberValues(left: number, right: number): number {
   if (left === right) {
     return 0;
@@ -714,16 +722,11 @@ export function hasActiveRequestFilters(filters: RequestTableFilters): boolean {
     filters.request.trim().length > 0 ||
     filters.model !== "all" ||
     filters.backend !== "all" ||
-    filters.queueComparator !== "any" ||
-    filters.queueValue.trim().length > 0 ||
-    filters.latencyComparator !== "any" ||
-    filters.latencyValue.trim().length > 0 ||
-    filters.tokensComparator !== "any" ||
-    filters.tokensValue.trim().length > 0 ||
-    filters.maxTokensComparator !== "any" ||
-    filters.maxTokensValue.trim().length > 0 ||
-    filters.rateComparator !== "any" ||
-    filters.rateValue.trim().length > 0 ||
+    hasActiveNumericFilter(filters.queueComparator, filters.queueValue) ||
+    hasActiveNumericFilter(filters.latencyComparator, filters.latencyValue) ||
+    hasActiveNumericFilter(filters.tokensComparator, filters.tokensValue) ||
+    hasActiveNumericFilter(filters.maxTokensComparator, filters.maxTokensValue) ||
+    hasActiveNumericFilter(filters.rateComparator, filters.rateValue) ||
     filters.note.trim().length > 0
   );
 }
@@ -762,23 +765,23 @@ export function isRequestFilterActive(filters: RequestTableFilters, filterKey: R
   }
 
   if (filterKey === "queue") {
-    return filters.queueComparator !== "any" && filters.queueValue.trim().length > 0;
+    return hasActiveNumericFilter(filters.queueComparator, filters.queueValue);
   }
 
   if (filterKey === "latency") {
-    return filters.latencyComparator !== "any" && filters.latencyValue.trim().length > 0;
+    return hasActiveNumericFilter(filters.latencyComparator, filters.latencyValue);
   }
 
   if (filterKey === "tokens") {
-    return filters.tokensComparator !== "any" && filters.tokensValue.trim().length > 0;
+    return hasActiveNumericFilter(filters.tokensComparator, filters.tokensValue);
   }
 
   if (filterKey === "maxTokens") {
-    return filters.maxTokensComparator !== "any" && filters.maxTokensValue.trim().length > 0;
+    return hasActiveNumericFilter(filters.maxTokensComparator, filters.maxTokensValue);
   }
 
   if (filterKey === "rate") {
-    return filters.rateComparator !== "any" && filters.rateValue.trim().length > 0;
+    return hasActiveNumericFilter(filters.rateComparator, filters.rateValue);
   }
 
   return filters.note.trim().length > 0;

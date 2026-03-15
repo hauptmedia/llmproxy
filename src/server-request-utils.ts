@@ -75,9 +75,68 @@ export function isErrorStatus(statusCode: number | undefined): boolean {
   return typeof statusCode === "number" && (statusCode < 200 || statusCode >= 300);
 }
 
+export function sanitizeUpstreamErrorMessage(message: string): string {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  const sanitized = trimmed
+    .replace(/\s*Sorry about that!\s*/gi, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ *\n */g, "\n")
+    .trim();
+
+  return sanitized || trimmed;
+}
+
 export function extractErrorMessageFromPayload(value: JsonValue | undefined): string | undefined {
   const message = extractNestedErrorMessage(value, 0);
-  return typeof message === "string" && message.trim().length > 0 ? message.trim() : undefined;
+  if (typeof message !== "string" || message.trim().length === 0) {
+    return undefined;
+  }
+
+  return sanitizeUpstreamErrorMessage(message);
+}
+
+export function sanitizeUpstreamErrorPayloadForClient(value: JsonValue | undefined): JsonValue | undefined {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return sanitizeUpstreamErrorMessage(value);
+  }
+
+  if (Array.isArray(value)) {
+    let changed = false;
+    const sanitized = value.map((entry) => {
+      const nextEntry = sanitizeUpstreamErrorPayloadForClient(entry);
+      if (nextEntry !== entry) {
+        changed = true;
+      }
+
+      return nextEntry as JsonValue;
+    });
+
+    return changed ? sanitized : value;
+  }
+
+  if (!isJsonRecord(value)) {
+    return value;
+  }
+
+  let changed = false;
+  const sanitizedEntries = Object.entries(value).map(([key, entry]) => {
+    const nextEntry = sanitizeUpstreamErrorPayloadForClient(entry);
+    if (nextEntry !== entry) {
+      changed = true;
+    }
+
+    return [key, nextEntry] as const;
+  });
+
+  return changed ? Object.fromEntries(sanitizedEntries) as JsonValue : value;
 }
 
 export function extractApiRequestId(pathname: string, suffix = ""): string | undefined {

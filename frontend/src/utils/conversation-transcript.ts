@@ -3,6 +3,7 @@ import type {
   DebugTranscriptEntry,
   RequestLogDetail,
 } from "../types/dashboard";
+import { readReasoningText } from "./debug-chat-metrics";
 import { isClientRecord } from "./guards";
 
 function cloneTranscriptToolCall(value: unknown): unknown {
@@ -16,27 +17,79 @@ function cloneTranscriptToolCall(value: unknown): unknown {
   };
 }
 
+function readNonEmptyString(value: unknown): string {
+  return typeof value === "string" && value.length > 0 ? value : "";
+}
+
+function buildConversationMessageRecord(
+  value: unknown,
+  options: {
+    model?: string;
+    backend?: string;
+    finishReason?: string;
+    inferredToolName?: string;
+    allowPending?: boolean;
+  } = {},
+): Record<string, unknown> {
+  if (!isClientRecord(value)) {
+    return {
+      role: "unknown",
+      content: value ?? null,
+      reasoning_content: "",
+      refusal: "",
+    };
+  }
+
+  const toolCallId = readNonEmptyString(value.tool_call_id);
+  const inferredToolName = toolCallId ? readNonEmptyString(options.inferredToolName) : "";
+  const name = readNonEmptyString(value.name) || inferredToolName;
+  const model = readNonEmptyString(value.model) || readNonEmptyString(options.model);
+  const backend = readNonEmptyString(value.backend) || readNonEmptyString(options.backend);
+  const finishReason = readNonEmptyString(value.finish_reason) || readNonEmptyString(options.finishReason);
+
+  return {
+    role: readNonEmptyString(value.role) || "unknown",
+    content: Object.prototype.hasOwnProperty.call(value, "content") ? (value.content ?? null) : null,
+    reasoning_content: readReasoningText(value),
+    refusal: typeof value.refusal === "string" ? value.refusal : "",
+    ...(name ? { name } : {}),
+    ...(toolCallId ? { tool_call_id: toolCallId } : {}),
+    ...(model ? { model } : {}),
+    ...(backend ? { backend } : {}),
+    ...(finishReason ? { finish_reason: finishReason } : {}),
+    ...(options.allowPending && value.pending === true ? { pending: true } : {}),
+    ...(options.allowPending && typeof value.pending_title === "string" && value.pending_title.length > 0
+      ? { pending_title: value.pending_title }
+      : {}),
+    ...(isClientRecord(value.function_call) ? { function_call: { ...value.function_call } } : {}),
+    ...(Array.isArray(value.tool_calls)
+      ? { tool_calls: value.tool_calls.map((toolCall) => cloneTranscriptToolCall(toolCall)) }
+      : {}),
+    ...(isClientRecord(value.audio) ? { audio: { ...value.audio } } : {}),
+  };
+}
+
+function rememberToolCallNames(message: Record<string, unknown>, toolNamesByCallId: Map<string, string>): void {
+  const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+  for (const toolCall of toolCalls) {
+    if (!isClientRecord(toolCall) || !isClientRecord(toolCall.function)) {
+      continue;
+    }
+
+    const toolCallId = readNonEmptyString(toolCall.id);
+    const toolName = readNonEmptyString(toolCall.function.name);
+    if (!toolCallId || !toolName) {
+      continue;
+    }
+
+    toolNamesByCallId.set(toolCallId, toolName);
+  }
+}
+
 export function buildConversationMessageFromDebugEntry(
   entry: DebugTranscriptEntry,
 ): Record<string, unknown> {
-  return {
-    role: entry.role,
-    content: Object.prototype.hasOwnProperty.call(entry, "content") ? (entry.content ?? null) : null,
-    reasoning_content: entry.reasoning_content ?? "",
-    refusal: entry.refusal ?? "",
-    ...(typeof entry.name === "string" && entry.name.length > 0 ? { name: entry.name } : {}),
-    ...(typeof entry.tool_call_id === "string" && entry.tool_call_id.length > 0 ? { tool_call_id: entry.tool_call_id } : {}),
-    ...(typeof entry.model === "string" && entry.model.length > 0 ? { model: entry.model } : {}),
-    ...(typeof entry.backend === "string" && entry.backend.length > 0 ? { backend: entry.backend } : {}),
-    ...(typeof entry.finish_reason === "string" && entry.finish_reason.length > 0 ? { finish_reason: entry.finish_reason } : {}),
-    ...(entry.pending === true ? { pending: true } : {}),
-    ...(typeof entry.pending_title === "string" && entry.pending_title.length > 0 ? { pending_title: entry.pending_title } : {}),
-    ...(isClientRecord(entry.function_call) ? { function_call: { ...entry.function_call } } : {}),
-    ...(Array.isArray(entry.tool_calls)
-      ? { tool_calls: entry.tool_calls.map((toolCall) => cloneTranscriptToolCall(toolCall)) }
-      : {}),
-    ...(isClientRecord(entry.audio) ? { audio: { ...entry.audio } } : {}),
-  };
+  return buildConversationMessageRecord(entry, { allowPending: true });
 }
 
 export function buildConversationItemsFromDebugTranscript(
@@ -87,16 +140,27 @@ export function buildRequestConversationItems(
     ? detail.requestBody as Record<string, unknown>
     : null;
   const requestMessages = Array.isArray(requestBody?.messages) ? requestBody.messages : [];
+  const toolNamesByCallId = new Map<string, string>();
 
-  const requestItems: ConversationTranscriptItem[] = includeRequestMessages
-    ? requestMessages.map((message, index) => ({
-        key: `${requestKeyPrefix}:${index}:${typeof message?.role === "string" ? message.role : "unknown"}`,
-        message: isClientRecord(message) ? message as Record<string, unknown> : { role: "unknown", content: message },
+  const requestItems: ConversationTranscriptItem[] = [];
+  if (includeRequestMessages) {
+    for (let index = 0; index < requestMessages.length; index += 1) {
+      const rawMessage = requestMessages[index];
+      const inferredToolName =
+        isClientRecord(rawMessage) && typeof rawMessage.tool_call_id === "string" && rawMessage.tool_call_id.length > 0
+          ? toolNamesByCallId.get(rawMessage.tool_call_id)
+          : undefined;
+      const message = buildConversationMessageRecord(rawMessage, { inferredToolName });
+      requestItems.push({
+        key: `${requestKeyPrefix}:${index}:${typeof message.role === "string" ? message.role : "unknown"}`,
+        message,
         index: startIndex + index,
         hideFinishBadge,
         reasoningCollapsed,
-      }))
-    : [];
+      });
+      rememberToolCallNames(message, toolNamesByCallId);
+    }
+  }
 
   const responseBody = isClientRecord(detail.responseBody)
     ? detail.responseBody as Record<string, unknown>
@@ -114,12 +178,14 @@ export function buildRequestConversationItems(
   const responseStartIndex = startIndex + requestItems.length;
   const responseItems = choices.flatMap((choice: unknown, choiceIndex: number): ConversationTranscriptItem[] => {
     if (isClientRecord(choice) && isClientRecord(choice.message)) {
+      const message = buildConversationMessageRecord(choice.message, {
+        model: resolvedModel,
+        finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
+      });
+      rememberToolCallNames(message, toolNamesByCallId);
       return [{
         key: `${responseKeyPrefix}:${choiceIndex}:message`,
-        message: {
-          ...choice.message,
-          ...(resolvedModel ? { model: resolvedModel } : {}),
-        } as Record<string, unknown>,
+        message,
         index: responseStartIndex + choiceIndex,
         finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
         hideFinishBadge,
@@ -128,13 +194,16 @@ export function buildRequestConversationItems(
     }
 
     if (isClientRecord(choice) && typeof choice.text === "string") {
+      const message = buildConversationMessageRecord({
+        role: "assistant",
+        content: choice.text,
+      }, {
+        model: resolvedModel,
+        finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
+      });
       return [{
         key: `${responseKeyPrefix}:${choiceIndex}:text`,
-        message: {
-          role: "assistant",
-          content: choice.text,
-          ...(resolvedModel ? { model: resolvedModel } : {}),
-        },
+        message,
         index: responseStartIndex + choiceIndex,
         finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
         hideFinishBadge,

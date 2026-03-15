@@ -135,6 +135,17 @@ export function useRequestsTable() {
     clearRequestFilter(filters, filterKey);
   }
 
+  function promoteNumericComparator(
+    comparatorKey: "queueComparator" | "latencyComparator" | "tokensComparator" | "maxTokensComparator" | "rateComparator",
+    value: string,
+  ): void {
+    if (value.trim().length === 0 || filters[comparatorKey] !== "any") {
+      return;
+    }
+
+    filters[comparatorKey] = "gte";
+  }
+
   function handleDocumentPointerDown(event: PointerEvent): void {
     const target = event.target;
     if (!(target instanceof Element)) {
@@ -175,6 +186,26 @@ export function useRequestsTable() {
       void router.replace({ query: nextQuery });
     },
   );
+
+  watch(() => filters.queueValue, (value) => {
+    promoteNumericComparator("queueComparator", value);
+  });
+
+  watch(() => filters.latencyValue, (value) => {
+    promoteNumericComparator("latencyComparator", value);
+  });
+
+  watch(() => filters.tokensValue, (value) => {
+    promoteNumericComparator("tokensComparator", value);
+  });
+
+  watch(() => filters.maxTokensValue, (value) => {
+    promoteNumericComparator("maxTokensComparator", value);
+  });
+
+  watch(() => filters.rateValue, (value) => {
+    promoteNumericComparator("rateComparator", value);
+  });
 
   onMounted(() => {
     document.addEventListener("pointerdown", handleDocumentPointerDown);

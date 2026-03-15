@@ -39,6 +39,7 @@ import {
   isEventStream,
   isErrorStatus,
   proxyError,
+  sanitizeUpstreamErrorPayloadForClient,
   readRequestedProxyRequestId,
   resolveEffectiveCompletionTokenLimit,
   resolveModelCompletionLimit,
@@ -997,8 +998,12 @@ export class LlmProxyServer {
           responseBuffer,
           upstreamResponse.headers.get("content-type"),
         );
+        const clientResponseBody = sanitizeUpstreamErrorPayloadForClient(retainedResponseBody);
+        const clientResponseBuffer = clientResponseBody === retainedResponseBody
+          ? responseBuffer
+          : buildClientUpstreamErrorBuffer(clientResponseBody, responseBuffer);
         const errorMessage =
-          extractErrorMessageFromPayload(retainedResponseBody)
+          extractErrorMessageFromPayload(clientResponseBody ?? retainedResponseBody)
           ?? `Upstream backend returned HTTP ${upstreamResponse.status}.`;
 
         this.updateActiveConnection(route.id, {
@@ -1013,7 +1018,7 @@ export class LlmProxyServer {
           };
 
           response.once("error", onError);
-          response.end(responseBuffer, () => {
+          response.end(clientResponseBuffer, () => {
             response.off("error", onError);
             resolve();
           });
@@ -1701,4 +1706,19 @@ function parseRetainedUpstreamResponseBody(
   }
 
   return undefined;
+}
+
+function buildClientUpstreamErrorBuffer(
+  payload: JsonValue | undefined,
+  fallbackBody: Buffer,
+): Buffer {
+  if (payload === undefined) {
+    return fallbackBody;
+  }
+
+  if (typeof payload === "string") {
+    return payload === fallbackBody.toString("utf8") ? fallbackBody : Buffer.from(payload, "utf8");
+  }
+
+  return Buffer.from(JSON.stringify(payload));
 }

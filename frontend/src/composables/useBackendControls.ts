@@ -139,8 +139,11 @@ function parseHeadersText(headersText: string): Record<string, string> | undefin
   return Object.keys(headers).length > 0 ? headers : undefined;
 }
 
-function parsePositiveIntegerField(value: string, fieldName: string, allowEmpty = false): number | undefined {
-  const trimmed = value.trim();
+function parsePositiveIntegerField(value: string | number | null | undefined, fieldName: string, allowEmpty = false): number | undefined {
+  const trimmed = typeof value === "number"
+    ? String(value)
+    : (typeof value === "string" ? value.trim() : "");
+
   if (!trimmed) {
     if (allowEmpty) {
       return undefined;

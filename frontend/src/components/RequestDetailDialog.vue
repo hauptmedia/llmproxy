@@ -70,6 +70,16 @@ const rawPayloadDialogTitle = computed(() => {
   return `${store.requestDetailTitle} · ${activeRawPayload.value.kind === "request" ? "Raw Request Data" : "Raw Response Data"}`;
 });
 
+const requestResponseNote = computed(() => {
+  const note = store.state.requestDetail.detail?.entry.error;
+  return typeof note === "string" ? note.trim() : "";
+});
+
+const requestResponseHttpCode = computed(() => {
+  const statusCode = store.state.requestDetail.detail?.entry.statusCode;
+  return typeof statusCode === "number" ? `HTTP ${statusCode}` : "";
+});
+
 watch(
   () => [store.state.requestDetail.open, store.state.requestDetail.requestId, store.state.requestDetail.tab] as const,
   () => {
@@ -399,6 +409,27 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
             </section>
 
             <section v-else-if="activeInspectorTab === 'response'" class="request-detail-section">
+              <div
+                v-if="requestResponseHttpCode"
+                class="request-detail-note-box request-detail-status-box"
+                :class="{
+                  good: store.state.requestDetail.detail?.entry.statusCode !== undefined
+                    && store.state.requestDetail.detail.entry.statusCode >= 200
+                    && store.state.requestDetail.detail.entry.statusCode < 300,
+                  bad: store.state.requestDetail.detail?.entry.statusCode !== undefined
+                    && (store.state.requestDetail.detail.entry.statusCode < 200
+                      || store.state.requestDetail.detail.entry.statusCode >= 300),
+                }"
+                role="status"
+                aria-label="Backend HTTP status"
+              >
+                <div class="request-detail-note-label">HTTP-Code</div>
+                <p class="request-detail-note-copy">{{ requestResponseHttpCode }}</p>
+              </div>
+              <div v-if="requestResponseNote" class="request-detail-note-box" role="note" aria-label="Request note">
+                <div class="request-detail-note-label">Note</div>
+                <p class="request-detail-note-copy">{{ requestResponseNote }}</p>
+              </div>
               <div v-if="store.requestResponseMetricRows.length" class="detail-table-wrap">
                 <table class="detail-table">
                   <thead>
