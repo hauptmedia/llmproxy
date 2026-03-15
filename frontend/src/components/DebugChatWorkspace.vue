@@ -108,6 +108,15 @@ function applyFirstMessageSuggestion(key: string): void {
   store.state.debug.defaultPromptDismissed = false;
 }
 
+function handleInitialPromptKeydown(event: KeyboardEvent): void {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+    return;
+  }
+
+  event.preventDefault();
+  void store.sendDebugChat();
+}
+
 store.ensureDefaultDebugPrompt();
 
 function shouldCollapseDebugReasoning(entry: DebugTranscriptEntry, index: number): boolean {
@@ -243,7 +252,7 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
         </div>
         <ConversationSurface
           card-class="chat-conversation-card"
-          viewport-class="chat-conversation-viewport"
+          :viewport-class="hasTranscript ? 'chat-conversation-viewport' : 'chat-conversation-viewport chat-conversation-viewport-initial'"
           :reset-key="hasTranscript ? 'ready' : 'initial'"
           :scroll-signature="chatConversationSignature"
           :scroll-target="hasTranscript ? 'bottom' : 'top'"
@@ -297,34 +306,19 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
 
               <div class="chat-editor-turn chat-initial-prompt-turn">
                 <div class="diagnostics-section-label">Prompt</div>
-                <ChatComposer
-                  :prompt="store.state.debug.prompt"
-                  :model="store.state.debug.model"
-                  :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
-                  :mcp-server-enabled="mcpServerEnabled"
-                  :params="store.state.debug.params"
-                  :models="store.state.models"
-                  :sending="store.state.debug.sending"
-                  :show-advanced-parameters="showAdvancedParameters"
-                  :submit-label="debugSubmitLabel"
-                  prompt-placeholder="Enter the first user message to send through the proxy."
-                  prompt-id="debug-prompt"
-                  model-id="debug-model"
-                  advanced-id-prefix="debug"
-                  :advanced-param-help="advancedParamHelp"
-                  @update:prompt="store.state.debug.prompt = $event"
-                  @update:model="store.state.debug.model = $event"
-                  @update:enable-diagnostic-tools="store.state.debug.enableDiagnosticTools = $event"
-                  @submit="store.sendDebugChat()"
-                  @toggle-advanced="showAdvancedParameters = !showAdvancedParameters"
-                />
+                <textarea
+                  id="debug-prompt"
+                  v-model="store.state.debug.prompt"
+                  class="chat-editor-textarea"
+                  placeholder="Enter the first user message to send through the proxy."
+                  @keydown="handleInitialPromptKeydown"
+                ></textarea>
               </div>
             </div>
           </div>
 
           <template #footer>
             <ChatComposer
-              v-if="hasTranscript"
               :prompt="store.state.debug.prompt"
               :model="store.state.debug.model"
               :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
@@ -334,10 +328,11 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
               :sending="store.state.debug.sending"
               :show-advanced-parameters="showAdvancedParameters"
               :submit-label="debugSubmitLabel"
-              prompt-placeholder="Enter the next message to continue the conversation."
-              prompt-id="debug-follow-up"
-              model-id="debug-follow-up-model"
-              advanced-id-prefix="debug-follow-up"
+              :show-prompt-input="hasTranscript"
+              :prompt-placeholder="hasTranscript ? 'Enter the next message to continue the conversation.' : 'Enter the first user message to send through the proxy.'"
+              :prompt-id="hasTranscript ? 'debug-follow-up' : 'debug-prompt-footer'"
+              :model-id="hasTranscript ? 'debug-follow-up-model' : 'debug-model'"
+              :advanced-id-prefix="hasTranscript ? 'debug-follow-up' : 'debug'"
               :advanced-param-help="advancedParamHelp"
               @update:prompt="store.state.debug.prompt = $event"
               @update:model="store.state.debug.model = $event"

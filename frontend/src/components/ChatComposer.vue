@@ -12,7 +12,7 @@ interface AdvancedParamHelp {
   tool_choice: string;
 }
 
-defineProps<{
+const props = withDefaults(defineProps<{
   prompt: string;
   model: string;
   enableDiagnosticTools: boolean;
@@ -27,7 +27,10 @@ defineProps<{
   modelId: string;
   advancedIdPrefix: string;
   advancedParamHelp: AdvancedParamHelp;
-}>();
+  showPromptInput?: boolean;
+}>(), {
+  showPromptInput: true,
+});
 
 const emit = defineEmits<{
   (event: "update:prompt", value: string): void;
@@ -48,8 +51,13 @@ function handlePromptKeydown(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <form class="chat-composer chat-composer-inline" @submit.prevent="emit('submit')">
+  <form
+    class="chat-composer chat-composer-inline"
+    :class="{ 'chat-composer-without-input': !props.showPromptInput }"
+    @submit.prevent="emit('submit')"
+  >
     <textarea
+      v-if="props.showPromptInput"
       :id="promptId"
       :value="prompt"
       class="chat-editor-textarea"
