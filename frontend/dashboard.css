@@ -2095,6 +2095,13 @@
 
   .chat-initial-prompt-turn .chat-editor-textarea {
     flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+  }
+
+  .chat-initial-prompt-turn .chat-composer-actions {
+    margin-top: auto;
+    padding-top: 0.75rem;
   }
 
 .conversation-bubble-transcript .message-card-host {

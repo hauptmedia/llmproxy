@@ -28,7 +28,7 @@ export async function executeDebugToolCalls(
         role: "tool",
         name: toolCall.name,
         tool_call_id: toolCall.id,
-        content: prettyJson(result.structuredContent ?? result),
+        content: prettyJson(result),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

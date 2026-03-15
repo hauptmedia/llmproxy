@@ -105,6 +105,43 @@ test("maps OpenAI tool call argument strings to native Ollama argument objects",
   ]);
 });
 
+test("preserves malformed OpenAI tool call argument strings in an Ollama-compatible object payload", () => {
+  const payload = JSON.parse(buildOllamaChatRequestBody({
+    model: "qwen-native",
+    stream: false,
+    messages: [
+      { role: "user", content: "Use the comparison tool." },
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "call_bad",
+            type: "function",
+            function: {
+              name: "chat_with_model",
+              arguments:
+                "{\"model\":\"qwen-a\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}{\"model\":\"qwen-b\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}",
+            },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        tool_call_id: "call_bad",
+        name: "chat_with_model",
+        content: "{\"error\":{\"message\":\"The llmproxy MCP tool \\\"chat_with_model\\\" received invalid arguments.\"}}",
+      },
+    ],
+  }, false).toString("utf8")) as Record<string, any>;
+
+  assert.deepEqual(payload.messages?.[1]?.tool_calls?.[0]?.function?.arguments, {
+    __llmproxy_raw_arguments:
+      "{\"model\":\"qwen-a\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}{\"model\":\"qwen-b\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}",
+    __llmproxy_note: "Original tool arguments were not valid JSON.",
+  });
+});
+
 test("translates native Ollama stream chunks into OpenAI-compatible chunks", () => {
   const chunk = convertOllamaChunkToOpenAiChunk({
     model: "qwen-native",

@@ -195,18 +195,6 @@ export function hasVisibleAssistantTurnPayload(entry: DebugTranscriptEntry): boo
 }
 
 export function normalizeDebugToolArgumentsForTransport(value: unknown): unknown {
-  if (isClientRecord(value)) {
-    return { ...value };
-  }
-
-  if (typeof value !== "string") {
-    return value ?? {};
-  }
-
-  if (!value.trim()) {
-    return {};
-  }
-
   return value;
 }
 

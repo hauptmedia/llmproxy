@@ -409,7 +409,10 @@ function normalizeOllamaToolArguments(value: unknown): JsonValue | undefined {
       const normalized = normalizeJsonValue(parsed);
       return normalized ?? trimmed;
     } catch {
-      return trimmed;
+      return {
+        __llmproxy_raw_arguments: trimmed,
+        __llmproxy_note: "Original tool arguments were not valid JSON.",
+      };
     }
   }
 

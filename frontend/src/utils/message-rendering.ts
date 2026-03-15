@@ -21,6 +21,7 @@ function renderMarkdownInline(markdown: unknown): string {
   };
 
   let html = String(markdown ?? "")
+    .replace(/<br\s*\/?>/gi, () => store("<br />"))
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
