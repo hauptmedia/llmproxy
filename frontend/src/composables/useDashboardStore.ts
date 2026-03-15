@@ -118,7 +118,6 @@ function createDashboardStoreInternal() {
   let nextToastId = 1;
   let lastToastKey = "";
   let lastToastAt = 0;
-  let liveFeedPaused = false;
 
   function dismissToast(toastId: number): void {
     const index = state.toasts.findIndex((toast) => toast.id === toastId);
@@ -206,13 +205,6 @@ function createDashboardStoreInternal() {
       return;
     }
 
-    if (liveFeedPaused) {
-      liveFeed.stopLiveFeed();
-      state.connectionStatus = "paused";
-      state.connectionText = "Live feed paused on config page";
-      return;
-    }
-
     liveFeed.connectLiveFeed();
   }
 
@@ -241,15 +233,6 @@ function createDashboardStoreInternal() {
       window.clearTimeout(timer);
     }
     toastTimers.clear();
-  }
-
-  function setLiveFeedPaused(paused: boolean): void {
-    if (liveFeedPaused === paused) {
-      return;
-    }
-
-    liveFeedPaused = paused;
-    syncLiveFeed();
   }
 
   function isRequestCancelling(requestId: string): boolean {
@@ -349,7 +332,6 @@ function createDashboardStoreInternal() {
     recentRequestMetrics: buildRecentRequestMetrics,
     showToast,
     dismissToast,
-    setLiveFeedPaused,
     start,
     stop,
   });

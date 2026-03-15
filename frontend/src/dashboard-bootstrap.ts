@@ -16,8 +16,8 @@ export function getPageTitle(page: DashboardPage): string {
     return "Requests";
   }
 
-  if (page === "chat") {
-    return "Chatbox";
+  if (page === "playground") {
+    return "Playground";
   }
 
   if (page === "config") {

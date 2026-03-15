@@ -204,7 +204,7 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
     <div class="chat-thread">
       <div class="panel chat-conversation-shell">
         <div class="panel-header">
-          <h2 v-if="props.headingId" :id="props.headingId" class="sr-only">Chatbox</h2>
+          <h2 v-if="props.headingId" :id="props.headingId" class="sr-only">Playground</h2>
           <div class="conversation-surface-actions ml-auto">
             <button
               v-if="store.state.debug.lastRequestId"

@@ -7,9 +7,11 @@ const props = withDefaults(defineProps<{
   value?: unknown;
   placeholder?: string;
   readOnly?: boolean;
+  minHeight?: string;
 }>(), {
   placeholder: "",
   readOnly: true,
+  minHeight: "320px",
 });
 
 const editorHost = ref<HTMLElement | null>(null);
@@ -48,8 +50,17 @@ onBeforeUnmount(() => {
   controller = null;
 });
 
+function resize(): void {
+  controller?.resize();
+}
+
+defineExpose({
+  resize,
+});
+
 watch(() => [props.value, props.placeholder] as const, ([value, placeholder]) => {
   controller?.setValue(value, placeholder);
+  controller?.resize();
 });
 
 watch(
@@ -61,7 +72,7 @@ watch(
 </script>
 
 <template>
-  <div class="json-ace-viewer">
+  <div class="json-ace-viewer" :style="{ '--json-ace-min-height': props.minHeight }">
     <div ref="editorHost" class="json-ace-editor"></div>
   </div>
 </template>
@@ -70,7 +81,8 @@ watch(
 .json-ace-viewer {
   display: flex;
   flex: 1 1 auto;
-  min-height: 0;
+  width: 100%;
+  min-height: var(--json-ace-min-height, 320px);
   height: 100%;
   flex-direction: column;
   overflow: hidden;
@@ -81,19 +93,32 @@ watch(
 
 .json-ace-editor {
   flex: 1 1 auto;
-  min-height: 0;
+  width: 100%;
+  height: 100%;
+  min-height: var(--json-ace-min-height, 320px);
+  overflow: hidden;
 }
 
+:deep(.json-ace-editor.ace_editor),
 .json-ace-editor :deep(.ace_editor),
 .json-ace-editor :deep(.ace_scroller),
 .json-ace-editor :deep(.ace_content) {
   font-family: "IBM Plex Mono", "Consolas", monospace;
 }
 
+:deep(.json-ace-editor.ace_editor),
+.json-ace-editor :deep(.ace_editor) {
+  width: 100%;
+  height: 100%;
+  min-height: var(--json-ace-min-height, 320px);
+}
+
+:deep(.json-ace-editor.ace_editor .ace_gutter),
 .json-ace-editor :deep(.ace_gutter) {
   background: rgba(245, 245, 244, 0.92);
 }
 
+:deep(.json-ace-editor.ace_editor .ace_fold-widget),
 .json-ace-editor :deep(.ace_fold-widget) {
   cursor: pointer;
 }

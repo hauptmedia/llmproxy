@@ -4,7 +4,7 @@ import type { ProxySnapshot } from "./types";
 
 export const FIXED_DASHBOARD_PATH = "/dashboard";
 export interface DashboardRoute {
-  page: "overview" | "chat" | "logs" | "config";
+  page: "overview" | "playground" | "logs" | "config";
 }
 
 export function normalizeDashboardPath(pathname: string): string {
@@ -36,8 +36,8 @@ export function matchDashboardRoute(
     return { page: landingPage };
   }
 
-  if (normalizedPathname === `${dashboardPath}/chatbox` || normalizedPathname === `${dashboardPath}/chat`) {
-    return { page: "chat" };
+  if (normalizedPathname === `${dashboardPath}/playground`) {
+    return { page: "playground" };
   }
 
   if (normalizedPathname === `${dashboardPath}/logs`) {

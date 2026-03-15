@@ -107,7 +107,7 @@
     min-width: 0;
   }
 
-  .shell.shell-chat {
+  .shell.shell-playground {
     height: 100dvh;
     max-height: 100dvh;
     margin-bottom: 0;
@@ -115,7 +115,7 @@
     overflow: visible;
   }
 
-  .shell.shell-chat .shell-content {
+  .shell.shell-playground .shell-content {
     @apply flex;
     flex: 1 1 auto;
     min-height: 0;
@@ -260,7 +260,7 @@
     padding-right: 0.8rem;
   }
 
-  .page-link-chat {
+  .page-link-playground {
     margin-left: -0.22rem;
     padding-left: 0.8rem;
   }
@@ -1786,6 +1786,7 @@
   .log-action-content .icon-button,
   .conversation-surface-actions .icon-button,
   .backend-editor-dialog .panel-header .icon-button,
+  .model-info-dialog .panel-header .icon-button,
   .server-editor-dialog .panel-header .icon-button,
   .config-panel-header .icon-button,
   .config-section-head .icon-button,
@@ -1803,6 +1804,7 @@
   .log-action-content .icon-button:hover:not(:disabled),
   .conversation-surface-actions .icon-button:hover:not(:disabled),
   .backend-editor-dialog .panel-header .icon-button:hover:not(:disabled),
+  .model-info-dialog .panel-header .icon-button:hover:not(:disabled),
   .server-editor-dialog .panel-header .icon-button:hover:not(:disabled),
   .config-panel-header .icon-button:hover:not(:disabled),
   .config-section-head .icon-button:hover:not(:disabled),
@@ -1820,6 +1822,7 @@
   .log-action-content .icon-button.active,
   .conversation-surface-actions .icon-button.active,
   .backend-editor-dialog .panel-header .icon-button.active,
+  .model-info-dialog .panel-header .icon-button.active,
   .server-editor-dialog .panel-header .icon-button.active,
   .config-panel-header .icon-button.active,
   .config-section-head .icon-button.active,
@@ -1837,6 +1840,7 @@
   .log-action-content .icon-button.danger,
   .conversation-surface-actions .icon-button.danger,
   .backend-editor-dialog .panel-header .icon-button.danger,
+  .model-info-dialog .panel-header .icon-button.danger,
   .server-editor-dialog .panel-header .icon-button.danger,
   .config-panel-header .icon-button.danger,
   .config-section-head .icon-button.danger,
@@ -1854,6 +1858,7 @@
   .log-action-content .icon-button.danger:hover:not(:disabled),
   .conversation-surface-actions .icon-button.danger:hover:not(:disabled),
   .backend-editor-dialog .panel-header .icon-button.danger:hover:not(:disabled),
+  .model-info-dialog .panel-header .icon-button.danger:hover:not(:disabled),
   .server-editor-dialog .panel-header .icon-button.danger:hover:not(:disabled),
   .config-panel-header .icon-button.danger:hover:not(:disabled),
   .config-section-head .icon-button.danger:hover:not(:disabled),
@@ -3726,6 +3731,37 @@
 
   .model-info-dialog {
     max-width: min(1120px, calc(100vw - 32px));
+  }
+
+  .model-info-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .model-info-overview-viewport {
+    padding-right: 0.25rem;
+  }
+
+  .model-info-metadata-viewport {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding-right: 0;
+  }
+
+  .model-info-metadata-section {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+  }
+
+  .model-info-metadata-section .json-ace-viewer {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
   }
 
   .backend-editor-dialog {

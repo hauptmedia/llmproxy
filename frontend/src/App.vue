@@ -36,8 +36,8 @@ const pageLinks: Array<{ page: DashboardPage; label: string; icon: string[] }> =
     ],
   },
   {
-    page: "chat",
-    label: "Chatbox",
+    page: "playground",
+    label: "Playground",
     icon: [
       "M5.5 7.5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H11l-3.5 3v-3H7.5a2 2 0 0 1-2-2z",
     ],
@@ -46,7 +46,7 @@ const pageLinks: Array<{ page: DashboardPage; label: string; icon: string[] }> =
 
 const currentPage = computed(() => {
   const routeName = route.name;
-  if (routeName === "chat" || routeName === "config" || routeName === "overview" || routeName === "logs") {
+  if (routeName === "playground" || routeName === "config" || routeName === "overview" || routeName === "logs") {
     return routeName;
   }
 
@@ -64,7 +64,6 @@ onBeforeUnmount(() => {
 watch(
   currentPage,
   (page) => {
-    store.setLiveFeedPaused(page === "config");
     document.title = `llmproxy - ${getPageTitle(page)}`;
   },
   { immediate: true },
@@ -72,7 +71,7 @@ watch(
 </script>
 
 <template>
-  <div class="shell" :class="{ 'shell-chat': currentPage === 'chat' }">
+  <div class="shell" :class="{ 'shell-playground': currentPage === 'playground' }">
     <div class="hero-sticky">
       <header class="hero">
         <div class="hero-bar">

@@ -1,14 +1,47 @@
 <script setup lang="ts">
-import CodeView from "./CodeView.vue";
+import { nextTick, ref, watch } from "vue";
+import DialogCloseButton from "./DialogCloseButton.vue";
+import JsonAceViewer from "./JsonAceViewer.vue";
 import type { ModelDetailView } from "../types/dashboard";
 
-defineProps<{
+const props = defineProps<{
   detail: ModelDetailView | null;
 }>();
 
 const emit = defineEmits<{
   (event: "close"): void;
 }>();
+
+type ModelInfoTab = "overview" | "raw-metadata";
+
+const activeTab = ref<ModelInfoTab>("overview");
+const rawMetadataViewer = ref<{ resize: () => void } | null>(null);
+
+async function resizeRawMetadataViewer(): Promise<void> {
+  await nextTick();
+  window.requestAnimationFrame(() => {
+    rawMetadataViewer.value?.resize();
+  });
+}
+
+watch(
+  () => props.detail,
+  () => {
+    activeTab.value = "overview";
+  },
+);
+
+watch(
+  activeTab,
+  (tab) => {
+    if (tab !== "raw-metadata") {
+      return;
+    }
+
+    void resizeRawMetadataViewer();
+  },
+  { flush: "post" },
+);
 </script>
 
 <template>
@@ -22,21 +55,40 @@ const emit = defineEmits<{
         <div class="panel-header">
           <div>
             <h2 id="model-info-title" class="panel-title">{{ detail.title }}</h2>
-            <p class="hint">{{ detail.subtitle }}</p>
           </div>
-          <button
-            class="button secondary small"
-            type="button"
+          <DialogCloseButton
+            compact
             title="Close model details"
             aria-label="Close model details"
             @click="emit('close')"
-          >
-            X
-          </button>
+          />
         </div>
 
-        <div class="request-detail-grid">
-          <div class="request-detail-card">
+        <div class="request-detail-card request-detail-inspector-card model-info-panel">
+          <div class="request-detail-tab-bar" role="tablist" aria-label="Model detail sections">
+            <button
+              type="button"
+              class="request-detail-tab-button"
+              :class="{ active: activeTab === 'overview' }"
+              role="tab"
+              :aria-selected="activeTab === 'overview'"
+              @click="activeTab = 'overview'"
+            >
+              <span>Overview</span>
+            </button>
+            <button
+              type="button"
+              class="request-detail-tab-button"
+              :class="{ active: activeTab === 'raw-metadata' }"
+              role="tab"
+              :aria-selected="activeTab === 'raw-metadata'"
+              @click="activeTab = 'raw-metadata'"
+            >
+              <span>Raw Metadata</span>
+            </button>
+          </div>
+
+          <div v-if="activeTab === 'overview'" class="detail-card-viewport model-info-overview-viewport">
             <section class="request-detail-section">
               <h3>Overview</h3>
               <div class="model-detail-grid">
@@ -70,12 +122,13 @@ const emit = defineEmits<{
             </section>
           </div>
 
-          <div class="request-detail-card">
-            <section class="request-detail-section">
-              <h3>Raw Metadata</h3>
-              <CodeView
+          <div v-else class="detail-card-viewport model-info-metadata-viewport">
+            <section class="request-detail-section model-info-metadata-section">
+              <JsonAceViewer
+                ref="rawMetadataViewer"
                 :value="detail.rawMetadata"
                 placeholder="No raw model metadata was stored."
+                min-height="clamp(320px, 52vh, 560px)"
               />
             </section>
           </div>
