@@ -187,17 +187,6 @@ function createDashboardStoreInternal() {
   const liveFeed = useLiveFeed(state, applySnapshot, applyLiveRequestDetail, showToast);
   const summaryCards = computed(() => buildSummaryCards(state.snapshot));
 
-  function handleKeyDown(event: KeyboardEvent): void {
-    if (event.key === "Escape" && state.debug.dialogOpen) {
-      state.debug.dialogOpen = false;
-      return;
-    }
-
-    if (event.key === "Escape" && state.requestDetail.open) {
-      requestDetail.closeRequestDetail();
-    }
-  }
-
   let started = false;
 
   function syncLiveFeed(): void {
@@ -217,7 +206,6 @@ function createDashboardStoreInternal() {
     backendControls.ensureDebugModel();
     void backendControls.loadBackendConfigs();
     syncLiveFeed();
-    window.addEventListener("keydown", handleKeyDown);
   }
 
   function stop(): void {
@@ -228,7 +216,6 @@ function createDashboardStoreInternal() {
     started = false;
     liveFeed.stopLiveFeed();
     debugChat.stopDebugMetricsTicker();
-    window.removeEventListener("keydown", handleKeyDown);
     for (const timer of toastTimers.values()) {
       window.clearTimeout(timer);
     }

@@ -9,6 +9,7 @@ import JsonAceViewer from "./JsonAceViewer.vue";
 import ToolDefinitionsView from "./ToolDefinitionsView.vue";
 import type { DiagnosticReport } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
+import { useDialogEscape } from "../composables/useDialogEscape";
 import { readErrorResponse } from "../utils/http";
 
 type RawPayloadKind = "request" | "response";
@@ -113,6 +114,22 @@ watch(
 onBeforeUnmount(() => {
   setBackgroundScrollLocked(false);
 });
+
+useDialogEscape(
+  () => store.state.requestDetail.open,
+  () => {
+    if (activeRawPayload.value) {
+      return;
+    }
+
+    store.closeRequestDetail();
+  },
+);
+
+useDialogEscape(
+  () => activeRawPayload.value !== null,
+  closeRawPayloadInspector,
+);
 
 function selectInspectorTab(tab: "request" | "response" | "diagnosis" | "tools"): void {
   activeInspectorTab.value = tab;

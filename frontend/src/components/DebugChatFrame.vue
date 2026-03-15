@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useDialogEscape } from "../composables/useDialogEscape";
 import DebugChatWorkspace from "./DebugChatWorkspace.vue";
 
 const props = withDefaults(defineProps<{
@@ -23,6 +24,11 @@ function handleBackdropClick(): void {
 
   emit("close");
 }
+
+useDialogEscape(
+  () => props.open,
+  () => emit("close"),
+);
 </script>
 
 <template>

@@ -54,7 +54,7 @@ const advancedParamHelp = {
   top_k: "Limits sampling to the K most likely next tokens. Lower values are stricter. Typical values: 0 to 100. This UI accepts integers >= 0.",
   min_p: "Filters out very unlikely tokens whose probability falls below a relative threshold. Range: 0.0 to 1.0.",
   repeat_penalty: "Penalizes repeated tokens. 1.0 means no penalty. Typical range: 1.0 to 1.5. This UI accepts values > 0.",
-  max_completion_tokens: "Maximum completion tokens to generate for the response. This UI accepts integers >= 1. The effective limit may still be lower if the backend or model enforces a smaller cap.",
+  max_completion_tokens: "Maximum tokens to generate for the response. This UI sends the value as max_completion_tokens and accepts integers >= 1. The effective limit may still be lower if the backend or model enforces a smaller cap.",
   tool_choice: "Controls how the model uses llmproxy functions. Auto lets the model decide, required forces at least one tool call before answering, and none forbids tool calls even when functions are available.",
 } as const;
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
+import { useDialogEscape } from "../composables/useDialogEscape";
 import type { BackendEditorFields, BackendEditorState, EditableBackendConfig } from "../types/dashboard";
 
 const props = defineProps<{
@@ -84,6 +85,11 @@ function submitDialog(): void {
   });
 }
 
+useDialogEscape(
+  () => props.state.open,
+  closeDialog,
+);
+
 </script>
 
 <template>
@@ -93,10 +99,10 @@ function submitDialog(): void {
       class="request-detail-overlay backend-editor-overlay"
       @click.self="closeDialog"
     >
-      <div class="request-detail-dialog backend-editor-dialog">
+      <div class="request-detail-dialog backend-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="backend-editor-title">
         <div class="panel-header">
           <div>
-            <h2 class="panel-title">{{ title }}</h2>
+            <h2 id="backend-editor-title" class="panel-title">{{ title }}</h2>
             <p class="hint">Changes are written to <span class="mono">llmproxy.config.json</span> and become active immediately.</p>
           </div>
           <DialogCloseButton compact :disabled="state.saving" @click="closeDialog" />

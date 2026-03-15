@@ -2,6 +2,7 @@
 import { nextTick, ref, watch } from "vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
 import JsonAceViewer from "./JsonAceViewer.vue";
+import { useDialogEscape } from "../composables/useDialogEscape";
 import type { ModelDetailView } from "../types/dashboard";
 
 const props = defineProps<{
@@ -41,6 +42,11 @@ watch(
     void resizeRawMetadataViewer();
   },
   { flush: "post" },
+);
+
+useDialogEscape(
+  () => props.detail !== null,
+  () => emit("close"),
 );
 </script>
 

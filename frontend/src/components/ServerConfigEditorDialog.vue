@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
+import { useDialogEscape } from "../composables/useDialogEscape";
 import type { EditableServerConfig, ServerEditorState } from "../types/dashboard";
 
 const props = defineProps<{
@@ -122,6 +123,11 @@ const pendingRestartMessage = computed(() => {
 
 const hasPendingRestartEdits = computed(() => pendingRestartFields.value.length > 0);
 
+useDialogEscape(
+  () => props.state.open,
+  closeDialog,
+);
+
 </script>
 
 <template>
@@ -131,10 +137,10 @@ const hasPendingRestartEdits = computed(() => pendingRestartFields.value.length 
       class="request-detail-overlay server-editor-overlay"
       @click.self="closeDialog"
     >
-      <div class="request-detail-dialog server-editor-dialog">
+      <div class="request-detail-dialog server-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="server-editor-title">
         <div class="panel-header">
           <div>
-            <h2 class="panel-title">Edit llmproxy config</h2>
+            <h2 id="server-editor-title" class="panel-title">Edit llmproxy config</h2>
             <p class="hint">
               Changes are written to <span class="mono">llmproxy.config.json</span>.
               Runtime settings apply immediately where possible.
