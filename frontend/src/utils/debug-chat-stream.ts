@@ -14,6 +14,7 @@ import {
 
 type DebugStateSlice = DashboardState["debug"];
 type ReplaceTranscriptEntry = (entry: DebugTranscriptEntry) => DebugTranscriptEntry;
+const STREAM_UI_FLUSH_INTERVAL_MS = 24;
 
 async function yieldToBrowserPaint(): Promise<void> {
   await new Promise<void>((resolve) => {
@@ -24,6 +25,14 @@ async function yieldToBrowserPaint(): Promise<void> {
 
     setTimeout(resolve, 0);
   });
+}
+
+function nowMs(): number {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+
+  return Date.now();
 }
 
 function hasVisibleFunctionCallDelta(value: unknown): boolean {
@@ -65,6 +74,54 @@ function hasVisibleToolCallsDelta(value: unknown): boolean {
   });
 }
 
+function cloneStreamingToolCall(value: unknown): unknown {
+  if (!isClientRecord(value)) {
+    return value;
+  }
+
+  return {
+    ...value,
+    ...(isClientRecord(value.function) ? { function: { ...value.function } } : {}),
+  };
+}
+
+function cloneStreamingAssistantTurn(entry: DebugTranscriptEntry): DebugTranscriptEntry {
+  return {
+    ...entry,
+    ...(isClientRecord(entry.function_call) ? { function_call: { ...entry.function_call } } : {}),
+    ...(Array.isArray(entry.tool_calls)
+      ? { tool_calls: entry.tool_calls.map((toolCall) => cloneStreamingToolCall(toolCall)) as DebugTranscriptEntry["tool_calls"] }
+      : {}),
+    ...(isClientRecord(entry.audio) ? { audio: { ...entry.audio } } : {}),
+  };
+}
+
+function syncStreamingAssistantTurn(
+  target: DebugTranscriptEntry,
+  source: DebugTranscriptEntry,
+): void {
+  target.role = source.role;
+  target.content = source.content;
+  target.reasoning_content = source.reasoning_content;
+  target.refusal = source.refusal;
+  target.function_call = isClientRecord(source.function_call)
+    ? { ...source.function_call }
+    : undefined;
+  target.tool_calls = Array.isArray(source.tool_calls)
+    ? source.tool_calls.map((toolCall) => cloneStreamingToolCall(toolCall)) as DebugTranscriptEntry["tool_calls"]
+    : undefined;
+  target.audio = isClientRecord(source.audio)
+    ? { ...source.audio }
+    : undefined;
+  target.name = source.name;
+  target.tool_call_id = source.tool_call_id;
+  target.model = source.model;
+  target.backend = source.backend;
+  target.finish_reason = source.finish_reason;
+  target.pending = source.pending;
+  target.pending_title = source.pending_title;
+}
+
 export function applyNonStreamingResponse(
   debugState: DebugStateSlice,
   payload: Record<string, any>,
@@ -102,27 +159,35 @@ export function applyStreamingPayload(
   debugState: DebugStateSlice,
   payload: Record<string, any>,
   assistantTurn: DebugTranscriptEntry,
-  replaceTranscriptEntry: ReplaceTranscriptEntry,
-): DebugTranscriptEntry {
+): boolean {
   const choice = Array.isArray(payload?.choices) ? payload[0] : undefined;
   const normalizedChoice = Array.isArray(payload?.choices) ? payload.choices[0] : undefined;
   const delta = normalizedChoice?.delta ?? normalizedChoice?.message ?? {};
+  let updated = false;
 
   if (typeof delta?.role === "string" && delta.role.length > 0) {
     assistantTurn.role = delta.role;
+    updated = true;
   }
 
   if (typeof delta?.content === "string") {
     assistantTurn.content = String(assistantTurn.content ?? "") + delta.content;
+    if (delta.content.length > 0) {
+      updated = true;
+    }
   }
 
   const reasoningDelta = readReasoningText(delta);
   if (reasoningDelta) {
     assistantTurn.reasoning_content = String(assistantTurn.reasoning_content ?? "") + reasoningDelta;
+    updated = true;
   }
 
   if (typeof delta?.refusal === "string") {
     assistantTurn.refusal = String(assistantTurn.refusal ?? "") + delta.refusal;
+    if (delta.refusal.length > 0) {
+      updated = true;
+    }
   }
 
   mergeDebugFunctionCall(assistantTurn as Record<string, any>, delta?.function_call);
@@ -130,6 +195,7 @@ export function applyStreamingPayload(
 
   if (typeof normalizedChoice?.finish_reason === "string" && normalizedChoice.finish_reason.length > 0) {
     assistantTurn.finish_reason = normalizedChoice.finish_reason;
+    updated = true;
   }
 
   if (
@@ -148,48 +214,45 @@ export function applyStreamingPayload(
   noteStreamingTokenActivity(debugState.metrics, delta);
   applyUsageMetrics(debugState.metrics, payload?.usage, payload?.timings, normalizedChoice?.finish_reason);
   debugState.usage = formatUsage(payload?.usage, payload?.timings, normalizedChoice?.finish_reason);
-  return replaceTranscriptEntry(assistantTurn);
+  return updated;
 }
 
 function processStreamBlock(
   debugState: DebugStateSlice,
   block: string,
-  rawEvents: string[],
+  rawResponseState: { text: string; hasAny: boolean },
   assistantTurn: DebugTranscriptEntry,
-  replaceTranscriptEntry: ReplaceTranscriptEntry,
-): DebugTranscriptEntry {
+): boolean {
   const dataLines = block
     .split(/\r?\n/)
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice(5).trimStart());
 
   if (dataLines.length === 0) {
-    return assistantTurn;
+    return false;
   }
 
   const payloadText = dataLines.join("\n");
   if (!payloadText || payloadText === "[DONE]") {
-    return assistantTurn;
+    return false;
   }
 
-  rawEvents.push(payloadText);
+  rawResponseState.text += rawResponseState.hasAny ? `\n\n${payloadText}` : payloadText;
+  rawResponseState.hasAny = true;
 
   try {
-    const nextAssistantTurn = applyStreamingPayload(debugState, JSON.parse(payloadText), assistantTurn, replaceTranscriptEntry);
-    debugState.rawResponse = rawEvents.join("\n\n");
-    return nextAssistantTurn;
+    const updated = applyStreamingPayload(debugState, JSON.parse(payloadText), assistantTurn);
+    return updated;
   } catch {
-    debugState.rawResponse = rawEvents.join("\n\n");
-    return assistantTurn;
+    return false;
   }
 }
 
 function processStreamBuffer(
   debugState: DebugStateSlice,
   buffer: string,
-  rawEvents: string[],
+  rawResponseState: { text: string; hasAny: boolean },
   assistantTurn: DebugTranscriptEntry,
-  replaceTranscriptEntry: ReplaceTranscriptEntry,
   flush: boolean,
 ): { buffer: string; assistantTurn: DebugTranscriptEntry; updated: boolean } {
   let working = buffer;
@@ -216,19 +279,17 @@ function processStreamBuffer(
 
     const block = working.slice(0, breakIndex);
     working = working.slice(breakIndex + breakLength);
-    const nextAssistantTurn = processStreamBlock(debugState, block, rawEvents, currentAssistantTurn, replaceTranscriptEntry);
-    if (nextAssistantTurn !== currentAssistantTurn) {
+    if (processStreamBlock(debugState, block, rawResponseState, currentAssistantTurn)) {
       updated = true;
     }
-    currentAssistantTurn = nextAssistantTurn;
   }
 
   if (flush && working.trim()) {
-    currentAssistantTurn = processStreamBlock(debugState, working, rawEvents, currentAssistantTurn, replaceTranscriptEntry);
+    const flushed = processStreamBlock(debugState, working, rawResponseState, currentAssistantTurn);
     return {
       buffer: "",
       assistantTurn: currentAssistantTurn,
-      updated: true,
+      updated: flushed,
     };
   }
 
@@ -243,7 +304,6 @@ export async function consumeStreamingResponse(
   response: Response,
   debugState: DebugStateSlice,
   assistantTurn: DebugTranscriptEntry,
-  replaceTranscriptEntry: ReplaceTranscriptEntry,
 ): Promise<DebugTranscriptEntry> {
   if (!response.body) {
     throw new Error("Streaming response had no body.");
@@ -251,9 +311,22 @@ export async function consumeStreamingResponse(
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  const rawEvents: string[] = [];
+  const rawResponseState = {
+    text: "",
+    hasAny: false,
+  };
+  const draftAssistantTurn = cloneStreamingAssistantTurn(assistantTurn);
   let buffer = "";
-  let currentAssistantTurn = assistantTurn;
+  let currentAssistantTurn = draftAssistantTurn;
+  let lastUiFlushAt = nowMs();
+
+  function flushStreamingUi(forcePaint: boolean): Promise<void> | void {
+    syncStreamingAssistantTurn(assistantTurn, currentAssistantTurn);
+    debugState.rawResponse = rawResponseState.text;
+    if (forcePaint) {
+      return yieldToBrowserPaint();
+    }
+  }
 
   while (true) {
     const next = await reader.read();
@@ -262,22 +335,24 @@ export async function consumeStreamingResponse(
     }
 
     buffer += decoder.decode(next.value, { stream: true });
-    const update = processStreamBuffer(debugState, buffer, rawEvents, currentAssistantTurn, replaceTranscriptEntry, false);
+    const update = processStreamBuffer(debugState, buffer, rawResponseState, currentAssistantTurn, false);
     buffer = update.buffer;
     currentAssistantTurn = update.assistantTurn;
-    if (update.updated) {
-      await yieldToBrowserPaint();
+    if (update.updated && nowMs() - lastUiFlushAt >= STREAM_UI_FLUSH_INTERVAL_MS) {
+      await flushStreamingUi(true);
+      lastUiFlushAt = nowMs();
     }
   }
 
   buffer += decoder.decode();
   {
-    const update = processStreamBuffer(debugState, buffer, rawEvents, currentAssistantTurn, replaceTranscriptEntry, true);
+    const update = processStreamBuffer(debugState, buffer, rawResponseState, currentAssistantTurn, true);
     currentAssistantTurn = update.assistantTurn;
+    flushStreamingUi(false);
     if (update.updated) {
       await yieldToBrowserPaint();
     }
   }
-  debugState.rawResponse = rawEvents.join("\n\n");
-  return currentAssistantTurn;
+  flushStreamingUi(false);
+  return assistantTurn;
 }

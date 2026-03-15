@@ -169,7 +169,7 @@ export function useDebugChat(
     }
 
     if (payload.stream === true) {
-      return await consumeStreamingResponse(response, state.debug, assistantTurn, replaceTranscriptEntry);
+      return await consumeStreamingResponse(response, state.debug, assistantTurn);
     }
 
     return applyNonStreamingResponse(

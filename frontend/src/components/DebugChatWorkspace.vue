@@ -12,7 +12,6 @@ import type {
 } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
 import { buildConversationItemsFromDebugTranscript } from "../utils/conversation-transcript";
-import { isClientRecord } from "../utils/guards";
 import {
   debugChatFirstMessageSuggestions,
   debugChatSystemPromptSuggestions,
@@ -116,37 +115,15 @@ function shouldCollapseDebugReasoning(entry: DebugTranscriptEntry, index: number
   return true;
 }
 
-function getTranscriptContentLength(entry: DebugTranscriptEntry): number {
-  return typeof entry.content === "string"
-    ? entry.content.length
-    : JSON.stringify(entry.content ?? null).length;
-}
-
-function getTranscriptEntrySignature(entry: DebugTranscriptEntry): string {
-  return [
-    entry.role,
-    entry.pending ? "pending" : "ready",
-    entry.pending_title?.length ?? 0,
-    getTranscriptContentLength(entry),
-    entry.reasoning_content?.length ?? 0,
-    typeof entry.refusal === "string" ? entry.refusal.length : 0,
-    isClientRecord(entry.function_call) ? JSON.stringify(entry.function_call).length : 0,
-    Array.isArray(entry.tool_calls) ? JSON.stringify(entry.tool_calls).length : 0,
-    entry.finish_reason ?? "",
-    entry.backend ?? "",
-  ].join(":");
-}
-
 function getDebugTranscript(): DebugTranscriptEntry[] {
   return store.state.debug.transcript as unknown as DebugTranscriptEntry[];
 }
 
 const chatConversationSignature = computed<string>(() => {
   const transcript = getDebugTranscript();
-  const transcriptBits: string[] = [];
-  for (let index = 0; index < transcript.length; index += 1) {
-    transcriptBits.push(getTranscriptEntrySignature(transcript[index] as DebugTranscriptEntry));
-  }
+  const lastEntry = transcript.length > 0
+    ? transcript[transcript.length - 1] as DebugTranscriptEntry
+    : null;
 
   const queuedBits = store.state.debug.queuedMessages.map((entry, index) => (
     `${index}:${entry.model}:${entry.enableDiagnosticTools ? "tools" : "plain"}:${entry.prompt.length}`
@@ -154,9 +131,12 @@ const chatConversationSignature = computed<string>(() => {
 
   return [
     hasTranscript.value ? "ready" : "initial",
-    trimmedSystemPrompt.value,
+    trimmedSystemPrompt.value.length,
     store.state.debug.sending ? "sending" : "idle",
-    transcriptBits.join("|"),
+    transcript.length,
+    lastEntry?.role ?? "",
+    lastEntry?.pending ? "pending" : "ready",
+    lastEntry?.finish_reason ?? "",
     queuedBits.join("|"),
   ].join("|");
 });
