@@ -580,16 +580,25 @@ test("MCP chat_with_model tool rejects explicit stream arguments", async () => {
 
     assert.equal(response.status, 200);
     const payload = await response.json() as {
-      result?: unknown;
+      result?: {
+        isError?: boolean;
+        structuredContent?: {
+          error?: {
+            message?: string;
+            details?: string[];
+          };
+        };
+      };
       error?: {
         message?: string;
       };
     };
 
-    assert.equal(payload.result, undefined);
-    assert.equal(
-      payload.error?.message,
-      'The llmproxy MCP tool "chat_with_model" does not accept "stream". It always returns one final non-streaming completion payload.',
+    assert.equal(payload.error, undefined);
+    assert.equal(payload.result?.isError, true);
+    assert.equal(payload.result?.structuredContent?.error?.message, 'The llmproxy MCP tool "chat_with_model" received invalid arguments.');
+    assert.ok(
+      payload.result?.structuredContent?.error?.details?.some((detail) => detail.includes('unsupported field "stream"')),
     );
   } finally {
     while (cleanup.length > 0) {
@@ -684,16 +693,25 @@ test("MCP chat_with_model tool rejects unsupported extra arguments", async () =>
 
     assert.equal(response.status, 200);
     const payload = await response.json() as {
-      result?: unknown;
+      result?: {
+        isError?: boolean;
+        structuredContent?: {
+          error?: {
+            message?: string;
+            details?: string[];
+          };
+        };
+      };
       error?: {
         message?: string;
       };
     };
 
-    assert.equal(payload.result, undefined);
-    assert.equal(
-      payload.error?.message,
-      'The llmproxy MCP tool "chat_with_model" received unsupported argument "extra_flag".',
+    assert.equal(payload.error, undefined);
+    assert.equal(payload.result?.isError, true);
+    assert.equal(payload.result?.structuredContent?.error?.message, 'The llmproxy MCP tool "chat_with_model" received invalid arguments.');
+    assert.ok(
+      payload.result?.structuredContent?.error?.details?.some((detail) => detail.includes('unsupported field "extra_flag"')),
     );
   } finally {
     while (cleanup.length > 0) {
@@ -786,16 +804,133 @@ test("MCP chat_with_model tool requires exactly one target model", async () => {
 
     assert.equal(response.status, 200);
     const payload = await response.json() as {
-      result?: unknown;
+      result?: {
+        isError?: boolean;
+        structuredContent?: {
+          error?: {
+            message?: string;
+            details?: string[];
+          };
+        };
+      };
       error?: {
         message?: string;
       };
     };
 
-    assert.equal(payload.result, undefined);
-    assert.equal(
-      payload.error?.message,
-      'The llmproxy MCP tool "chat_with_model" argument "model" must be a non-empty string.',
+    assert.equal(payload.error, undefined);
+    assert.equal(payload.result?.isError, true);
+    assert.equal(payload.result?.structuredContent?.error?.message, 'The llmproxy MCP tool "chat_with_model" received invalid arguments.');
+    assert.ok(
+      payload.result?.structuredContent?.error?.details?.some((detail) => detail.includes("arguments.model is required")),
+    );
+  } finally {
+    while (cleanup.length > 0) {
+      const task = cleanup.pop();
+      if (task) {
+        await task();
+      }
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("MCP chat_with_model tool returns recovery instructions for concatenated JSON argument strings", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-mcp-chat-concatenated-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  try {
+    const backendPort = await getFreePort();
+    const routerPort = await getFreePort();
+
+    const backend = await startMockDiagnosticsBackend(backendPort);
+    cleanup.push(async () => {
+      await new Promise<void>((resolve, reject) => {
+        backend.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        });
+      });
+    });
+
+    const config: ProxyConfig = {
+      server: {
+        host: "127.0.0.1",
+        port: routerPort,
+        requestTimeoutMs: 10000,
+        queueTimeoutMs: 2000,
+        healthCheckIntervalMs: 60000,
+        recentRequestLimit: 1000,
+        mcpServerEnabled: true,
+      },
+      backends: [
+        {
+          id: "mock-diagnostics-upstream",
+          name: "mock diagnostics upstream",
+          baseUrl: `http://127.0.0.1:${backendPort}`,
+          enabled: true,
+          maxConcurrency: 1,
+          healthPath: "/v1/models",
+          models: ["diagnostics-model"],
+        },
+      ],
+    };
+
+    const router = await startRouter(config, path.join(tempDir, "mcp-chat-concatenated-router.config.json"));
+    cleanup.push(async () => {
+      await router.server.stop();
+      await router.loadBalancer.stop();
+    });
+
+    const baseUrl = `http://127.0.0.1:${routerPort}`;
+    await waitForHealthyBackend(baseUrl, "mock-diagnostics-upstream");
+
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 12,
+        method: "tools/call",
+        params: {
+          name: "chat_with_model",
+          arguments:
+            '{"model":"qwen3:30b-a3b-thinking-2507-q4_K_M","messages":[{"content":"kannst du bilder lesen?","role":"user"}]}{"model":"qwen3.5-35b-a3b","messages":[{"content":"kannst du bilder lesen?","role":"user"}]}',
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as {
+      result?: {
+        isError?: boolean;
+        structuredContent?: {
+          error?: {
+            message?: string;
+            instructions?: string[];
+          };
+        };
+      };
+      error?: {
+        message?: string;
+      };
+    };
+
+    assert.equal(payload.error, undefined);
+    assert.equal(payload.result?.isError, true);
+    assert.equal(payload.result?.structuredContent?.error?.message, 'The llmproxy MCP tool "chat_with_model" received invalid arguments.');
+    assert.ok(
+      payload.result?.structuredContent?.error?.instructions?.some((instruction) => instruction.includes("Do not concatenate JSON objects like }{")),
+    );
+    assert.ok(
+      payload.result?.structuredContent?.error?.instructions?.some((instruction) => instruction.includes("separate tool_calls entries")),
     );
   } finally {
     while (cleanup.length > 0) {
@@ -915,9 +1050,11 @@ test("MCP manifest exposes a single llmproxy functions service", async () => {
     assert.equal(chatTool?.title, "Chat with one model");
     assert.match(chatTool?.description ?? "", /exactly one registered llmproxy model/i);
     assert.match(chatTool?.description ?? "", /never concatenate multiple json objects/i);
+    assert.match(chatTool?.description ?? "", /multiple tool_calls entries/i);
     assert.equal(chatTool?.inputSchema?.additionalProperties, false);
     assert.match(String(chatTool?.inputSchema?.description ?? ""), /exactly one json object/i);
     assert.match(String(chatTool?.inputSchema?.description ?? ""), /never concatenate multiple json objects/i);
+    assert.match(String(chatTool?.inputSchema?.description ?? ""), /multiple separate tool_calls entries/i);
     assert.equal(
       Object.prototype.hasOwnProperty.call(chatTool?.inputSchema?.properties ?? {}, "stream"),
       false,
@@ -932,8 +1069,10 @@ test("MCP manifest exposes a single llmproxy functions service", async () => {
     );
     const modelSchema = chatTool?.inputSchema?.properties?.model as { description?: string } | undefined;
     assert.match(String(modelSchema?.description ?? ""), /exactly one target model/i);
+    assert.match(String(modelSchema?.description ?? ""), /multiple tool_calls entries/i);
     const messagesSchema = chatTool?.inputSchema?.properties?.messages as {
       type?: string;
+      description?: string;
       items?: {
         oneOf?: Array<{
           properties?: Record<string, unknown>;
@@ -941,6 +1080,7 @@ test("MCP manifest exposes a single llmproxy functions service", async () => {
       };
     } | undefined;
     assert.equal(messagesSchema?.type, "array");
+    assert.match(String(messagesSchema?.description ?? ""), /one tool_calls entry per target model/i);
     assert.ok(Array.isArray(messagesSchema?.items?.oneOf));
     const messageRoleEnums = (messagesSchema?.items?.oneOf ?? []).map((schema) => {
       const roleProperty = schema.properties?.role as { enum?: unknown[] } | undefined;

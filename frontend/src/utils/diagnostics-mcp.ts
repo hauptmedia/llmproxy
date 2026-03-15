@@ -271,7 +271,7 @@ export async function buildDiagnosticsChatTools(): Promise<Array<Record<string, 
 
 export async function callDiagnosticsTool(
   name: string,
-  args: Record<string, unknown>,
+  args: unknown,
 ): Promise<Record<string, unknown>> {
   return await callDiagnosticsMcp("tools/call", {
     name,

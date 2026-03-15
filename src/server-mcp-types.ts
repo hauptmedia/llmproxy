@@ -65,6 +65,7 @@ export interface McpContext {
 export interface McpToolCallResult {
   content: Array<{ type: "text" | "json"; text?: string; json?: unknown }>;
   structuredContent: unknown;
+  isError?: boolean;
 }
 
 export interface McpService {

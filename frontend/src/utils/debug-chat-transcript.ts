@@ -6,7 +6,7 @@ import { hasVisibleMessageContent } from "./message-rendering";
 export interface DebugToolCallRequest {
   id: string;
   name: string;
-  args: Record<string, unknown>;
+  args: unknown;
 }
 
 export function createAssistantTurn(): DebugTranscriptEntry {
@@ -194,17 +194,13 @@ export function hasVisibleAssistantTurnPayload(entry: DebugTranscriptEntry): boo
   );
 }
 
-function looksLikeConcatenatedJsonObjects(value: string): boolean {
-  return /}\s*{/.test(value);
-}
-
-export function parseDebugToolArguments(value: unknown, toolName = "tool"): Record<string, unknown> {
+export function normalizeDebugToolArgumentsForTransport(value: unknown): unknown {
   if (isClientRecord(value)) {
     return { ...value };
   }
 
   if (typeof value !== "string") {
-    return {};
+    return value ?? {};
   }
 
   const trimmed = value.trim();
@@ -212,27 +208,11 @@ export function parseDebugToolArguments(value: unknown, toolName = "tool"): Reco
     return {};
   }
 
-  let parsed: unknown;
-
   try {
-    parsed = JSON.parse(trimmed) as unknown;
+    return JSON.parse(trimmed) as unknown;
   } catch {
-    if (toolName === "chat_with_model" && looksLikeConcatenatedJsonObjects(trimmed)) {
-      throw new Error('The llmproxy function "chat_with_model" expects exactly one JSON object per tool call. You appear to have concatenated multiple JSON objects. Emit multiple separate chat_with_model tool calls instead, one per model.');
-    }
-
-    throw new Error("Tool arguments must resolve to one JSON object.");
+    return trimmed;
   }
-
-  if (toolName === "chat_with_model" && Array.isArray(parsed)) {
-    throw new Error('The llmproxy function "chat_with_model" expects exactly one JSON object per tool call, not an array. Emit multiple separate chat_with_model tool calls instead, one per model.');
-  }
-
-  if (!isClientRecord(parsed)) {
-    throw new Error("Tool arguments must resolve to one JSON object.");
-  }
-
-  return parsed;
 }
 
 export function extractDebugToolCalls(entry: DebugTranscriptEntry): DebugToolCallRequest[] {
@@ -257,13 +237,12 @@ export function extractDebugToolCalls(entry: DebugTranscriptEntry): DebugToolCal
       continue;
     }
 
-    const parsedArgs = parseDebugToolArguments(functionRecord.arguments, functionRecord.name);
     calls.push({
       id: typeof toolCallRecord.id === "string" && toolCallRecord.id.length > 0
         ? toolCallRecord.id
         : `${functionRecord.name}_${calls.length}`,
       name: functionRecord.name,
-      args: parsedArgs,
+      args: normalizeDebugToolArgumentsForTransport(functionRecord.arguments),
     });
   }
 

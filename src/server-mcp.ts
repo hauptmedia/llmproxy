@@ -1,8 +1,11 @@
+import Ajv, { type ErrorObject, type ValidateFunction } from "ajv";
 import { createDiagnosticsMcpService } from "./server-mcp-diagnostics";
 import type {
   McpContext,
   McpManifest,
   McpService,
+  McpToolCallResult,
+  McpToolDefinition,
 } from "./server-mcp-types";
 
 interface JsonRpcRequest {
@@ -26,6 +29,12 @@ export const MCP_ENDPOINT = "/mcp";
 export const MCP_MANIFEST_PATH = "/mcp/manifest";
 export const MCP_DISABLED_MESSAGE = "MCP server is disabled in config.";
 const LLMPROXY_MCP_SERVICE_ID = "llmproxy";
+const mcpAjv = new Ajv({
+  allErrors: true,
+  strict: false,
+  allowUnionTypes: true,
+});
+const mcpToolValidatorCache = new Map<string, ValidateFunction>();
 const CHAT_TOOL_ALLOWED_TOP_LEVEL_KEYS = new Set([
   "model",
   "messages",
@@ -43,6 +52,10 @@ const CHAT_TOOL_ALLOWED_TOP_LEVEL_KEYS = new Set([
 ]);
 const CHAT_MESSAGE_ROLES = ["system", "developer", "user", "assistant", "tool"] as const;
 type ChatMessageRole = (typeof CHAT_MESSAGE_ROLES)[number];
+
+type McpToolArgumentValidationResult =
+  | { ok: true; args: Record<string, unknown> }
+  | { ok: false; result: McpToolCallResult };
 
 function buildChatTextContentPartSchema(): Record<string, unknown> {
   return {
@@ -342,15 +355,15 @@ function buildChatToolChoiceSchema(): Record<string, unknown> {
 function buildChatInputSchema(): Record<string, unknown> {
   return {
     type: "object",
-    description: "Arguments for one non-streaming chat request to exactly one target model. Each chat_with_model tool call must contain exactly one JSON object for exactly one model. Never concatenate multiple JSON objects, never send an array of request objects, and never bundle multiple models into one payload. If you need multiple models, emit multiple separate chat_with_model tool calls.",
+    description: "Arguments for one non-streaming chat request to exactly one target model. Each chat_with_model tool call must contain exactly one JSON object for exactly one model. Never concatenate multiple JSON objects, never send an array of request objects, and never bundle multiple models into one payload. If you need multiple models, emit multiple separate chat_with_model tool calls as multiple separate tool_calls entries, one entry per model.",
     properties: {
       model: {
         type: "string",
-        description: "Exactly one target model id for this call. Do not pass multiple model ids here, do not pass an array, and do not concatenate multiple request objects. If you want multiple models, emit multiple separate chat_with_model tool calls.",
+        description: "Exactly one target model id for this call. Do not pass multiple model ids here, do not pass an array, and do not concatenate multiple request objects. If you want multiple models, emit multiple separate chat_with_model tool calls as multiple tool_calls entries, one per model.",
       },
       messages: {
         ...buildChatMessagesSchema(),
-        description: "Ordered chat history for this one request to this one target model. Reuse the same messages in separate tool calls when querying several models, instead of combining several request payloads into one arguments object.",
+        description: "Ordered chat history for this one request to this one target model. Reuse the same messages in separate tool calls when querying several models, instead of combining several request payloads into one arguments object. When comparing several models, create one tool_calls entry per target model and reuse the same messages array in each entry.",
       },
       temperature: {
         type: "number",
@@ -411,6 +424,174 @@ function buildChatInputSchema(): Record<string, unknown> {
       },
     ],
     additionalProperties: false,
+  };
+}
+
+function getMcpToolValidator(tool: McpToolDefinition): ValidateFunction {
+  const cached = mcpToolValidatorCache.get(tool.name);
+  if (cached) {
+    return cached;
+  }
+
+  const compiled = mcpAjv.compile(tool.inputSchema);
+  mcpToolValidatorCache.set(tool.name, compiled);
+  return compiled;
+}
+
+function formatJsonPointerPath(pointer: string): string {
+  if (!pointer) {
+    return "arguments";
+  }
+
+  const parts = pointer
+    .split("/")
+    .slice(1)
+    .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"));
+
+  let path = "arguments";
+  for (const part of parts) {
+    if (/^\d+$/.test(part)) {
+      path += `[${part}]`;
+    } else {
+      path += `.${part}`;
+    }
+  }
+
+  return path;
+}
+
+function formatAjvValidationError(error: ErrorObject): string {
+  const basePath = formatJsonPointerPath(error.instancePath);
+
+  if (error.keyword === "required" && typeof error.params.missingProperty === "string") {
+    return `${basePath}.${error.params.missingProperty} is required.`;
+  }
+
+  if (error.keyword === "additionalProperties" && typeof error.params.additionalProperty === "string") {
+    return `${basePath} includes unsupported field "${error.params.additionalProperty}".`;
+  }
+
+  if (error.keyword === "type" && typeof error.params.type === "string") {
+    return `${basePath} must be ${error.params.type}.`;
+  }
+
+  if (error.keyword === "enum" && Array.isArray(error.params.allowedValues)) {
+    return `${basePath} must be one of ${error.params.allowedValues.map((value) => String(value)).join(", ")}.`;
+  }
+
+  if (error.keyword === "minItems" && typeof error.params.limit === "number") {
+    return `${basePath} must contain at least ${error.params.limit} item${error.params.limit === 1 ? "" : "s"}.`;
+  }
+
+  if (error.keyword === "oneOf" || error.keyword === "anyOf") {
+    return `${basePath} does not match any allowed input shape.`;
+  }
+
+  return `${basePath} ${error.message ?? "is invalid"}.`;
+}
+
+function extractToolSchemaExample(tool: McpToolDefinition): unknown {
+  const examples = tool.inputSchema.examples;
+  if (!Array.isArray(examples) || examples.length === 0) {
+    return undefined;
+  }
+
+  return examples[0];
+}
+
+function buildToolValidationInstructions(tool: McpToolDefinition, rawArgs: unknown): string[] {
+  const instructions = [
+    `Pass exactly one JSON object that matches the "${tool.name}" input schema.`,
+  ];
+
+  if (tool.name === "chat_with_model") {
+    instructions.push("Use exactly one target model per tool call.");
+  }
+
+  if (typeof rawArgs === "string" && /}\s*{/.test(rawArgs)) {
+    instructions.push("Do not concatenate JSON objects like }{ into one arguments string.");
+    if (tool.name === "chat_with_model") {
+      instructions.push("Emit multiple separate chat_with_model tool calls as separate tool_calls entries, one entry per model.");
+    }
+  } else if (Array.isArray(rawArgs)) {
+    instructions.push("Do not send an array of request objects as tool arguments.");
+    if (tool.name === "chat_with_model") {
+      instructions.push("Emit multiple separate chat_with_model tool calls as separate tool_calls entries, one entry per model.");
+    }
+  } else if (!isRecord(rawArgs)) {
+    instructions.push("The MCP tools/call payload should carry arguments as a JSON object, not as a string, array, or scalar value.");
+  }
+
+  return instructions;
+}
+
+function buildMcpToolErrorResult(
+  tool: McpToolDefinition,
+  type: "invalid_arguments" | "tool_execution_failed",
+  message: string,
+  rawArgs: unknown,
+  details: string[] = [],
+): McpToolCallResult {
+  const instructions = buildToolValidationInstructions(tool, rawArgs);
+  const exampleArguments = extractToolSchemaExample(tool);
+  const structuredContent = {
+    ok: false,
+    error: {
+      type,
+      tool: tool.name,
+      message,
+      details,
+      instructions,
+      ...(exampleArguments !== undefined ? { exampleArguments } : {}),
+    },
+  };
+
+  const textLines = [
+    message,
+    ...(details.length > 0 ? ["Details:", ...details.map((detail) => `- ${detail}`)] : []),
+    "Instructions:",
+    ...instructions.map((instruction) => `- ${instruction}`),
+    ...(exampleArguments !== undefined
+      ? ["Example arguments:", JSON.stringify(exampleArguments, null, 2)]
+      : []),
+  ];
+
+  return {
+    isError: true,
+    content: [
+      {
+        type: "text",
+        text: textLines.join("\n"),
+      },
+      {
+        type: "json",
+        json: structuredContent,
+      },
+    ],
+    structuredContent,
+  };
+}
+
+function validateMcpToolArguments(
+  tool: McpToolDefinition,
+  rawArgs: unknown,
+): McpToolArgumentValidationResult {
+  const validator = getMcpToolValidator(tool);
+  const valid = validator(rawArgs);
+
+  if (valid && isRecord(rawArgs)) {
+    return {
+      ok: true,
+      args: rawArgs,
+    };
+  }
+
+  const details = (validator.errors ?? []).map((error) => formatAjvValidationError(error));
+  const message = `The llmproxy MCP tool "${tool.name}" received invalid arguments.`;
+
+  return {
+    ok: false,
+    result: buildMcpToolErrorResult(tool, "invalid_arguments", message, rawArgs, details),
   };
 }
 
@@ -789,7 +970,7 @@ function buildOpenAiCompatMcpService(context: McpContext): McpService {
           {
             name: "chat_with_model",
             title: "Chat with one model",
-            description: "Send one OpenAI-compatible chat request to exactly one registered llmproxy model and receive one final non-streaming completion JSON payload. Use exactly one JSON object per tool call. Never concatenate multiple JSON objects, never send an array of request objects, and never combine several models into one payload. If you need multiple models, emit multiple separate chat_with_model tool calls.",
+            description: "Send one OpenAI-compatible chat request to exactly one registered llmproxy model and receive one final non-streaming completion JSON payload. Use exactly one JSON object per tool call. Never concatenate multiple JSON objects, never send an array of request objects, and never combine several models into one payload. If you need multiple models, emit multiple separate chat_with_model tool calls as multiple tool_calls entries, one entry per model.",
             inputSchema: buildChatInputSchema(),
           },
       ],
@@ -964,14 +1145,38 @@ export async function handleMcpRequest(
       const toolName = asString(parsedParams.name, 'tools/call requires a string "name".');
       const toolArgs = parsedParams.arguments === undefined
         ? {}
-        : asObject(parsedParams.arguments, 'tools/call "arguments" must be an object.');
+        : parsedParams.arguments;
 
       const service = services.find((candidate) => candidate.definition.tools.some((tool) => tool.name === toolName) && candidate.callTool);
       if (!service?.callTool) {
         return failure(id, -32601, `Tool "${toolName}" is not registered on the llmproxy MCP server.`);
       }
 
-      return success(id, await service.callTool(toolName, toolArgs));
+      const toolDefinition = service.definition.tools.find((tool) => tool.name === toolName);
+      if (!toolDefinition) {
+        return failure(id, -32601, `Tool "${toolName}" is not registered on the llmproxy MCP server.`);
+      }
+
+      const validationResult = validateMcpToolArguments(toolDefinition, toolArgs);
+      if (!validationResult.ok) {
+        return success(id, validationResult.result);
+      }
+
+      try {
+        return success(id, await service.callTool(toolName, validationResult.args));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return success(
+          id,
+          buildMcpToolErrorResult(
+            toolDefinition,
+            "tool_execution_failed",
+            `The llmproxy MCP tool "${toolName}" failed while executing.`,
+            validationResult.args,
+            [message],
+          ),
+        );
+      }
     }
 
     if (method === "prompts/list") {
