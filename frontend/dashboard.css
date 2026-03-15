@@ -1775,7 +1775,8 @@
   .request-actions .icon-button,
   .conversation-surface-actions .icon-button,
   .config-panel-header .icon-button,
-  .config-section-head .icon-button {
+  .config-section-head .icon-button,
+  .chat-composer-settings .icon-button {
     color: #57534e;
     border-color: rgba(120, 53, 15, 0.12);
     background: linear-gradient(180deg, rgba(255, 253, 250, 0.98), rgba(255, 246, 237, 0.94));
@@ -1787,7 +1788,8 @@
   .request-actions .icon-button:hover:not(:disabled),
   .conversation-surface-actions .icon-button:hover:not(:disabled),
   .config-panel-header .icon-button:hover:not(:disabled),
-  .config-section-head .icon-button:hover:not(:disabled) {
+  .config-section-head .icon-button:hover:not(:disabled),
+  .chat-composer-settings .icon-button:hover:not(:disabled) {
     color: #7c2d12;
     border-color: rgba(180, 83, 9, 0.18);
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 249, 242, 0.96));
@@ -1799,7 +1801,8 @@
   .request-actions .icon-button.active,
   .conversation-surface-actions .icon-button.active,
   .config-panel-header .icon-button.active,
-  .config-section-head .icon-button.active {
+  .config-section-head .icon-button.active,
+  .chat-composer-settings .icon-button.active {
     color: #9a3412;
     border-color: rgba(180, 83, 9, 0.22);
     background: linear-gradient(180deg, rgba(255, 248, 239, 0.98), rgba(255, 240, 226, 0.94));
@@ -1811,7 +1814,8 @@
   .request-actions .icon-button.danger,
   .conversation-surface-actions .icon-button.danger,
   .config-panel-header .icon-button.danger,
-  .config-section-head .icon-button.danger {
+  .config-section-head .icon-button.danger,
+  .chat-composer-settings .icon-button.danger {
     color: #b91c1c;
     border-color: rgba(185, 28, 28, 0.18);
     background: linear-gradient(180deg, rgba(255, 248, 248, 0.98), rgba(254, 242, 242, 0.94));
@@ -1823,7 +1827,8 @@
   .request-actions .icon-button.danger:hover:not(:disabled),
   .conversation-surface-actions .icon-button.danger:hover:not(:disabled),
   .config-panel-header .icon-button.danger:hover:not(:disabled),
-  .config-section-head .icon-button.danger:hover:not(:disabled) {
+  .config-section-head .icon-button.danger:hover:not(:disabled),
+  .chat-composer-settings .icon-button.danger:hover:not(:disabled) {
     background: linear-gradient(180deg, rgba(255, 251, 251, 0.99), rgba(254, 226, 226, 0.96));
     border-color: rgba(185, 28, 28, 0.22);
     box-shadow:

@@ -55,9 +55,9 @@ export const debugChatFirstMessageSuggestions: readonly DebugChatSuggestion[] = 
   },
   {
     key: "repetition",
-    title: "Fix repetition",
-    description: "Probe looping behavior and get concrete sampling changes to try next.",
-    value: "Look for signs of repetition or degeneration in the response and recommend safer sampling settings to reduce looping.",
+    title: "Play Tic Tac Toe",
+    description: "Let the model play a full game against another model and report the outcome.",
+    value: "Play Tic Tac Toe with another model until someone wins or the game ends in a draw, then tell me the result. Keep calling the chat function to get the other model's moves.",
   },
 ];
 
