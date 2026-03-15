@@ -23,6 +23,10 @@ interface ServerConfigSaveResponse {
   appliedImmediatelyFields?: string[];
 }
 
+interface BackendSaveResponse {
+  backend?: EditableBackendConfig;
+}
+
 function createEmptyBackendFields(): BackendEditorFields {
   return {
     id: "",
@@ -167,6 +171,10 @@ function isServerConfigSaveResponse(value: unknown): value is ServerConfigSaveRe
   return Boolean(value) && typeof value === "object";
 }
 
+function isBackendSaveResponse(value: unknown): value is BackendSaveResponse {
+  return Boolean(value) && typeof value === "object";
+}
+
 function formatServerFieldLabel(field: string): string {
   if (field === "host") {
     return "host";
@@ -207,6 +215,120 @@ export function useBackendControls(
   state: DashboardState,
   onErrorToast: (title: string, message: string) => void,
 ) {
+  function applyLocalSnapshot(snapshot: ProxySnapshot): void {
+    state.snapshot = snapshot;
+    syncModels(collectSnapshotModels(snapshot));
+  }
+
+  function createSnapshotBackendFromConfig(
+    config: EditableBackendConfig,
+    previous?: BackendSnapshot,
+  ): BackendSnapshot {
+    const activeRequests = previous?.activeRequests ?? 0;
+
+    return {
+      id: config.id,
+      name: config.name,
+      baseUrl: config.baseUrl,
+      connector: config.connector,
+      enabled: config.enabled,
+      healthy: previous?.healthy ?? false,
+      maxConcurrency: config.maxConcurrency,
+      activeRequests,
+      availableSlots: Math.max(0, config.maxConcurrency - activeRequests),
+      totalRequests: previous?.totalRequests ?? 0,
+      successfulRequests: previous?.successfulRequests ?? 0,
+      failedRequests: previous?.failedRequests ?? 0,
+      cancelledRequests: previous?.cancelledRequests ?? 0,
+      lastLatencyMs: previous?.lastLatencyMs,
+      avgLatencyMs: previous?.avgLatencyMs,
+      lastCheckedAt: previous?.lastCheckedAt,
+      lastError: previous?.lastError,
+      configuredModels: config.models ? [...config.models] : [],
+      discoveredModels: previous?.discoveredModels ? [...previous.discoveredModels] : [],
+      discoveredModelDetails: previous?.discoveredModelDetails
+        ? previous.discoveredModelDetails.map((detail) => ({
+          id: detail.id,
+          ...(detail.metadata !== undefined ? { metadata: detail.metadata } : {}),
+        }))
+        : [],
+    };
+  }
+
+  function upsertLocalBackendConfig(config: EditableBackendConfig, previousId?: string): void {
+    if (previousId && previousId !== config.id) {
+      delete state.backendConfigs[previousId];
+    }
+
+    state.backendConfigs[config.id] = config;
+  }
+
+  function removeLocalBackendConfig(backendId: string): void {
+    delete state.backendConfigs[backendId];
+  }
+
+  function upsertLocalSnapshotBackend(config: EditableBackendConfig, previousId?: string): void {
+    const targetId = previousId || config.id;
+    const existingIndex = state.snapshot.backends.findIndex((backend) => backend.id === targetId);
+    const previousBackend = existingIndex >= 0
+      ? state.snapshot.backends[existingIndex]
+      : state.snapshot.backends.find((backend) => backend.id === config.id);
+    const nextBackend = createSnapshotBackendFromConfig(config, previousBackend);
+
+    let nextBackends: BackendSnapshot[];
+    if (existingIndex >= 0) {
+      nextBackends = state.snapshot.backends.map((backend, index) => (
+        index === existingIndex ? nextBackend : backend
+      ));
+    } else {
+      nextBackends = [...state.snapshot.backends, nextBackend];
+    }
+
+    if (targetId !== config.id) {
+      nextBackends = nextBackends.filter((backend, index) => (
+        backend.id !== config.id || index === existingIndex
+      ));
+    }
+
+    applyLocalSnapshot({
+      ...state.snapshot,
+      backends: nextBackends,
+    });
+  }
+
+  function removeLocalSnapshotBackend(backendId: string): void {
+    const nextBackends = state.snapshot.backends.filter((backend) => backend.id !== backendId);
+    if (nextBackends.length === state.snapshot.backends.length) {
+      return;
+    }
+
+    applyLocalSnapshot({
+      ...state.snapshot,
+      backends: nextBackends,
+    });
+  }
+
+  async function refreshDashboardSnapshot(silent = false): Promise<void> {
+    try {
+      const response = await fetch("/api/state", {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorResponse(response));
+      }
+
+      const snapshot = await response.json() as ProxySnapshot;
+      applyLocalSnapshot(snapshot);
+    } catch (error) {
+      if (silent) {
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      onErrorToast("Backends", `Saved, but the dashboard state could not be refreshed: ${message}`);
+    }
+  }
+
   async function loadBackendConfigs(): Promise<void> {
     state.backendEditor.error = "";
     state.backendEditor.loading = true;
@@ -256,8 +378,7 @@ export function useBackendControls(
   }
 
   function applySnapshot(snapshot: ProxySnapshot): void {
-    state.snapshot = snapshot;
-    syncModels(collectSnapshotModels(snapshot));
+    applyLocalSnapshot(snapshot);
   }
 
   function openCreateBackend(): void {
@@ -434,8 +555,15 @@ export function useBackendControls(
         throw new Error(await readErrorResponse(response));
       }
 
-      await loadBackendConfigs();
+      const payload = await response.json() as unknown;
+      const persistedBackend = isBackendSaveResponse(payload) ? payload.backend : undefined;
+      if (persistedBackend) {
+        upsertLocalBackendConfig(persistedBackend, mode === "edit" ? originalId : undefined);
+        upsertLocalSnapshotBackend(persistedBackend, mode === "edit" ? originalId : undefined);
+      }
+
       closeBackendEditor();
+      void refreshDashboardSnapshot(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       state.backendEditor.error = message;
@@ -481,10 +609,14 @@ export function useBackendControls(
         throw new Error(await readErrorResponse(response));
       }
 
-      await loadBackendConfigs();
+      removeLocalBackendConfig(backendId);
+      removeLocalSnapshotBackend(backendId);
+
       if (state.backendEditor.open && state.backendEditor.originalId === backendId) {
         closeBackendEditor();
       }
+
+      void refreshDashboardSnapshot(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       state.backendEditor.error = message;
