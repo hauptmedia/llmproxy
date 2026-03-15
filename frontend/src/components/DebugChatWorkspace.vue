@@ -323,7 +323,7 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
               </div>
             </div>
             <ChatComposer
-              v-if="hasTranscript"
+              v-else
               :prompt="store.state.debug.prompt"
               :model="store.state.debug.model"
               :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"

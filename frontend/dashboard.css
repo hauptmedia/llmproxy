@@ -1881,7 +1881,9 @@
     @apply flex flex-col gap-[18px];
     height: 100%;
     min-height: 0;
+    min-width: 0;
     overflow: visible;
+    container-type: inline-size;
   }
 
   .chat-header-main {
@@ -1937,7 +1939,7 @@
     }
   }
 
-  @media (max-width: 720px) {
+  @media (max-width: 520px) {
     .chat-suggestion-grid {
       grid-template-columns: minmax(0, 1fr);
     }
@@ -1980,6 +1982,7 @@
   .conversation-surface-footer {
     @apply mt-4;
     flex: 0 0 auto;
+    min-width: 0;
     overflow: visible;
     background-clip: padding-box;
     border-bottom-left-radius: inherit;
@@ -2013,21 +2016,26 @@
   }
 
   .chat-initial-suggestions {
-    @apply grid min-h-0 flex-1 gap-5;
-    grid-template-rows: repeat(2, minmax(0, 1fr));
-    overflow: hidden;
+    @apply grid flex-1 gap-4;
+    grid-template-rows: auto auto;
+    align-content: start;
+    min-height: max-content;
+    padding-right: 0.1rem;
   }
 
   .chat-initial-layout .chat-suggestion-section {
-    @apply flex min-h-0 flex-col;
+    @apply grid;
+    gap: 0.55rem;
+    min-height: auto;
   }
 
   .chat-initial-layout .chat-suggestion-grid {
-    @apply min-h-0 flex-1 overflow-auto;
+    overflow: visible;
+    flex: none;
   }
 
   .chat-initial-layout .diagnostics-actions {
-    @apply items-start content-start;
+    @apply items-stretch content-start;
   }
 
   .chat-initial-layout .diagnostics-action-card {
@@ -2054,6 +2062,17 @@
 
   .chat-initial-footer {
     @apply grid gap-3;
+    min-width: 0;
+    width: 100%;
+    padding-top: 0.1rem;
+  }
+
+  .chat-initial-footer > .chat-editor-turn:first-child .chat-editor-textarea {
+    min-height: 80px;
+  }
+
+  .chat-initial-footer .chat-composer .chat-editor-textarea {
+    min-height: 96px;
   }
 
 .conversation-bubble-transcript .message-card-host {
@@ -2338,6 +2357,7 @@
 
   .chat-editor-turn {
     @apply grid gap-3;
+    min-width: 0;
   }
 
   .chat-editor-textarea {
@@ -2375,36 +2395,36 @@
   }
 
   .chat-composer-actions {
-    @apply mt-3 flex items-end justify-between gap-2;
-    flex-wrap: wrap;
+    @apply mt-3;
+    min-width: 0;
   }
 
   .chat-composer-settings {
-    @apply flex items-end gap-2;
-    flex: 1 1 auto;
-    flex-wrap: wrap;
+    @apply flex items-center gap-2;
+    flex-wrap: nowrap;
+    width: 100%;
     min-width: 0;
   }
 
   .chat-composer-model-field {
     @apply mb-0;
-    flex: 0 1 248px;
-    width: min(248px, 100%);
+    flex: 0 0 188px;
+    width: auto;
     min-width: 0;
   }
 
   .chat-composer-model-inline-control {
-    @apply flex items-center gap-2;
+    @apply flex items-center gap-1.5;
     min-width: 0;
   }
 
   .chat-composer-model-label {
     @apply mb-0 shrink-0;
-    font-size: 0.84rem;
+    font-size: 0.78rem;
   }
 
   .chat-composer-model-select {
-    @apply w-full rounded-2xl border border-amber-900/12 bg-white/92 px-2.5 py-2 text-sm text-stone-950 shadow-sm outline-none transition;
+    @apply w-full rounded-2xl border border-amber-900/12 bg-white/92 px-2.25 py-1.5 text-sm text-stone-950 shadow-sm outline-none transition;
     flex: 1 1 auto;
   }
 
@@ -2414,11 +2434,11 @@
 
   .chat-composer-tool-toggle {
     @apply inline-flex items-center gap-1.5 text-stone-600;
-    font-size: 0.82rem;
-    flex: 1 1 16rem;
+    font-size: 0.74rem;
+    flex: 1 1 auto;
     min-width: 0;
-    white-space: normal;
-    line-height: 1.35;
+    white-space: nowrap;
+    line-height: 1.1;
   }
 
   .chat-composer-tool-toggle input {
@@ -2426,54 +2446,214 @@
     accent-color: #b45309;
   }
 
+  .chat-composer-tool-toggle-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-composer-advanced-toggle {
+    flex: 0 0 auto;
+  }
+
   .chat-composer-primary-actions {
     @apply flex items-center justify-end gap-2;
     flex: 0 0 auto;
+    min-width: 0;
     margin-left: auto;
   }
 
-  @container (max-width: 820px) {
-    .chat-composer-actions {
-      align-items: stretch;
-      justify-content: flex-start;
-    }
+  .chat-composer-primary-actions .button {
+    min-width: 8.85rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
 
-    .chat-composer-settings {
-      width: 100%;
-      align-items: stretch;
-    }
-
-    .chat-composer-model-field {
-      flex: 1 1 220px;
-      width: auto;
-    }
-
+  @container (max-width: 980px) {
     .chat-composer-tool-toggle {
-      white-space: normal;
-      line-height: 1.35;
-    }
-
-    .chat-composer-primary-actions {
-      width: 100%;
-      margin-left: 0;
-      justify-content: flex-end;
+      flex-basis: auto;
     }
   }
 
-  @container (max-width: 640px) {
-    .chat-composer-model-inline-control {
-      align-items: stretch;
-      flex-wrap: wrap;
-      gap: 0.45rem;
+  @container (max-width: 460px) {
+    .chat-composer-settings {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.55rem 0.7rem;
     }
 
     .chat-composer-model-field {
-      flex-basis: 100%;
+      grid-column: 1 / -1;
       width: 100%;
+      flex: none;
+    }
+
+    .chat-composer-tool-toggle {
+      grid-column: 1 / 2;
+      flex: none;
+      white-space: normal;
+      line-height: 1.25;
+    }
+
+    .chat-composer-advanced-toggle {
+      grid-column: 2 / 3;
+      justify-self: end;
+    }
+
+    .chat-composer-primary-actions {
+      grid-column: 2 / 3;
+      justify-self: end;
+      margin-left: 0;
+    }
+
+    .chat-composer-primary-actions .button {
+      min-width: 10.75rem;
+    }
+  }
+
+  @container (max-width: 900px) {
+    .chat-initial-suggestions {
+      gap: 0.85rem;
+    }
+
+    .chat-initial-layout .chat-suggestion-section {
+      gap: 0.48rem;
+    }
+
+    .chat-initial-layout .diagnostics-action-card {
+      height: 88px;
+      min-height: 88px;
+    }
+
+    .chat-initial-layout .diagnostics-action-description {
+      -webkit-line-clamp: 1;
+    }
+
+    .chat-initial-footer {
+      gap: 0.75rem;
+    }
+
+    .chat-initial-footer .chat-editor-turn {
+      gap: 0.45rem;
+    }
+
+    .chat-initial-footer > .chat-editor-turn:first-child .chat-editor-textarea {
+      min-height: 68px;
+    }
+
+    .chat-initial-footer .chat-composer .chat-editor-textarea {
+      min-height: 84px;
+    }
+  }
+
+  @container (max-width: 760px) {
+    .chat-initial-suggestions {
+      gap: 0.7rem;
+    }
+
+    .chat-initial-layout .diagnostics-action-card {
+      height: 66px;
+      min-height: 66px;
+    }
+
+    .chat-initial-layout .diagnostics-action-description {
+      display: none;
+    }
+
+    .chat-initial-footer > .chat-editor-turn:first-child .chat-editor-textarea {
+      min-height: 56px;
+    }
+
+    .chat-initial-footer .chat-composer .chat-editor-textarea {
+      min-height: 68px;
+    }
+  }
+
+  @container (max-width: 620px) {
+    .chat-initial-suggestions {
+      gap: 0.55rem;
+    }
+
+    .chat-initial-footer {
+      gap: 0.45rem;
+    }
+
+    .chat-initial-footer .chat-editor-turn {
+      gap: 0.28rem;
+    }
+
+    .chat-initial-footer .diagnostics-section-label {
+      font-size: 0.66rem;
+    }
+
+    .chat-initial-footer > .chat-editor-turn:first-child .chat-editor-textarea {
+      min-height: 44px;
+      padding-top: 0.62rem;
+      padding-bottom: 0.62rem;
+    }
+
+    .chat-initial-footer .chat-composer .chat-editor-textarea {
+      min-height: 54px;
+      padding-top: 0.68rem;
+      padding-bottom: 0.68rem;
+    }
+
+    .chat-composer-actions {
+      margin-top: 0.4rem;
+    }
+
+    .chat-composer-settings {
+      gap: 0.45rem;
+    }
+
+    .chat-composer-model-select {
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
+    }
+
+    .chat-composer-settings {
+      gap: 0.45rem 0.55rem;
+    }
+  }
+
+  @container (max-width: 560px) {
+    .chat-initial-layout .diagnostics-action-card {
+      height: 52px;
+      min-height: 52px;
+    }
+
+    .chat-initial-footer > .chat-editor-turn:first-child .chat-editor-textarea {
+      min-height: 38px;
+    }
+
+    .chat-initial-footer .chat-composer .chat-editor-textarea {
+      min-height: 46px;
+    }
+
+    .chat-composer-tool-toggle {
+      font-size: 0.76rem;
+      line-height: 1.28;
+    }
+
+    .chat-composer-settings .icon-button {
+      width: 2.15rem;
+      height: 2.15rem;
+    }
+  }
+
+  @container (max-width: 400px) {
+    .chat-composer-primary-actions {
+      width: 100%;
+      justify-self: stretch;
+      justify-content: stretch;
+      grid-column: 1 / -1;
     }
 
     .chat-composer-primary-actions .button {
       width: 100%;
+      min-width: 0;
     }
   }
 
@@ -2593,6 +2773,30 @@
   --inline-json-ace-background: linear-gradient(180deg, rgba(250, 250, 249, 0.98), rgba(241, 240, 238, 0.94));
   --inline-json-ace-gutter-bg: rgba(234, 231, 228, 0.96);
 }
+
+  .conversation-bubble-transcript .message-card-host.role-user .compact-bubble-panel-embedded {
+    --inline-json-ace-border: rgba(194, 65, 12, 0.16);
+    --inline-json-ace-background: linear-gradient(180deg, rgba(255, 251, 245, 0.97), rgba(255, 242, 226, 0.93));
+    --inline-json-ace-gutter-bg: rgba(255, 236, 216, 0.96);
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-assistant .compact-bubble-panel-embedded {
+    --inline-json-ace-border: rgba(14, 116, 144, 0.14);
+    --inline-json-ace-background: linear-gradient(180deg, rgba(249, 252, 255, 0.98), rgba(236, 246, 255, 0.93));
+    --inline-json-ace-gutter-bg: rgba(226, 240, 255, 0.96);
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-system .compact-bubble-panel-embedded {
+    --inline-json-ace-border: rgba(124, 58, 237, 0.14);
+    --inline-json-ace-background: linear-gradient(180deg, rgba(252, 250, 255, 0.98), rgba(245, 239, 255, 0.93));
+    --inline-json-ace-gutter-bg: rgba(239, 231, 255, 0.96);
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-tool .compact-bubble-panel-embedded {
+    --inline-json-ace-border: rgba(180, 83, 9, 0.18);
+    --inline-json-ace-background: linear-gradient(180deg, rgba(255, 250, 244, 0.97), rgba(252, 239, 226, 0.93));
+    --inline-json-ace-gutter-bg: rgba(247, 229, 210, 0.96);
+  }
 
   .conversation-bubble-transcript .compact-bubble-panel {
     display: inline-block;

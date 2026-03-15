@@ -85,8 +85,9 @@ function handlePromptKeydown(event: KeyboardEvent): void {
             </select>
           </div>
         </div>
+
         <button
-          class="icon-button compact"
+          class="icon-button compact chat-composer-advanced-toggle"
           type="button"
           :aria-label="showAdvancedParameters ? 'Hide advanced parameters' : 'Show advanced parameters'"
           :title="showAdvancedParameters ? 'Hide advanced parameters' : 'Show advanced parameters'"
@@ -104,6 +105,7 @@ function handlePromptKeydown(event: KeyboardEvent): void {
             <path d="M14 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"></path>
           </svg>
         </button>
+
         <label
           class="chat-composer-tool-toggle"
           :for="`${modelId}-diagnostic-tools`"
@@ -122,13 +124,14 @@ function handlePromptKeydown(event: KeyboardEvent): void {
               : 'MCP server is disabled in config.'"
             @change="emit('update:enableDiagnosticTools', ($event.target as HTMLInputElement).checked)"
           >
-          <span>Provide llmproxy MCP Tools</span>
+          <span class="chat-composer-tool-toggle-label">Provide llmproxy MCP Tools</span>
         </label>
-      </div>
-      <div class="chat-composer-primary-actions">
-        <button class="button" type="submit">
-          {{ submitLabel }}
-        </button>
+
+        <div class="chat-composer-primary-actions">
+          <button class="button" type="submit">
+            {{ submitLabel }}
+          </button>
+        </div>
       </div>
     </div>
   </form>
