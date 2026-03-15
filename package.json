@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.1",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.13.14",
     "@vitejs/plugin-vue": "^6.0.5",
     "tailwindcss": "^4.2.1",
@@ -30,6 +31,7 @@
   "dependencies": {
     "ace-builds": "^1.43.6",
     "ajv": "^8.18.0",
+    "markdown-it": "^14.1.1",
     "vue-router": "^4.6.4"
   }
 }

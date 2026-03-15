@@ -1,3 +1,4 @@
+import MarkdownIt from "markdown-it";
 import type { RenderMessageOptions, UiBadge } from "../types/dashboard";
 import { buildModelIdentityBadge, describeFinishReason, badgeSpec } from "./dashboard-badges";
 import { formatUiValue, prettyJson } from "./formatters";
@@ -9,155 +10,58 @@ import {
   serializeCodeAceValue,
 } from "./json-ace";
 
-function renderMarkdownInline(markdown: unknown): string {
-  const placeholders: Array<{ token: string; html: string }> = [];
-  const store = (html: string) => {
-    const token = `@@MDTOKEN${placeholders.length}@@`;
-    placeholders.push({
-      token,
-      html,
-    });
-    return token;
-  };
-
-  let html = String(markdown ?? "")
-    .replace(/<br\s*\/?>/gi, () => store("<br />"))
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-  html = html.replace(
-    new RegExp(String.fromCharCode(96) + "([^" + String.fromCharCode(96) + "\\n]+)" + String.fromCharCode(96), "g"),
-    (_match, code) => store(`<code>${code}</code>`),
-  );
-  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, label, href) => (
-    store(`<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${label}</a>`)
-  ));
-  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  html = html.replace(/__([^_]+)__/g, "<strong>$1</strong>");
-  html = html.replace(/~~([^~]+)~~/g, "<del>$1</del>");
-  html = html.replace(/(^|[\s(])\*([^*]+)\*(?=[$\s).,!?:;]|$)/g, "$1<em>$2</em>");
-  html = html.replace(/(^|[\s(])_([^_]+)_(?=[$\s).,!?:;]|$)/g, "$1<em>$2</em>");
-  html = html.replace(/(^|[\s(])(https?:\/\/[^\s<]+)/g, (_match, prefix, href) => (
-    prefix + store(`<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(href)}</a>`)
-  ));
-
-  for (const placeholder of placeholders) {
-    html = html.replaceAll(placeholder.token, placeholder.html);
+function renderMarkdownCodeFence(content: string, language: string): string {
+  const aceLanguage = normalizeInlineAceLanguage(language);
+  if (aceLanguage) {
+    return renderEmbeddedContentBubble(aceLanguage, content);
   }
 
-  return html;
+  const rendered = renderCodeInnerBlock(content);
+  const codeClass = "turn-content" + (rendered.isJson || language === "json" ? " json-view" : "");
+  return `<pre class="${escapeHtml(codeClass)}"><code>${rendered.html}</code></pre>`;
 }
 
-function isMarkdownFence(line: string): boolean {
-  const fence = String.fromCharCode(96).repeat(3);
-  return line.trimStart().startsWith(fence);
-}
-
-function getMarkdownFenceLanguage(line: string): string {
-  return line.trimStart().slice(3).trim().toLowerCase();
-}
-
-function isMarkdownBlockBoundary(line: string): boolean {
-  return (
-    isMarkdownFence(line) ||
-    /^(#{1,6})\s+/.test(line) ||
-    /^[-*+]\s+/.test(line) ||
-    /^\d+\.\s+/.test(line) ||
-    /^>\s?/.test(line)
-  );
-}
-
-type MarkdownTableAlignment = "left" | "center" | "right" | "";
-
-function splitMarkdownTableRow(line: string): string[] {
-  let normalized = line.trim();
-
-  if (normalized.startsWith("|")) {
-    normalized = normalized.slice(1);
-  }
-
-  if (normalized.endsWith("|")) {
-    normalized = normalized.slice(0, -1);
-  }
-
-  return normalized.split("|").map((cell) => cell.trim());
-}
-
-function parseMarkdownTableAlignments(line: string): MarkdownTableAlignment[] | null {
-  const cells = splitMarkdownTableRow(line);
-  if (cells.length === 0) {
-    return null;
-  }
-
-  const alignments: MarkdownTableAlignment[] = [];
-
-  for (const cell of cells) {
-    if (!/^:?-{3,}:?$/.test(cell)) {
-      return null;
-    }
-
-    const startsWithColon = cell.startsWith(":");
-    const endsWithColon = cell.endsWith(":");
-
-    if (startsWithColon && endsWithColon) {
-      alignments.push("center");
-    } else if (endsWithColon) {
-      alignments.push("right");
-    } else if (startsWithColon) {
-      alignments.push("left");
-    } else {
-      alignments.push("");
-    }
-  }
-
-  return alignments;
-}
-
-function isMarkdownTableStart(lines: string[], index: number): boolean {
-  if (index + 1 >= lines.length) {
-    return false;
-  }
-
-  if (!lines[index].includes("|")) {
-    return false;
-  }
-
-  const headerCells = splitMarkdownTableRow(lines[index]);
-  const alignments = parseMarkdownTableAlignments(lines[index + 1]);
-
-  return headerCells.length > 1 && alignments !== null && alignments.length === headerCells.length;
-}
-
-function renderMarkdownTableHtml(
-  headerCells: string[],
-  alignments: MarkdownTableAlignment[],
-  bodyRows: string[][],
-): string {
-  const normalizedRows = bodyRows.map((row) => {
-    const nextRow = [...row];
-
-    while (nextRow.length < headerCells.length) {
-      nextRow.push("");
-    }
-
-    return nextRow.slice(0, headerCells.length);
+function createMarkdownRenderer(): MarkdownIt {
+  const markdown = new MarkdownIt({
+    html: false,
+    breaks: false,
+    linkify: true,
   });
 
-  const renderAlignedCell = (tag: "th" | "td", cell: string, index: number) => {
-    const alignment = alignments[index];
-    const alignAttr = alignment ? ` style="text-align:${alignment}"` : "";
-    return `<${tag}${alignAttr}>${renderMarkdownInline(cell)}</${tag}>`;
+  const defaultLinkOpen = markdown.renderer.rules.link_open;
+  markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+    tokens[idx].attrSet("target", "_blank");
+    tokens[idx].attrSet("rel", "noreferrer noopener");
+    return defaultLinkOpen ? defaultLinkOpen(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
   };
 
-  return (
-    `<div class="markdown-table-wrap">` +
-      `<table class="markdown-table">` +
-        `<thead><tr>${headerCells.map((cell, index) => renderAlignedCell("th", cell, index)).join("")}</tr></thead>` +
-        `<tbody>${normalizedRows.map((row) => `<tr>${row.map((cell, index) => renderAlignedCell("td", cell, index)).join("")}</tr>`).join("")}</tbody>` +
-      `</table>` +
-    `</div>`
+  const defaultTableOpen = markdown.renderer.rules.table_open;
+  markdown.renderer.rules.table_open = (tokens, idx, options, env, self) => {
+    tokens[idx].attrJoin("class", "markdown-table");
+    const rendered = defaultTableOpen ? defaultTableOpen(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+    return `<div class="markdown-table-wrap">${rendered}`;
+  };
+
+  const defaultTableClose = markdown.renderer.rules.table_close;
+  markdown.renderer.rules.table_close = (tokens, idx, options, env, self) => {
+    const rendered = defaultTableClose ? defaultTableClose(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+    return `${rendered}</div>`;
+  };
+
+  markdown.renderer.rules.fence = (tokens, idx) => {
+    const token = tokens[idx];
+    const language = token.info.trim().split(/\s+/, 1)[0]?.toLowerCase() ?? "";
+    return renderMarkdownCodeFence(token.content, language);
+  };
+
+  markdown.renderer.rules.code_block = (tokens, idx) => (
+    renderMarkdownCodeFence(tokens[idx].content, "")
   );
+
+  return markdown;
 }
+
+const markdownRenderer = createMarkdownRenderer();
 
 function renderMarkdownToHtml(markdown: unknown): string {
   const normalized = String(markdown ?? "").replace(/\r\n?/g, "\n").trim();
@@ -166,126 +70,7 @@ function renderMarkdownToHtml(markdown: unknown): string {
     return "";
   }
 
-  const lines = normalized.split("\n");
-  const blocks: string[] = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    const line = lines[index];
-
-    if (!line.trim()) {
-      index += 1;
-      continue;
-    }
-
-    if (isMarkdownFence(line)) {
-      const codeLines: string[] = [];
-      const language = getMarkdownFenceLanguage(line);
-      index += 1;
-
-      while (index < lines.length && !isMarkdownFence(lines[index])) {
-        codeLines.push(lines[index]);
-        index += 1;
-      }
-
-      if (index < lines.length && isMarkdownFence(lines[index])) {
-        index += 1;
-      }
-
-      const codeValue = codeLines.join("\n");
-      const aceLanguage = normalizeInlineAceLanguage(language);
-      if (aceLanguage) {
-        blocks.push(renderEmbeddedContentBubble(aceLanguage, codeValue));
-        continue;
-      }
-
-      const rendered = renderCodeInnerBlock(codeValue);
-      const codeClass = "turn-content" + (rendered.isJson || language === "json" ? " json-view" : "");
-      blocks.push(`<pre class="${escapeHtml(codeClass)}"><code>${rendered.html}</code></pre>`);
-      continue;
-    }
-
-    if (isMarkdownTableStart(lines, index)) {
-      const headerCells = splitMarkdownTableRow(lines[index]);
-      const alignments = parseMarkdownTableAlignments(lines[index + 1]) ?? headerCells.map(() => "");
-      index += 2;
-
-      const bodyRows: string[][] = [];
-
-      while (index < lines.length) {
-        const rowLine = lines[index];
-        if (!rowLine.trim()) {
-          break;
-        }
-
-        if (isMarkdownBlockBoundary(rowLine) || !rowLine.includes("|")) {
-          break;
-        }
-
-        const rowCells = splitMarkdownTableRow(rowLine);
-        if (rowCells.length < 2) {
-          break;
-        }
-
-        bodyRows.push(rowCells);
-        index += 1;
-      }
-
-      blocks.push(renderMarkdownTableHtml(headerCells, alignments, bodyRows));
-      continue;
-    }
-
-    const headingMatch = /^(#{1,6})\s+(.*)$/.exec(line);
-    if (headingMatch) {
-      const level = Math.min(6, headingMatch[1].length);
-      blocks.push(`<h${level}>${renderMarkdownInline(headingMatch[2])}</h${level}>`);
-      index += 1;
-      continue;
-    }
-
-    if (/^>\s?/.test(line)) {
-      const quoteLines: string[] = [];
-      while (index < lines.length && /^>\s?/.test(lines[index])) {
-        quoteLines.push(lines[index].replace(/^>\s?/, ""));
-        index += 1;
-      }
-
-      blocks.push(`<blockquote><p>${renderMarkdownInline(quoteLines.join("\n")).replace(/\n/g, "<br />")}</p></blockquote>`);
-      continue;
-    }
-
-    if (/^[-*+]\s+/.test(line)) {
-      const items: string[] = [];
-      while (index < lines.length && /^[-*+]\s+/.test(lines[index])) {
-        items.push(lines[index].replace(/^[-*+]\s+/, ""));
-        index += 1;
-      }
-
-      blocks.push(`<ul>${items.map((item) => `<li>${renderMarkdownInline(item)}</li>`).join("")}</ul>`);
-      continue;
-    }
-
-    if (/^\d+\.\s+/.test(line)) {
-      const items: string[] = [];
-      while (index < lines.length && /^\d+\.\s+/.test(lines[index])) {
-        items.push(lines[index].replace(/^\d+\.\s+/, ""));
-        index += 1;
-      }
-
-      blocks.push(`<ol>${items.map((item) => `<li>${renderMarkdownInline(item)}</li>`).join("")}</ol>`);
-      continue;
-    }
-
-    const paragraphLines: string[] = [];
-    while (index < lines.length && lines[index].trim() && !isMarkdownBlockBoundary(lines[index])) {
-      paragraphLines.push(lines[index]);
-      index += 1;
-    }
-
-    blocks.push(`<p>${renderMarkdownInline(paragraphLines.join("\n")).replace(/\n/g, "<br />")}</p>`);
-  }
-
-  return blocks.join("");
+  return markdownRenderer.render(normalized);
 }
 
 function renderMessageStringHtml(value: unknown): string {
