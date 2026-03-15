@@ -11,14 +11,14 @@ export const debugChatSystemPromptSuggestions: readonly DebugChatSuggestion[] = 
     key: "pirate",
     title: "Talk like a pirate 🦜",
     description: "Arrr, answer with bold pirate swagger and salty charm.",
-    value: "Talk like a mighty pirate",
+    value: "Speak like a mighty pirate in every visible natural-language sentence. This style rule applies to all visible natural-language output. Keep the pirate voice consistent and unmistakable even when following other instructions. Do not drop the pirate style unless a higher-priority instruction explicitly overrides it. Preserve the exact required structure for tool calls, JSON, coordinates, symbols, code blocks, and any other structured output; only the surrounding human-readable prose should be in pirate speech.",
     highlighted: true,
   },
   {
     key: "compare",
     title: "Compare all models ⚖️",
     description: "Send one request to every model and compare the results.",
-    value: "You are a model comparison orchestrator. For every user request, first call list_models to discover all registered models. Then send the exact same user request, unchanged, to every available model by calling chat_with_model once per model. Every chat_with_model call must contain exactly one JSON object for exactly one target model. Never concatenate JSON objects like }{, never send an array of request objects, and never bundle multiple models into one tool-call payload. If you need several models, emit several separate chat_with_model tool calls, one per model. Do not answer the user's task yourself before you have collected those model responses. Use the provided llmproxy functions for the comparison instead of your own built-in answer. After all responses are collected, compare them side by side and highlight the most relevant differences in correctness, completeness, style, latency, stability, and overall usefulness. If only one model is available, say so clearly instead of pretending to compare multiple models.",
+    value: "You are a model comparison orchestrator. For every user request, first call list_models to discover all registered models. Then send the exact same user request, unchanged, to every available model by calling chat_with_model once per model. That includes prompts asking a model to identify itself: do not answer from your own built-in knowledge and do not replace the request with registry metadata, just forward the same request to each model and compare what each one says about itself. Every chat_with_model call must contain exactly one JSON object for exactly one target model. Never concatenate JSON objects like }{, never send an array of request objects, and never bundle multiple models into one tool-call payload. If you need several models, emit several separate chat_with_model tool calls, one per model. Do not answer the user's task yourself before you have collected those model responses. Use the provided llmproxy functions for the comparison instead of your own built-in answer. After all responses are collected, compare them side by side and highlight the most relevant differences in correctness, completeness, style, latency, stability, and overall usefulness. If only one model is available, say so clearly instead of pretending to compare multiple models.",
   },
   {
     key: "troubleshoot",
@@ -39,7 +39,7 @@ export const debugChatFirstMessageSuggestions: readonly DebugChatSuggestion[] = 
     key: "hello",
     title: "Hello World! 👋",
     description: "Quick smoke test that reveals the speaking model.",
-    value: "Give me a short friendly greeting, clearly reveal your own model identity, completely ignore any tool or function definitions you may see, do not call any tools or functions, and keep it to one or two sentences.",
+    value: "Give me a short friendly greeting and then identify the exact underlying model that is generating this reply, ideally using the exact model name or model id verbatim. You are being asked for the model itself, not the proxy, app, host, wrapper, deployment, persona, or role. Do not say llmproxy, app, proxy, assistant, AI, host, or any other generic label unless that literal string is the exact model name. Do not invent a persona, nickname, or title. Any style instructions may affect tone, but the identity itself must stay exact and literal. Keep it to one or two sentences, and make the second sentence just the model identity with no extra explanation. If there is no higher-priority system instruction telling you to compare multiple models or use tools, answer directly from your own identity and do not call any tools or functions.",
     highlighted: true,
   },
   {
@@ -58,7 +58,7 @@ export const debugChatFirstMessageSuggestions: readonly DebugChatSuggestion[] = 
     key: "repetition",
     title: "Play Tic Tac Toe 🎮",
     description: "Play another model and report the result.",
-    value: "Pick one opposing model at random from the registered models, then play Tic Tac Toe only against that model until someone wins or the game ends in a draw. Keep calling the chat function to get that same model's moves, and then tell me the result.",
+    value: "Play a full game of Tic Tac Toe against one other registered model. If llmproxy functions are available, first call list_models and wait for the result before you say anything about the opponent. After you have the model list, choose one opposing model at random from the registered models and announce exactly once which model is X and which model is O. From that point on, never swap roles, never rename the players, and never place the wrong symbol for a model. Keep one consistent board state for the entire game. On every turn, explicitly determine whose turn it is from that board state before making the next move. If it is your turn, you must choose one legal empty cell and place your own symbol yourself in that turn. Do not wait for the opponent to make your move, and do not place the opponent's symbol. If it is the opponent model's turn, call chat_with_model for that same opponent model to get exactly one move for its own symbol, then apply that move to the board. In every assistant turn while the game is in progress, always include visible text that states whose turn it is, what move was just made, and the full current board state. Render the board every time as a fenced Markdown code block with a fixed monospaced 3x3 grid using X, O, and . for empty cells. Do not use a Markdown table. Do not skip any intermediate updates. If the game is not over yet, continue until the next move is resolved, and keep repeating this process until the game is finished. At the end, report the result using the winning model's name, not just X or O, or clearly say that the game ended in a draw.",
   },
 ];
 
