@@ -32,7 +32,6 @@ function createInitialState(): DashboardState {
       error: "",
       detail: null,
       cache: {},
-      lastFetchedAt: 0,
     }),
     backendConfigs: reactive({}),
     backendEditor: reactive({
@@ -180,20 +179,14 @@ function createDashboardStoreInternal() {
         delete pendingCancels[requestId];
       }
     }
-
-    if (state.requestDetail.open && state.requestDetail.requestId && state.requestDetail.detail?.live) {
-      if (activeRequestIds.has(state.requestDetail.requestId)) {
-        requestDetail.scheduleOpenDetailRefresh();
-      } else {
-        void requestDetail.refreshRequestDetail(state.requestDetail.requestId, false);
-      }
-      return;
-    }
-
-    requestDetail.scheduleOpenDetailRefresh();
   };
 
-  const liveFeed = useLiveFeed(state, applySnapshot, showToast);
+  const applyLiveRequestDetail = (detail: NonNullable<DashboardState["requestDetail"]["detail"]>): void => {
+    requestDetail.applyLiveRequestDetail(detail);
+    debugChat.applyLiveDebugDetail(detail);
+  };
+
+  const liveFeed = useLiveFeed(state, applySnapshot, applyLiveRequestDetail, showToast);
   const summaryCards = computed(() => buildSummaryCards(state.snapshot));
 
   function handleKeyDown(event: KeyboardEvent): void {
@@ -229,7 +222,6 @@ function createDashboardStoreInternal() {
     started = false;
     liveFeed.stopLiveFeed();
     debugChat.stopDebugMetricsTicker();
-    requestDetail.stopRequestDetailRefresh();
     window.removeEventListener("keydown", handleKeyDown);
     for (const timer of toastTimers.values()) {
       window.clearTimeout(timer);
@@ -267,10 +259,6 @@ function createDashboardStoreInternal() {
       });
       if (!response.ok) {
         throw new Error(await readErrorResponse(response));
-      }
-
-      if (state.requestDetail.requestId === requestId) {
-        await requestDetail.refreshRequestDetail(requestId, false);
       }
     } catch (error) {
       delete pendingCancels[requestId];

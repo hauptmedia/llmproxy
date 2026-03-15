@@ -16,34 +16,8 @@ export function useRequestDetail(
   state: DashboardState,
   onErrorToast: (title: string, message: string) => void,
 ) {
-  let detailRefreshTimer: number | undefined;
-
   function isActiveRequestId(requestId: string): boolean {
     return state.snapshot.activeConnections.some((connection) => connection.id === requestId);
-  }
-
-  function hasRecentRequestDetail(requestId: string): boolean {
-    return state.snapshot.recentRequests.some((entry) => entry.id === requestId && Boolean(entry.hasDetail));
-  }
-
-  function hasSnapshotRequestDetail(requestId: string): boolean {
-    return isActiveRequestId(requestId) || hasRecentRequestDetail(requestId);
-  }
-
-  function shouldRefreshOpenDetail(): boolean {
-    if (!state.requestDetail.open || !state.requestDetail.requestId) {
-      return false;
-    }
-
-    if (!hasSnapshotRequestDetail(state.requestDetail.requestId)) {
-      return false;
-    }
-
-    if (!state.requestDetail.detail) {
-      return true;
-    }
-
-    return state.requestDetail.detail.live === true;
   }
 
   async function loadRequestDetail(requestId: string, useCache = true): Promise<boolean> {
@@ -69,7 +43,6 @@ export function useRequestDetail(
 
       state.requestDetail.detail = detail;
       state.requestDetail.loading = false;
-      state.requestDetail.lastFetchedAt = Date.now();
 
       if (!detail.live) {
         state.requestDetail.cache[requestId] = detail;
@@ -100,7 +73,6 @@ export function useRequestDetail(
       error: state.requestDetail.error,
       detail: state.requestDetail.detail,
       loading: state.requestDetail.loading,
-      lastFetchedAt: state.requestDetail.lastFetchedAt,
     };
 
     state.requestDetail.requestId = requestId;
@@ -123,7 +95,6 @@ export function useRequestDetail(
     state.requestDetail.error = previousState.error;
     state.requestDetail.detail = previousState.detail;
     state.requestDetail.loading = previousState.loading;
-    state.requestDetail.lastFetchedAt = previousState.lastFetchedAt;
   }
 
   async function refreshRequestDetail(requestId = state.requestDetail.requestId, useCache = false): Promise<void> {
@@ -142,31 +113,17 @@ export function useRequestDetail(
     state.requestDetail.error = "";
   }
 
-  function scheduleOpenDetailRefresh(): void {
-    if (!shouldRefreshOpenDetail()) {
+  function applyLiveRequestDetail(detail: RequestLogDetail): void {
+    if (state.requestDetail.requestId !== detail.entry.id) {
       return;
     }
 
-    const elapsed = Date.now() - state.requestDetail.lastFetchedAt;
-    if (elapsed < 600) {
-      if (detailRefreshTimer !== undefined) {
-        return;
-      }
+    state.requestDetail.detail = detail;
+    state.requestDetail.loading = false;
+    state.requestDetail.error = "";
 
-      detailRefreshTimer = window.setTimeout(() => {
-        detailRefreshTimer = undefined;
-        scheduleOpenDetailRefresh();
-      }, Math.max(100, 600 - elapsed));
-      return;
-    }
-
-    void loadRequestDetail(state.requestDetail.requestId, false);
-  }
-
-  function stopRequestDetailRefresh(): void {
-    if (detailRefreshTimer !== undefined) {
-      window.clearTimeout(detailRefreshTimer);
-      detailRefreshTimer = undefined;
+    if (!detail.live) {
+      state.requestDetail.cache[detail.entry.id] = detail;
     }
   }
 
@@ -250,7 +207,6 @@ export function useRequestDetail(
     requestParamRows,
     requestResponseMetricRows,
     requestStateBadge,
-    scheduleOpenDetailRefresh,
-    stopRequestDetailRefresh,
+    applyLiveRequestDetail,
   };
 }

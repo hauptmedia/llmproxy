@@ -394,9 +394,12 @@ export class LlmProxyServer {
     });
 
     response.write(`event: snapshot\ndata: ${JSON.stringify(this.getSnapshot())}\n\n`);
+    for (const requestId of this.activeConnections.keys()) {
+      this.writeRequestDetailEvent(response, requestId);
+    }
     this.sseClients.add(response);
 
-    request.on("close", () => {
+    response.on("close", () => {
       this.sseClients.delete(response);
     });
   }
@@ -1031,6 +1034,7 @@ export class LlmProxyServer {
       requestedCompletionTokenLimit: resolveRequestedCompletionLimit(route.requestBody),
       requestBody: route.requestBody,
     });
+    this.broadcastRequestDetail(route.id);
     this.broadcastCurrentSnapshot();
   }
 
@@ -1046,6 +1050,7 @@ export class LlmProxyServer {
 
     Object.assign(connection, patch);
     connection.lastUpdatedAt = Date.now();
+    this.broadcastRequestDetail(requestId);
 
     if (immediate) {
       this.broadcastCurrentSnapshot();
@@ -1090,6 +1095,7 @@ export class LlmProxyServer {
       connection.responseBody = responseBody as JsonValue;
     }
     connection.lastUpdatedAt = now;
+    this.broadcastRequestDetail(requestId);
     this.scheduleSnapshotBroadcast();
   }
 
@@ -1098,6 +1104,7 @@ export class LlmProxyServer {
       return;
     }
 
+    this.broadcastRequestDetail(requestId);
     this.broadcastCurrentSnapshot();
   }
 
@@ -1536,6 +1543,30 @@ export class LlmProxyServer {
 
       client.write(payload);
     }
+  }
+
+  private broadcastRequestDetail(requestId: string): void {
+    if (this.sseClients.size === 0) {
+      return;
+    }
+
+    for (const client of this.sseClients) {
+      if (client.writableEnded) {
+        this.sseClients.delete(client);
+        continue;
+      }
+
+      this.writeRequestDetailEvent(client, requestId);
+    }
+  }
+
+  private writeRequestDetailEvent(response: ServerResponse, requestId: string): void {
+    const detail = this.getRequestDetail(requestId);
+    if (!detail) {
+      return;
+    }
+
+    response.write(`event: request_detail\ndata: ${JSON.stringify(detail)}\n\n`);
   }
 
   private readonly handleLoadBalancerSnapshot = (): void => {

@@ -28,11 +28,9 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
 
 <template>
   <div class="diagnostics-report-view">
-    <div v-if="loading" class="empty">Loading heuristic diagnosis...</div>
+    <div v-if="loading" class="empty">Loading analyzer...</div>
     <div v-else-if="error" class="empty">{{ error }}</div>
     <template v-else-if="report">
-      <p class="diagnostics-report-summary">{{ report.summary }}</p>
-
       <div v-if="report.findings.length" class="diagnostics-findings">
         <article
           v-for="finding in report.findings"
@@ -64,11 +62,11 @@ function severityLabel(severity: "info" | "warn" | "bad"): string {
           </div>
         </article>
       </div>
-      <div v-else class="empty mt-5">No likely problems were detected for this request.</div>
+      <div v-else class="empty mt-5">Analyzer did not detect likely issues for this request.</div>
     </template>
     <div v-else-if="waitingForFinal" class="empty">
-      Problems become available after the request finishes and is retained in history.
+      Analyzer becomes available after the request finishes and is retained in history.
     </div>
-    <div v-else class="empty">No heuristic diagnosis is available for this request.</div>
+    <div v-else class="empty">No analyzer result is available for this request.</div>
   </div>
 </template>

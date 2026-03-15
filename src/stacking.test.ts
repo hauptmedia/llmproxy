@@ -741,6 +741,23 @@ async function waitForRecentRequest(
   throw new Error(`Timed out waiting for recent request state. Last state: ${JSON.stringify(lastPayload)}`);
 }
 
+function parseSseEvents<T>(payload: string): T[] {
+  return payload
+    .split("\n\n")
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0)
+    .map((block) => {
+      const data = block
+        .split("\n")
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart())
+        .join("\n");
+
+      return data.length > 0 ? JSON.parse(data) as T : null;
+    })
+    .filter((entry): entry is T => entry !== null);
+}
+
 test("llmproxy can stack another llmproxy as an OpenAI-compatible backend", async (t) => {
   const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-stack-"));
   const streamModes: boolean[] = [];
@@ -1626,6 +1643,206 @@ test("active connections expose live request details for chat history inspection
   assert.equal(
     statePayload.recentRequests.find((entry) => entry.id === requestedRequestId)?.effectiveCompletionTokenLimit,
     128,
+  );
+});
+
+test("dashboard SSE streams live request_detail events before and after completion", async (t) => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-live-detail-sse-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  t.after(async () => {
+    for (const entry of cleanup.reverse()) {
+      await entry();
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  const mockPort = await getFreePort();
+  const routerPort = await getFreePort();
+
+  const mockServer = await startMockSlowStreamingBackend(mockPort);
+  cleanup.push(async () => {
+    await new Promise<void>((resolve, reject) => {
+      mockServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  });
+
+  const config: ProxyConfig = {
+    server: {
+      host: "127.0.0.1",
+      port: routerPort,
+      requestTimeoutMs: 15_000,
+      queueTimeoutMs: 2_000,
+      healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
+      mcpServerEnabled: true,
+    },
+    backends: [
+      {
+        id: "mock-live-detail-sse-upstream",
+        name: "mock live detail sse upstream",
+        baseUrl: `http://127.0.0.1:${mockPort}`,
+        enabled: true,
+        maxConcurrency: 1,
+        healthPath: "/v1/models",
+        models: ["mock-live-model"],
+      },
+    ],
+  };
+
+  const router = await startRouter(config, path.join(tempDir, "live-detail-sse-router.config.json"));
+  cleanup.push(async () => {
+    await router.server.stop();
+    await router.loadBalancer.stop();
+  });
+
+  const baseUrl = `http://127.0.0.1:${routerPort}`;
+  await waitForHealthyBackend(baseUrl, "mock-live-detail-sse-upstream");
+  const requestedRequestId = "chat-debug-live-sse-request";
+
+  const liveResponsePromise = fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-llmproxy-request-id": requestedRequestId,
+    },
+    body: JSON.stringify({
+      model: "mock-live-model",
+      stream: true,
+      messages: [
+        {
+          role: "user",
+          content: "Stream request detail updates.",
+        },
+      ],
+    }),
+  });
+
+  const activeConnection = await waitForActiveConnection(baseUrl);
+  assert.equal(activeConnection.id, requestedRequestId);
+
+  const eventsAbortController = new AbortController();
+  const detailEventsResponse = await fetch(`${baseUrl}/api/events`, {
+    signal: eventsAbortController.signal,
+  });
+  assert.equal(detailEventsResponse.status, 200);
+  assert.match(detailEventsResponse.headers.get("content-type") ?? "", /text\/event-stream/);
+  const detailReader = detailEventsResponse.body?.getReader();
+  assert.ok(detailReader);
+
+  let detailEventsPayload = "";
+  let sawLiveRequestDetail = false;
+  const readDeadline = Date.now() + 600;
+
+  while (Date.now() < readDeadline && !sawLiveRequestDetail) {
+    const next = await Promise.race([
+      detailReader!.read(),
+      delay(80).then(() => null),
+    ]);
+
+    if (!next) {
+      continue;
+    }
+
+    if (next.done) {
+      break;
+    }
+
+    detailEventsPayload += new TextDecoder().decode(next.value);
+    const detailEvents = parseSseEvents<{
+      live?: boolean;
+      entry?: {
+        id?: string;
+      };
+      responseBody?: {
+        choices?: Array<{
+          message?: {
+            content?: string;
+          };
+        }>;
+      };
+    }>(detailEventsPayload).filter((entry) => entry.entry?.id === requestedRequestId);
+
+    sawLiveRequestDetail = detailEvents.some((entry) => entry.live === true);
+  }
+
+  assert.equal(sawLiveRequestDetail, true);
+  assert.match(detailEventsPayload, /event: request_detail/);
+
+  const liveResponse = await liveResponsePromise;
+  assert.equal(liveResponse.status, 200);
+  const liveBody = await liveResponse.text();
+  assert.match(liveBody, /Streaming /);
+  assert.match(liveBody, /response\./);
+
+  let detailEvents = parseSseEvents<{
+    live?: boolean;
+    entry?: {
+      id?: string;
+    };
+    responseBody?: {
+      choices?: Array<{
+        message?: {
+          content?: string;
+        };
+      }>;
+    };
+  }>(detailEventsPayload).filter((entry) => entry.entry?.id === requestedRequestId);
+
+  const finalDeadline = Date.now() + 800;
+  while (
+    Date.now() < finalDeadline &&
+    !detailEvents.some((entry) => entry.live !== true)
+  ) {
+    const next = await Promise.race([
+      detailReader!.read(),
+      delay(80).then(() => null),
+    ]);
+
+    if (!next) {
+      continue;
+    }
+
+    if (next.done) {
+      break;
+    }
+
+    detailEventsPayload += new TextDecoder().decode(next.value);
+    detailEvents = parseSseEvents<{
+      live?: boolean;
+      entry?: {
+        id?: string;
+      };
+      responseBody?: {
+        choices?: Array<{
+          message?: {
+            content?: string;
+          };
+        }>;
+      };
+    }>(detailEventsPayload).filter((entry) => entry.entry?.id === requestedRequestId);
+  }
+
+  eventsAbortController.abort();
+
+  assert.ok(detailEvents.length >= 2);
+  assert.equal(detailEvents.some((entry) => entry.live === true), true);
+  assert.match(
+    detailEvents.find((entry) => entry.live === true)?.responseBody?.choices?.[0]?.message?.content ?? "",
+    /Streaming/,
+  );
+  assert.notEqual(detailEvents[detailEvents.length - 1]?.live, true);
+  assert.match(
+    detailEvents[detailEvents.length - 1]?.responseBody?.choices?.[0]?.message?.content ?? "",
+    /Streaming response\./,
   );
 });
 

@@ -4,15 +4,80 @@ import { prettyJson } from "./formatters";
 type AceModule = typeof import("ace-builds");
 
 let aceLoader: Promise<AceModule> | null = null;
+const loadedModes = new Set<string>();
 
-export type JsonAceController = {
+export type InlineAceLanguage =
+  | "json"
+  | "xml"
+  | "html"
+  | "javascript"
+  | "typescript"
+  | "yaml"
+  | "markdown"
+  | "python"
+  | "sh";
+
+export type AceViewerController = {
   destroy: () => void;
   resize: () => void;
   setReadOnly: (readOnly: boolean) => void;
   setValue: (value: unknown, placeholder?: string) => void;
 };
 
-export function serializeJsonAceValue(value: unknown, placeholder = ""): string {
+export function normalizeInlineAceLanguage(value: string): InlineAceLanguage | null {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === "json") {
+    return "json";
+  }
+
+  if (normalized === "xml" || normalized === "svg") {
+    return "xml";
+  }
+
+  if (normalized === "html") {
+    return "html";
+  }
+
+  if (normalized === "javascript" || normalized === "js") {
+    return "javascript";
+  }
+
+  if (normalized === "typescript" || normalized === "ts") {
+    return "typescript";
+  }
+
+  if (normalized === "yaml" || normalized === "yml") {
+    return "yaml";
+  }
+
+  if (normalized === "markdown" || normalized === "md") {
+    return "markdown";
+  }
+
+  if (normalized === "python" || normalized === "py") {
+    return "python";
+  }
+
+  if (normalized === "sh" || normalized === "bash" || normalized === "shell" || normalized === "zsh") {
+    return "sh";
+  }
+
+  return null;
+}
+
+function shouldUseJsonFormatting(language: InlineAceLanguage): boolean {
+  return language === "json";
+}
+
+export function serializeCodeAceValue(
+  value: unknown,
+  language: InlineAceLanguage,
+  placeholder = "",
+): string {
   if (value === undefined || value === null || value === "") {
     return placeholder;
   }
@@ -23,7 +88,7 @@ export function serializeJsonAceValue(value: unknown, placeholder = ""): string 
       return placeholder;
     }
 
-    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    if (shouldUseJsonFormatting(language) && (trimmed.startsWith("{") || trimmed.startsWith("["))) {
       try {
         return prettyJson(JSON.parse(trimmed));
       } catch {
@@ -54,14 +119,11 @@ export async function loadAce(): Promise<AceModule> {
     aceLoader = (async () => {
       const aceModule = await import("ace-builds") as unknown as { default: AceModule };
       const ace = aceModule.default;
-      const [{ default: workerJsonUrl }] = await Promise.all([
-        import("ace-builds/src-noconflict/worker-json?url"),
-        import("ace-builds/src-noconflict/mode-json"),
+      await Promise.all([
+        import("ace-builds/esm-resolver"),
         import("ace-builds/src-noconflict/theme-textmate"),
         import("ace-builds/src-noconflict/ext-searchbox"),
       ]);
-
-      ace.config.setModuleUrl("ace/mode/json_worker", workerJsonUrl);
       return ace;
     })();
   }
@@ -69,10 +131,57 @@ export async function loadAce(): Promise<AceModule> {
   return aceLoader;
 }
 
-export async function createJsonAceEditor(
+async function ensureAceMode(language: InlineAceLanguage): Promise<void> {
+  if (loadedModes.has(language)) {
+    return;
+  }
+
+  switch (language) {
+    case "json":
+      await import("ace-builds/src-noconflict/mode-json");
+      break;
+    case "xml":
+      await import("ace-builds/src-noconflict/mode-xml");
+      break;
+    case "html":
+      await import("ace-builds/src-noconflict/mode-html");
+      break;
+    case "javascript":
+      await import("ace-builds/src-noconflict/mode-javascript");
+      break;
+    case "typescript":
+      await import("ace-builds/src-noconflict/mode-typescript");
+      break;
+    case "yaml":
+      await import("ace-builds/src-noconflict/mode-yaml");
+      break;
+    case "markdown":
+      await import("ace-builds/src-noconflict/mode-markdown");
+      break;
+    case "python":
+      await import("ace-builds/src-noconflict/mode-python");
+      break;
+    case "sh":
+      await import("ace-builds/src-noconflict/mode-sh");
+      break;
+  }
+
+  loadedModes.add(language);
+}
+
+function aceModeName(language: InlineAceLanguage): string {
+  return `ace/mode/${language}`;
+}
+
+function aceShouldUseWorker(language: InlineAceLanguage): boolean {
+  return language === "json";
+}
+
+export async function createCodeAceEditor(
   host: HTMLElement,
   options: {
     value?: unknown;
+    language?: InlineAceLanguage;
     placeholder?: string;
     readOnly?: boolean;
     minLines?: number;
@@ -80,17 +189,20 @@ export async function createJsonAceEditor(
     scrollPastEnd?: number;
     padding?: number;
   } = {},
-): Promise<JsonAceController> {
+): Promise<AceViewerController> {
   const ace = await loadAce();
+  const language = options.language ?? "json";
+  await ensureAceMode(language);
+
   const editor = ace.edit(host, {
-    mode: "ace/mode/json",
+    mode: aceModeName(language),
     theme: "ace/theme/textmate",
     readOnly: options.readOnly ?? true,
     showPrintMargin: false,
     highlightActiveLine: false,
     highlightGutterLine: false,
     showGutter: true,
-    useWorker: true,
+    useWorker: aceShouldUseWorker(language),
     displayIndentGuides: true,
     wrap: true,
     tabSize: 2,
@@ -103,12 +215,13 @@ export async function createJsonAceEditor(
     maxLines: options.maxLines,
   });
 
-  editor.session.setUseWorker(true);
+  editor.session.setMode(aceModeName(language));
+  editor.session.setUseWorker(aceShouldUseWorker(language));
   editor.session.setUseWrapMode(true);
   editor.session.setFoldStyle("markbeginend");
-  editor.renderer.setScrollMargin(12, 12, 12, 12);
+  editor.renderer.setScrollMargin(0, 12, 12, 12);
   editor.renderer.setPadding(options.padding ?? 12);
-  editor.setValue(serializeJsonAceValue(options.value, options.placeholder ?? ""), -1);
+  editor.setValue(serializeCodeAceValue(options.value, language, options.placeholder ?? ""), -1);
   editor.clearSelection();
 
   let resizeObserver: ResizeObserver | null = null;
@@ -137,7 +250,7 @@ export async function createJsonAceEditor(
       editor.setReadOnly(readOnly);
     },
     setValue(value: unknown, placeholder = "") {
-      const nextValue = serializeJsonAceValue(value, placeholder);
+      const nextValue = serializeCodeAceValue(value, language, placeholder);
       if (editor.getValue() === nextValue) {
         return;
       }
@@ -146,4 +259,24 @@ export async function createJsonAceEditor(
       editor.clearSelection();
     },
   };
+}
+
+export type JsonAceController = AceViewerController;
+
+export async function createJsonAceEditor(
+  host: HTMLElement,
+  options: {
+    value?: unknown;
+    placeholder?: string;
+    readOnly?: boolean;
+    minLines?: number;
+    maxLines?: number;
+    scrollPastEnd?: number;
+    padding?: number;
+  } = {},
+): Promise<JsonAceController> {
+  return createCodeAceEditor(host, {
+    ...options,
+    language: "json",
+  });
 }

@@ -4,6 +4,8 @@ import DebugChatWorkspace from "../components/DebugChatWorkspace.vue";
 
 <template>
   <section class="chat-page-section">
-    <DebugChatWorkspace />
+    <div class="debug-chat-dialog debug-chat-page-dialog">
+      <DebugChatWorkspace />
+    </div>
   </section>
 </template>

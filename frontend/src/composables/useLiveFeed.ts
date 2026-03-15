@@ -1,8 +1,9 @@
-import type { DashboardState, ProxySnapshot } from "../types/dashboard";
+import type { DashboardState, ProxySnapshot, RequestLogDetail } from "../types/dashboard";
 
 export function useLiveFeed(
   state: DashboardState,
   onSnapshot: (snapshot: ProxySnapshot) => void,
+  onRequestDetail: (detail: RequestLogDetail) => void,
   onErrorToast: (title: string, message: string) => void,
 ) {
   let eventSource: EventSource | null = null;
@@ -20,6 +21,14 @@ export function useLiveFeed(
     eventSource.addEventListener("snapshot", (event: MessageEvent) => {
       try {
         onSnapshot(JSON.parse(event.data) as ProxySnapshot);
+      } catch {
+        return;
+      }
+    });
+
+    eventSource.addEventListener("request_detail", (event: MessageEvent) => {
+      try {
+        onRequestDetail(JSON.parse(event.data) as RequestLogDetail);
       } catch {
         return;
       }

@@ -33,7 +33,6 @@ export function useDebugChat(
 ) {
   const maxFunctionRounds = 100;
   let metricsTicker: number | undefined;
-  let liveTranscriptSyncTimer: number | undefined;
   let activeRunId = 0;
 
   function ensureDefaultDebugPrompt(): void {
@@ -114,13 +113,6 @@ export function useDebugChat(
     }
   }
 
-  function stopLiveTranscriptSync(): void {
-    if (liveTranscriptSyncTimer !== undefined) {
-      window.clearTimeout(liveTranscriptSyncTimer);
-      liveTranscriptSyncTimer = undefined;
-    }
-  }
-
   function startDebugMetricsTicker(): void {
     stopDebugMetricsTicker();
     metricsTicker = window.setInterval(() => {
@@ -136,44 +128,6 @@ export function useDebugChat(
       const seconds = Math.max(0.001, (Date.now() - metrics.firstTokenAt) / 1000);
       metrics.completionPerSecond = metrics.completionTokens / seconds;
     }, 200);
-  }
-
-  async function syncLiveTranscriptFromServer(runId: number): Promise<void> {
-    stopLiveTranscriptSync();
-
-    if (runId !== activeRunId || !state.debug.sending) {
-      return;
-    }
-
-    const requestId = state.debug.lastRequestId;
-    if (requestId) {
-      try {
-        const response = await fetch(`/api/requests/${encodeURIComponent(requestId)}`, { method: "GET" });
-        if (response.ok) {
-          const detail = await response.json();
-          if (runId === activeRunId && state.debug.sending && state.debug.lastRequestId === requestId) {
-            state.debug.liveDetail = detail;
-          }
-        }
-      } catch {
-        // Ignore polling errors for the live transcript mirror. The primary chat request remains authoritative.
-      }
-    }
-
-    if (runId !== activeRunId || !state.debug.sending) {
-      return;
-    }
-
-    liveTranscriptSyncTimer = window.setTimeout(() => {
-      void syncLiveTranscriptFromServer(runId);
-    }, 250);
-  }
-
-  function startLiveTranscriptSync(runId: number): void {
-    stopLiveTranscriptSync();
-    liveTranscriptSyncTimer = window.setTimeout(() => {
-      void syncLiveTranscriptFromServer(runId);
-    }, 150);
   }
 
   async function runSingleDebugAssistantRequest(
@@ -260,7 +214,7 @@ export function useDebugChat(
       });
     }
 
-    const diagnosticsAllowed = state.serverConfig?.mcpServerEnabled === true;
+    const diagnosticsAllowed = state.serverConfig?.mcpServerEnabled !== false;
     let diagnosticTools: Array<Record<string, unknown>> | undefined;
     if (enableDiagnosticTools && diagnosticsAllowed) {
       try {
@@ -313,7 +267,6 @@ export function useDebugChat(
     }
     state.debug.abortController = new AbortController();
     startDebugMetricsTicker();
-    startLiveTranscriptSync(runId);
 
     try {
       let currentAssistantTurn = assistantTurn;
@@ -344,7 +297,11 @@ export function useDebugChat(
 
         state.debug.lastRequestId = currentRequestId;
         state.debug.rawRequest = prettyJson(currentPayload);
-        currentAssistantTurn = await runSingleDebugAssistantRequest(currentPayload, currentAssistantTurn, currentRequestId);
+        currentAssistantTurn = await runSingleDebugAssistantRequest(
+          currentPayload,
+          currentAssistantTurn,
+          currentRequestId,
+        );
         assistantTurn = currentAssistantTurn;
 
         const assistantHistoryMessage = buildDebugHistoryMessage(currentAssistantTurn);
@@ -428,7 +385,6 @@ export function useDebugChat(
         state.debug.sending = false;
         state.debug.abortController = null;
         stopDebugMetricsTicker();
-        stopLiveTranscriptSync();
 
         const nextQueuedMessage = shiftQueuedDebugMessage();
         if (nextQueuedMessage) {
@@ -446,7 +402,6 @@ export function useDebugChat(
     state.debug.queuedMessages.splice(0);
     state.debug.liveDetail = null;
     stopDebugMetricsTicker();
-    stopLiveTranscriptSync();
   }
 
   function clearDebugChat(): void {
@@ -455,7 +410,6 @@ export function useDebugChat(
     state.debug.sending = false;
     state.debug.abortController = null;
     stopDebugMetricsTicker();
-    stopLiveTranscriptSync();
     state.debug.transcript = [];
     state.debug.queuedMessages.splice(0);
     state.debug.rawRequest = "";
@@ -475,7 +429,6 @@ export function useDebugChat(
   function prepareDebugChatDraft(systemPrompt: string, prompt: string): void {
     activeRunId += 1;
     stopDebugMetricsTicker();
-    stopLiveTranscriptSync();
     state.debug.abortController?.abort(new Error("Chat session reset from diagnostics."));
     state.debug.sending = false;
     state.debug.abortController = null;
@@ -495,7 +448,16 @@ export function useDebugChat(
     resetDebugMetrics();
   }
 
+  function applyLiveDebugDetail(detail: DashboardState["debug"]["liveDetail"]): void {
+    if (!detail || state.debug.lastRequestId !== detail.entry.id) {
+      return;
+    }
+
+    state.debug.liveDetail = detail;
+  }
+
   return {
+    applyLiveDebugDetail,
     clearDebugChat,
     ensureDefaultDebugPrompt,
     prepareDebugChatDraft,

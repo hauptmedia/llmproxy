@@ -3,21 +3,36 @@ import { callDiagnosticsTool } from "./diagnostics-mcp";
 import { prettyJson } from "./formatters";
 import type { DebugToolCallRequest } from "./debug-chat-transcript";
 
-export async function executeDebugToolCalls(toolCalls: DebugToolCallRequest[]): Promise<DebugTranscriptEntry[]> {
+export interface ExecuteDebugToolCallCallbacks {
+  onStart?: (toolCall: DebugToolCallRequest) => DebugTranscriptEntry | void;
+  onFinish?: (
+    toolTurn: DebugTranscriptEntry,
+    toolCall: DebugToolCallRequest,
+    pendingTurn?: DebugTranscriptEntry | void,
+  ) => void;
+}
+
+export async function executeDebugToolCalls(
+  toolCalls: DebugToolCallRequest[],
+  callbacks: ExecuteDebugToolCallCallbacks = {},
+): Promise<DebugTranscriptEntry[]> {
   const responses: DebugTranscriptEntry[] = [];
 
   for (const toolCall of toolCalls) {
+    const pendingTurn = callbacks.onStart?.(toolCall);
+    let toolTurn: DebugTranscriptEntry;
+
     try {
       const result = await callDiagnosticsTool(toolCall.name, toolCall.args);
-      responses.push({
+      toolTurn = {
         role: "tool",
         name: toolCall.name,
         tool_call_id: toolCall.id,
         content: prettyJson(result.structuredContent ?? result),
-      });
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      responses.push({
+      toolTurn = {
         role: "tool",
         name: toolCall.name,
         tool_call_id: toolCall.id,
@@ -26,8 +41,11 @@ export async function executeDebugToolCalls(toolCalls: DebugToolCallRequest[]): 
             message,
           },
         }),
-      });
+      };
     }
+
+    callbacks.onFinish?.(toolTurn, toolCall, pendingTurn);
+    responses.push(toolTurn);
   }
 
   return responses;

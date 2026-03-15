@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
-import type { JsonAceController } from "../utils/json-ace";
-import { createJsonAceEditor } from "../utils/json-ace";
+import type { AceViewerController } from "../utils/json-ace";
+import { createCodeAceEditor } from "../utils/json-ace";
 
 const props = withDefaults(defineProps<{
   value?: unknown;
@@ -13,7 +13,7 @@ const props = withDefaults(defineProps<{
 });
 
 const editorHost = ref<HTMLElement | null>(null);
-let controller: JsonAceController | null = null;
+let controller: AceViewerController | null = null;
 let disposed = false;
 
 async function initializeEditor(): Promise<void> {
@@ -22,8 +22,9 @@ async function initializeEditor(): Promise<void> {
   }
 
   try {
-    controller = await createJsonAceEditor(editorHost.value, {
+    controller = await createCodeAceEditor(editorHost.value, {
       value: props.value,
+      language: "json",
       placeholder: props.placeholder,
       readOnly: props.readOnly,
     });

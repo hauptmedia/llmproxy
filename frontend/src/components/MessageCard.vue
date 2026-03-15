@@ -2,8 +2,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { UiBadge } from "../types/dashboard";
 import { renderMessageHtml } from "../utils/message-rendering";
-import type { JsonAceController } from "../utils/json-ace";
-import { createJsonAceEditor, decodeJsonAcePayload } from "../utils/json-ace";
+import type { AceViewerController, InlineAceLanguage } from "../utils/json-ace";
+import {
+  createCodeAceEditor,
+  decodeJsonAcePayload,
+  normalizeInlineAceLanguage,
+} from "../utils/json-ace";
 
 interface MessageLike extends Record<string, unknown> {
   role?: string;
@@ -29,16 +33,16 @@ const props = withDefaults(defineProps<{
 
 const hostEl = ref<HTMLElement | null>(null);
 const reasoningExpanded = ref(false);
-const inlineJsonEditors: JsonAceController[] = [];
+const inlineAceEditors: AceViewerController[] = [];
 
-function destroyInlineJsonEditors(): void {
-  while (inlineJsonEditors.length > 0) {
-    inlineJsonEditors.pop()?.destroy();
+function destroyInlineAceEditors(): void {
+  while (inlineAceEditors.length > 0) {
+    inlineAceEditors.pop()?.destroy();
   }
 }
 
-function resizeInlineJsonEditors(): void {
-  for (const controller of inlineJsonEditors) {
+function resizeInlineAceEditors(): void {
+  for (const controller of inlineAceEditors) {
     controller.resize();
   }
 }
@@ -55,38 +59,68 @@ function handleReasoningToggle(event: Event): void {
 
   if (target.classList.contains("compact-bubble-panel-tool")) {
     window.requestAnimationFrame(() => {
-      resizeInlineJsonEditors();
+      resizeInlineAceEditors();
+    });
+  }
+
+  if (target.classList.contains("compact-bubble-panel-embedded")) {
+    window.requestAnimationFrame(() => {
+      resizeInlineAceEditors();
     });
   }
 }
 
-async function syncInlineJsonEditors(): Promise<void> {
-  destroyInlineJsonEditors();
+function handleReasoningClick(event: Event): void {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const summary = target.closest("summary");
+  if (!(summary instanceof HTMLElement)) {
+    return;
+  }
+
+  const panel = summary.parentElement;
+  if (!(panel instanceof HTMLDetailsElement)) {
+    return;
+  }
+
+  if (panel.classList.contains("compact-bubble-panel-reasoning")) {
+    reasoningExpanded.value = !panel.open;
+  }
+}
+
+async function syncInlineAceEditors(): Promise<void> {
+  destroyInlineAceEditors();
   await nextTick();
 
   if (!hostEl.value) {
     return;
   }
 
-  const containers = hostEl.value.querySelectorAll<HTMLElement>('[data-json-ace="true"]');
+  const containers = hostEl.value.querySelectorAll<HTMLElement>('[data-inline-ace="true"]');
 
   for (const container of containers) {
-    const host = container.querySelector<HTMLElement>(".inline-json-ace-host");
+    const host = container.querySelector<HTMLElement>(".inline-ace-host");
     const payload = container.querySelector<HTMLScriptElement>('script[type="application/json"]');
     if (!host || !payload) {
       continue;
     }
 
+    const language = normalizeInlineAceLanguage(container.dataset.aceLanguage ?? "") ?? "json";
+
     try {
-      const controller = await createJsonAceEditor(host, {
+      const controller = await createCodeAceEditor(host, {
         value: decodeJsonAcePayload(payload.textContent ?? ""),
+        language: language as InlineAceLanguage,
         readOnly: true,
         scrollPastEnd: 0,
         padding: 10,
       });
-      inlineJsonEditors.push(controller);
+      inlineAceEditors.push(controller);
     } catch (error) {
-      console.error("Failed to initialize inline JSON viewer.", error);
+      console.error("Failed to initialize inline code viewer.", error);
     }
   }
 }
@@ -161,17 +195,19 @@ const hostClass = computed(() => {
 });
 
 onMounted(() => {
+  hostEl.value?.addEventListener("click", handleReasoningClick, true);
   hostEl.value?.addEventListener("toggle", handleReasoningToggle, true);
-  void syncInlineJsonEditors();
+  void syncInlineAceEditors();
 });
 
 onBeforeUnmount(() => {
+  hostEl.value?.removeEventListener("click", handleReasoningClick, true);
   hostEl.value?.removeEventListener("toggle", handleReasoningToggle, true);
-  destroyInlineJsonEditors();
+  destroyInlineAceEditors();
 });
 
 watch(html, () => {
-  void syncInlineJsonEditors();
+  void syncInlineAceEditors();
 });
 </script>
 

@@ -297,7 +297,6 @@ export interface RequestDetailState {
   error: string;
   detail: RequestLogDetail | null;
   cache: Record<string, RequestLogDetail>;
-  lastFetchedAt: number;
 }
 
 export interface DashboardState {

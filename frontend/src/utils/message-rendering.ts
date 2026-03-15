@@ -3,7 +3,11 @@ import { buildModelIdentityBadge, describeFinishReason, badgeSpec } from "./dash
 import { formatUiValue, prettyJson } from "./formatters";
 import { isClientRecord } from "./guards";
 import { escapeHtml, renderCodeBlockHtml, renderCodeInnerBlock } from "./code-rendering";
-import { encodeJsonAcePayload, serializeJsonAceValue } from "./json-ace";
+import {
+  encodeJsonAcePayload,
+  normalizeInlineAceLanguage,
+  serializeCodeAceValue,
+} from "./json-ace";
 
 function renderMarkdownInline(markdown: unknown): string {
   const placeholders: Array<{ token: string; html: string }> = [];
@@ -96,8 +100,9 @@ function renderMarkdownToHtml(markdown: unknown): string {
       }
 
       const codeValue = codeLines.join("\n");
-      if (language === "json") {
-        blocks.push(renderInlineJsonAceHtml(codeValue, "inline-json-ace markdown-json-ace"));
+      const aceLanguage = normalizeInlineAceLanguage(language);
+      if (aceLanguage) {
+        blocks.push(renderEmbeddedContentBubble(aceLanguage, codeValue));
         continue;
       }
 
@@ -416,26 +421,44 @@ function renderReasoningPanelLive(reasoningContent: unknown, collapsed: boolean,
   );
 }
 
-function renderInlineJsonAceHtml(content: unknown, wrapperClass = "inline-json-ace"): string {
+function renderInlineAceHtml(
+  content: unknown,
+  language = "json",
+  wrapperClass = "inline-ace",
+): string {
   if (content === null || content === undefined || content === "") {
     return "";
   }
 
-  const serialized = serializeJsonAceValue(content, "");
+  const aceLanguage = normalizeInlineAceLanguage(language) ?? "json";
+  const serialized = serializeCodeAceValue(content, aceLanguage, "");
   if (!serialized) {
     return "";
   }
 
   return (
-    `<div class="${escapeHtml(wrapperClass)}" data-json-ace="true">` +
+    `<div class="${escapeHtml(wrapperClass)}" data-inline-ace="true" data-ace-language="${escapeHtml(aceLanguage)}">` +
       `<script type="application/json">${encodeJsonAcePayload(serialized)}</script>` +
-      `<div class="inline-json-ace-host"></div>` +
+      `<div class="inline-ace-host"></div>` +
     `</div>`
   );
 }
 
+function renderEmbeddedContentIconHtml(): string {
+  return (
+    `<span class="embedded-content-icon" aria-hidden="true">` +
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
+        `<path d="M8 4.75h6l4 4v10.5a1.75 1.75 0 0 1-1.75 1.75H8A1.75 1.75 0 0 1 6.25 19.25V6.5A1.75 1.75 0 0 1 8 4.75Z"></path>` +
+        `<path d="M14 4.75V9h4"></path>` +
+        `<path d="m9.5 14 1.8-1.8-1.8-1.8"></path>` +
+        `<path d="m14.5 14-1.8-1.8 1.8-1.8"></path>` +
+      `</svg>` +
+    `</span>`
+  );
+}
+
 function renderToolResponsePanel(content: unknown, collapsed: boolean): string {
-  const bodyHtml = renderInlineJsonAceHtml(content);
+  const bodyHtml = renderInlineAceHtml(content, "json");
   if (!bodyHtml) {
     return "";
   }
@@ -485,6 +508,7 @@ type CompactBubbleStaticOptions = {
   iconHtml: string;
   labelText?: string;
   labelTitle?: string;
+  trailingHtml?: string;
   extraRootClasses?: string[];
 };
 
@@ -536,6 +560,7 @@ function renderCompactBubbleStatic(options: CompactBubbleStaticOptions): string 
         (options.labelText
           ? `<span class="compact-bubble-label"${options.labelTitle ? ` title="${escapeHtml(options.labelTitle)}"` : ""}>${escapeHtml(options.labelText)}</span>`
           : "") +
+        (options.trailingHtml ?? "") +
       `</div>` +
     `</div>`
   );
@@ -568,19 +593,17 @@ function renderReasoningBubble(reasoningContent: unknown, collapsed: boolean, li
 
 function renderToolCallIconHtml(): string {
   return (
-    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">` +
-      `<path d="M5 12h11"></path>` +
-      `<path d="m12 6 6 6-6 6"></path>` +
-    `</svg>`
+    `<span class="tool-flow-icon" aria-hidden="true">` +
+      `<span class="tool-flow-glyph">fn</span>` +
+    `</span>`
   );
 }
 
 function renderToolReturnIconHtml(): string {
   return (
-    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">` +
-      `<path d="M19 12H8"></path>` +
-      `<path d="m12 6-6 6 6 6"></path>` +
-    `</svg>`
+    `<span class="tool-flow-icon" aria-hidden="true">` +
+      `<span class="tool-flow-glyph">fn</span>` +
+    `</span>`
   );
 }
 
@@ -592,22 +615,26 @@ function renderToolPayloadBubble(options: {
   iconHtml: string;
   collapsedTitle: string;
   expandedTitle: string;
+  kindClass?: string;
+  contentClass?: string;
+  iconClass?: string;
+  extraRootClasses?: string[];
 }): string {
   if (!options.bodyHtml) {
     return renderCompactBubbleStatic({
-      kindClass: "compact-bubble-panel-tool",
-      iconClass: "tool-response-icon",
+      kindClass: options.kindClass ?? "compact-bubble-panel-tool",
+      iconClass: options.iconClass ?? "tool-response-icon",
       iconHtml: options.iconHtml,
       labelText: options.labelText,
       labelTitle: options.labelTitle,
-      extraRootClasses: ["compact-bubble-static-tool"],
+      extraRootClasses: options.extraRootClasses ?? ["compact-bubble-static-tool"],
     });
   }
 
   return renderCompactBubbleDisclosure({
-    kindClass: "compact-bubble-panel-tool",
-    contentClass: "tool-response-content",
-    iconClass: "tool-response-icon",
+    kindClass: options.kindClass ?? "compact-bubble-panel-tool",
+    contentClass: options.contentClass ?? "tool-response-content",
+    iconClass: options.iconClass ?? "tool-response-icon",
     iconHtml: options.iconHtml,
     labelText: options.labelText,
     labelTitle: options.labelTitle,
@@ -615,12 +642,13 @@ function renderToolPayloadBubble(options: {
     collapsed: options.collapsed,
     collapsedTitle: options.collapsedTitle,
     expandedTitle: options.expandedTitle,
+    extraRootClasses: options.extraRootClasses,
   });
 }
 
 function renderToolResponseBubble(content: unknown, collapsed: boolean, toolName: string, toolCallId: string): string {
   return renderToolPayloadBubble({
-    bodyHtml: renderInlineJsonAceHtml(content),
+    bodyHtml: renderInlineAceHtml(content, "json"),
     collapsed,
     labelText: toolName || "Tool response",
     labelTitle: toolCallId ? `Tool call id: ${toolCallId}` : "",
@@ -635,6 +663,41 @@ function renderPendingAssistantIndicator(title: string): string {
     `<div class="chat-loading-indicator"${title ? ` title="${escapeHtml(title)}"` : ""}>` +
       `<span class="chat-loading-spinner" aria-hidden="true"></span>` +
     `</div>`
+  );
+}
+
+function renderEmbeddedContentBubble(language: string, content: unknown): string {
+  const aceLanguage = normalizeInlineAceLanguage(language);
+  if (!aceLanguage) {
+    return "";
+  }
+
+  return renderToolPayloadBubble({
+    bodyHtml: renderInlineAceHtml(content, aceLanguage, "inline-ace embedded-inline-ace"),
+    collapsed: true,
+    labelText: aceLanguage,
+    iconHtml: renderEmbeddedContentIconHtml(),
+    kindClass: "compact-bubble-panel-embedded",
+    contentClass: "embedded-content",
+    iconClass: "embedded-content-icon-shell",
+    extraRootClasses: ["compact-bubble-static-embedded"],
+    collapsedTitle: `Embedded ${aceLanguage} block. Expand it to inspect the content.`,
+    expandedTitle: `Embedded ${aceLanguage} block. Collapse it to focus on the surrounding message.`,
+  });
+}
+
+function renderPendingToolBubble(toolName: string, toolCallId: string, title: string): string {
+  return renderCompactBubbleStatic({
+    kindClass: "compact-bubble-panel-tool",
+    iconClass: "tool-response-icon",
+    iconHtml: renderToolReturnIconHtml(),
+    labelText: toolName || "Tool response",
+    labelTitle: toolCallId ? `Tool call id: ${toolCallId}` : undefined,
+    trailingHtml: `<span class="chat-loading-spinner compact-bubble-inline-spinner" aria-hidden="true"></span>`,
+    extraRootClasses: ["compact-bubble-static-tool", "compact-bubble-pending-tool"],
+  }).replace(
+    '<div class="compact-bubble-summary compact-bubble-summary-static">',
+    `<div class="compact-bubble-summary compact-bubble-summary-static"${title ? ` title="${escapeHtml(title)}"` : ""}>`,
   );
 }
 
@@ -718,6 +781,14 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
     !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
     !isClientRecord(message?.function_call) &&
     !Array.isArray(message?.tool_calls);
+  const pendingToolOnly =
+    role === "tool" &&
+    message?.pending === true &&
+    !hasVisibleMessageContent(message?.content) &&
+    !(typeof message?.reasoning_content === "string" && message.reasoning_content.length > 0) &&
+    !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
+    !isClientRecord(message?.function_call) &&
+    !Array.isArray(message?.tool_calls);
   const metaBits: UiBadge[] = [];
 
   if (!options.hideRoleBadge && role !== "user" && role !== "assistant") {
@@ -749,7 +820,7 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
   const hasHead = Boolean(options.heading) || metaBits.length > 0;
 
   return (
-    `<article class="turn ${escapeHtml(role)}${(reasoningOnly || toolResponseOnly || toolCallOnly) ? " compact-bubble-only" : ""}${reasoningOnly ? " reasoning-only" : ""}${toolResponseOnly ? " tool-response-only" : ""}${toolCallOnly ? " tool-call-only" : ""}${pendingAssistantOnly ? " pending-only" : ""}">` +
+    `<article class="turn ${escapeHtml(role)}${(reasoningOnly || toolResponseOnly || toolCallOnly || pendingToolOnly) ? " compact-bubble-only" : ""}${reasoningOnly ? " reasoning-only" : ""}${(toolResponseOnly || pendingToolOnly) ? " tool-response-only" : ""}${toolCallOnly ? " tool-call-only" : ""}${(pendingAssistantOnly || pendingToolOnly) ? " pending-only" : ""}">` +
       (hasHead
         ? (
           `<div class="turn-head">` +
@@ -767,6 +838,12 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
       renderReasoningBubble(message?.reasoning_content, options.reasoningCollapsed ?? true, reasoningLive) +
       (pendingAssistantOnly
         ? renderPendingAssistantIndicator(typeof message?.pending_title === "string" ? message.pending_title : "")
+        : pendingToolOnly
+        ? renderPendingToolBubble(
+            typeof message?.name === "string" ? message.name : "",
+            typeof message?.tool_call_id === "string" ? message.tool_call_id : "",
+            typeof message?.pending_title === "string" ? message.pending_title : "",
+          )
         : ((hasVisibleMessageContent(message?.content) || !message?.reasoning_content)
         ? (role === "tool"
           ? renderToolResponseBubble(
@@ -1040,6 +1117,26 @@ function renderInvocationArgumentListHtml(value: unknown): string {
   );
 }
 
+function hasInvocationPayload(value: unknown): boolean {
+  if (value === undefined || value === null) {
+    return false;
+  }
+
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  if (isClientRecord(value)) {
+    return Object.keys(value).length > 0;
+  }
+
+  return true;
+}
+
 function renderFunctionInvocationHtml(
   label: string,
   payload: Record<string, any>,
@@ -1054,7 +1151,9 @@ function renderFunctionInvocationHtml(
     options.type && options.type !== "function" ? `type: ${options.type}` : "",
   ].filter(Boolean).join("\n");
   const argumentsValue = parseStructuredArguments(payload.arguments);
-  const rawArgumentsHtml = renderInlineJsonAceHtml(argumentsValue);
+  const rawArgumentsHtml = hasInvocationPayload(argumentsValue)
+    ? renderInlineAceHtml(argumentsValue, "json")
+    : "";
   return renderToolPayloadBubble({
     bodyHtml: rawArgumentsHtml,
     collapsed: true,
