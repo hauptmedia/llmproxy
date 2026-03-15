@@ -2487,7 +2487,7 @@
 
   .chat-composer-model-field {
     @apply mb-0;
-    flex: 0 0 188px;
+    flex: 0 0 clamp(14rem, 22vw, 18rem);
     width: auto;
     min-width: 0;
   }

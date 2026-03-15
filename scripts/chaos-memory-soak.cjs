@@ -1581,11 +1581,13 @@ async function runActiveStreamsProfile(baseUrl, server, loadBalancer, clientStat
   let tokenTargetSum = 0;
   let tokenTargetMin = Number.POSITIVE_INFINITY;
   let tokenTargetMax = 0;
+  let successfulResponses = 0;
   const requestMix = {};
 
   for (const workerResult of workerResults) {
     mergeClientStats(clientStats, workerResult.clientStats);
     mergeCounterMaps(requestMix, workerResult.requestMix);
+    successfulResponses += workerResult.clientStats?.results?.success ?? 0;
 
     const tokenTargets = workerResult.tokenTargets;
     if (tokenTargets && typeof tokenTargets === "object") {
@@ -1608,6 +1610,21 @@ async function runActiveStreamsProfile(baseUrl, server, loadBalancer, clientStat
     const snapshot = loadBalancer.getSnapshot();
     return snapshot.queueDepth === 0 && server.activeConnections.size === 0;
   }, 30_000, "Timed out waiting for the 500-stream run to drain.");
+  const minimumPeakActiveConnections = Math.max(
+    1,
+    ACTIVE_STREAM_CONNECTIONS - Math.max(workerCount * 2, Math.ceil(ACTIVE_STREAM_CONNECTIONS * 0.03)),
+  );
+  const extraVerdicts = [];
+  if (peakActiveConnections < minimumPeakActiveConnections) {
+    extraVerdicts.push(
+      `active connections peaked at ${peakActiveConnections}; expected at least ${minimumPeakActiveConnections}`,
+    );
+  }
+  if (successfulResponses !== ACTIVE_STREAM_CONNECTIONS) {
+    extraVerdicts.push(
+      `successful active-stream responses were ${successfulResponses} of ${ACTIVE_STREAM_CONNECTIONS}`,
+    );
+  }
 
   return {
     reportFileName: `active-streams-${ACTIVE_STREAM_CONNECTIONS}-report.json`,
@@ -1623,15 +1640,14 @@ async function runActiveStreamsProfile(baseUrl, server, loadBalancer, clientStat
       peakObservedStreamingConnections: peakStreamingConnections,
       requestedConnections: ACTIVE_STREAM_CONNECTIONS,
       requestMix,
+      successfulResponses,
       tokenTargets: {
         min: tokenTargetCount > 0 ? tokenTargetMin : 0,
         max: tokenTargetCount > 0 ? tokenTargetMax : 0,
         average: tokenTargetCount > 0 ? Math.round((tokenTargetSum / tokenTargetCount) * 10) / 10 : 0,
       },
     },
-    extraVerdicts: peakActiveConnections >= ACTIVE_STREAM_CONNECTIONS
-      ? []
-      : [`active connections peaked at ${peakActiveConnections} instead of ${ACTIVE_STREAM_CONNECTIONS}`],
+    extraVerdicts,
   };
 }
 
