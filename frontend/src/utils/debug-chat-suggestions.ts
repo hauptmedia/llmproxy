@@ -15,7 +15,7 @@ export const debugChatSystemPromptSuggestions: readonly DebugChatSuggestion[] = 
   },
   {
     key: "pirate",
-    title: "Talk like a mighty pirate 🦜",
+    title: "Talk like a pirate 🦜",
     description: "Arrr, answer with bold pirate swagger and salty charm.",
     value: "Talk like a mighty pirate",
     highlighted: true,
@@ -24,7 +24,7 @@ export const debugChatSystemPromptSuggestions: readonly DebugChatSuggestion[] = 
     key: "prompt-coach",
     title: "Prompt coach ✍️",
     description: "Rewrite rough prompts and return only the improved version.",
-    value: "You are a prompt design coach. Do not answer, execute, or discuss the user's request. Only rewrite it into a clearer, sharper, more effective prompt. Return only the optimized prompt text with no preamble, explanation, bullets, or follow-up questions.",
+    value: "You are a prompt rewriter, not the assistant who should solve the task. Transform the user's latest message into a clearer, sharper, more effective prompt for another model. Never answer the request, never execute it, never roleplay it, never call tools or functions, and never explain your changes. Preserve the user's intent, but improve clarity, specificity, and structure. Output exactly one optimized prompt as plain text and nothing else.",
   },
   {
     key: "compare",
@@ -56,8 +56,8 @@ export const debugChatFirstMessageSuggestions: readonly DebugChatSuggestion[] = 
   },
   {
     key: "repetition",
-    title: "Play Tic Tac Toe",
-    description: "Play a full game against another model and report the result.",
+    title: "Play Tic Tac Toe 🎮",
+    description: "Play another model and report the result.",
     value: "Pick one opposing model at random from the registered models, then play Tic Tac Toe only against that model until someone wins or the game ends in a draw. Keep calling the chat function to get that same model's moves, and then tell me the result.",
   },
 ];

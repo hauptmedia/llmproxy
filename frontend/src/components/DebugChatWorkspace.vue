@@ -268,6 +268,7 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
                 <SuggestionActionCards
                   class="chat-suggestion-grid"
                   :items="systemPromptSuggestionItems"
+                  :show-highlighted-badge="false"
                   @select="applySystemPromptSuggestion"
                 />
               </div>
@@ -277,6 +278,7 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
                 <SuggestionActionCards
                   class="chat-suggestion-grid"
                   :items="firstMessageSuggestionItems"
+                  :show-highlighted-badge="false"
                   @select="applyFirstMessageSuggestion"
                 />
               </div>
@@ -285,34 +287,40 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
 
           <template #footer>
             <div v-if="!hasTranscript" class="chat-initial-footer">
-              <textarea
-                id="debug-system-prompt"
-                v-model="store.state.debug.systemPrompt"
-                class="chat-editor-textarea"
-                placeholder="Optional high-level instruction (System Prompt) for the model."
-              ></textarea>
+              <div class="chat-editor-turn">
+                <div class="diagnostics-section-label">System Prompt</div>
+                <textarea
+                  id="debug-system-prompt"
+                  v-model="store.state.debug.systemPrompt"
+                  class="chat-editor-textarea"
+                  placeholder="Optional high-level instruction (System Prompt) for the model."
+                ></textarea>
+              </div>
 
-              <ChatComposer
-                :prompt="store.state.debug.prompt"
-                :model="store.state.debug.model"
-                :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
-                :mcp-server-enabled="mcpServerEnabled"
-                :params="store.state.debug.params"
-                :models="store.state.models"
-                :sending="store.state.debug.sending"
-                :show-advanced-parameters="showAdvancedParameters"
-                :submit-label="debugSubmitLabel"
-                prompt-placeholder="Enter the first user message to send through the proxy."
-                prompt-id="debug-prompt"
-                model-id="debug-model"
-                advanced-id-prefix="debug"
-                :advanced-param-help="advancedParamHelp"
-                @update:prompt="store.state.debug.prompt = $event"
-                @update:model="store.state.debug.model = $event"
-                @update:enable-diagnostic-tools="store.state.debug.enableDiagnosticTools = $event"
-                @submit="store.sendDebugChat()"
-                @toggle-advanced="showAdvancedParameters = !showAdvancedParameters"
-              />
+              <div class="chat-editor-turn">
+                <div class="diagnostics-section-label">Prompt</div>
+                <ChatComposer
+                  :prompt="store.state.debug.prompt"
+                  :model="store.state.debug.model"
+                  :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"
+                  :mcp-server-enabled="mcpServerEnabled"
+                  :params="store.state.debug.params"
+                  :models="store.state.models"
+                  :sending="store.state.debug.sending"
+                  :show-advanced-parameters="showAdvancedParameters"
+                  :submit-label="debugSubmitLabel"
+                  prompt-placeholder="Enter the first user message to send through the proxy."
+                  prompt-id="debug-prompt"
+                  model-id="debug-model"
+                  advanced-id-prefix="debug"
+                  :advanced-param-help="advancedParamHelp"
+                  @update:prompt="store.state.debug.prompt = $event"
+                  @update:model="store.state.debug.model = $event"
+                  @update:enable-diagnostic-tools="store.state.debug.enableDiagnosticTools = $event"
+                  @submit="store.sendDebugChat()"
+                  @toggle-advanced="showAdvancedParameters = !showAdvancedParameters"
+                />
+              </div>
             </div>
             <ChatComposer
               v-if="hasTranscript"

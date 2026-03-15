@@ -15,6 +15,10 @@ defineProps({
     type: Array as PropType<SuggestionActionItem[]>,
     required: true,
   },
+  showHighlightedBadge: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 const emit = defineEmits<{
@@ -34,7 +38,10 @@ const emit = defineEmits<{
     >
       <div class="diagnostics-action-title">
         {{ item.title }}
-        <span v-if="item.highlighted" class="diagnostics-action-badge">{{ item.badgeText || "Suggested" }}</span>
+        <span
+          v-if="item.highlighted && showHighlightedBadge"
+          class="diagnostics-action-badge"
+        >{{ item.badgeText || "Suggested" }}</span>
       </div>
       <div v-if="item.description" class="diagnostics-action-description">{{ item.description }}</div>
     </button>
