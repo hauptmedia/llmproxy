@@ -9,6 +9,25 @@ import { formatDuration } from "../utils/formatters";
 import type { McpToolDefinition } from "../types/dashboard";
 
 type ConfigTab = "general" | "openai" | "mcp" | "backends";
+type ConnectorParameterSupport = "forwarded" | "mapped" | "ignored" | "dropped";
+
+interface OpenAiConnectorNote {
+  title: string;
+  description: string;
+}
+
+interface OpenAiParameterSupportRow {
+  parameter: string;
+  openai: ConnectorParameterSupport;
+  ollama: ConnectorParameterSupport;
+  llamaCpp: ConnectorParameterSupport;
+  notes: string;
+}
+
+interface OpenAiSupportLegendRow {
+  state: ConnectorParameterSupport;
+  description: string;
+}
 
 const store = useDashboardStore();
 const { endpointUrl, loadCapabilities, loadingCapabilities, mcpServerEnabled, serviceDefinitions } = useDiagnosticsCapabilities();
@@ -59,6 +78,158 @@ const openAiRouteRows = [
   {
     route: `POST ${openAiBaseUrl}/v1/chat/completions`,
     purpose: "Run chat completions through llmproxy with the normal OpenAI-compatible request body, including streaming, tools, and generation parameters.",
+  },
+];
+
+const openAiConnectorNotes: OpenAiConnectorNote[] = [
+  {
+    title: "OpenAI backends",
+    description:
+      "Forward the OpenAI-compatible request body almost unchanged. llmproxy only removes top_k, min_p, and repeat_penalty before sending the request upstream.",
+  },
+  {
+    title: "Ollama backends",
+    description:
+      "Translate the supported OpenAI-style fields into Ollama's native /api/chat payload. Fields not listed in the matrix below are not connector-mapped for Ollama.",
+  },
+  {
+    title: "llama.cpp backends",
+    description:
+      "Forward the OpenAI-compatible request body unchanged, including llama.cpp-style sampler fields such as top_k, min_p, and repeat_penalty.",
+  },
+];
+
+const openAiSupportLegend: OpenAiSupportLegendRow[] = [
+  {
+    state: "forwarded",
+    description: "llmproxy sends the field upstream unchanged. The upstream backend still needs to understand it.",
+  },
+  {
+    state: "mapped",
+    description: "llmproxy translates the field into the connector's native request format.",
+  },
+  {
+    state: "ignored",
+    description: "llmproxy accepts the field on the public route, but this connector does not emit it upstream.",
+  },
+  {
+    state: "dropped",
+    description: "llmproxy removes the field before forwarding the upstream request.",
+  },
+];
+
+const openAiParameterSupportRows: OpenAiParameterSupportRow[] = [
+  {
+    parameter: "model",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Required model id. Ollama receives it as the native model field.",
+  },
+  {
+    parameter: "messages",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Ollama normalizes chat messages, multimodal content, and tool-call payloads into its native message format.",
+  },
+  {
+    parameter: "stream",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Accepted on all connectors. llmproxy may still enable upstream streaming internally when it needs streaming transport.",
+  },
+  {
+    parameter: "tools",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Ollama receives native tools, and assistant tool-call arguments are normalized into JSON objects when possible.",
+  },
+  {
+    parameter: "tool_choice",
+    openai: "forwarded",
+    ollama: "ignored",
+    llamaCpp: "forwarded",
+    notes: "Currently not translated into Ollama's native /api/chat payload.",
+  },
+  {
+    parameter: "temperature",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Mapped to Ollama options.temperature.",
+  },
+  {
+    parameter: "top_p",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Mapped to Ollama options.top_p.",
+  },
+  {
+    parameter: "top_k",
+    openai: "dropped",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Removed only for openai backends. Ollama maps it to options.top_k.",
+  },
+  {
+    parameter: "min_p",
+    openai: "dropped",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Removed only for openai backends. Ollama maps it to options.min_p.",
+  },
+  {
+    parameter: "repeat_penalty",
+    openai: "dropped",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Removed only for openai backends. Ollama maps it to options.repeat_penalty.",
+  },
+  {
+    parameter: "seed",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Mapped to Ollama options.seed.",
+  },
+  {
+    parameter: "stop",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "String and string[] are accepted. Ollama always receives stop sequences as an array.",
+  },
+  {
+    parameter: "max_completion_tokens",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Preferred completion limit field. Ollama maps it to options.num_predict when max_tokens is not set.",
+  },
+  {
+    parameter: "max_tokens",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Legacy-compatible alias. Ollama also maps it to options.num_predict and it takes precedence if both limit fields are present.",
+  },
+  {
+    parameter: "response_format",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Ollama receives this as format. llmproxy also accepts a direct format field for Ollama-native callers.",
+  },
+  {
+    parameter: "keep_alive",
+    openai: "forwarded",
+    ollama: "mapped",
+    llamaCpp: "forwarded",
+    notes: "Mainly useful for Ollama. Other upstreams only honor it if they support the same field name.",
   },
 ];
 
@@ -194,6 +365,61 @@ watch(
                 <tr v-for="row in openAiRouteRows" :key="row.route">
                   <td :title="row.purpose" class="detail-table-value mono">{{ row.route }}</td>
                   <td :title="row.purpose" class="detail-table-value">{{ row.purpose }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="diagnostics-tools">
+          <div class="diagnostics-section-label">Connector behavior</div>
+          <div class="mcp-prompt-grid">
+            <article
+              v-for="note in openAiConnectorNotes"
+              :key="note.title"
+              class="mcp-prompt-card"
+            >
+              <div class="mcp-prompt-title">{{ note.title }}</div>
+              <div class="mcp-prompt-description">{{ note.description }}</div>
+            </article>
+          </div>
+        </div>
+        <div class="diagnostics-tools">
+          <div class="diagnostics-section-label">Chat completion parameter support</div>
+          <p class="diagnostics-prompt-description">
+            This matrix documents how llmproxy handles the most important fields for
+            <span class="mono">POST {{ openAiBaseUrl }}/v1/chat/completions</span>.
+            Fields not listed here are forwarded unchanged for <span class="mono">openai</span> and
+            <span class="mono">llama.cpp</span> backends, but are not connector-mapped for
+            <span class="mono">ollama</span> unless they appear below.
+          </p>
+          <div class="mcp-prompt-grid">
+            <article
+              v-for="row in openAiSupportLegend"
+              :key="row.state"
+              class="mcp-prompt-card"
+            >
+              <div class="mcp-prompt-title mono">{{ row.state }}</div>
+              <div class="mcp-prompt-description">{{ row.description }}</div>
+            </article>
+          </div>
+          <div class="detail-table-wrap">
+            <table class="detail-table">
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>openai</th>
+                  <th>ollama</th>
+                  <th>llama.cpp</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in openAiParameterSupportRows" :key="row.parameter">
+                  <td :title="row.notes" class="detail-table-value mono">{{ row.parameter }}</td>
+                  <td :title="row.notes" class="detail-table-value mono">{{ row.openai }}</td>
+                  <td :title="row.notes" class="detail-table-value mono">{{ row.ollama }}</td>
+                  <td :title="row.notes" class="detail-table-value mono">{{ row.llamaCpp }}</td>
+                  <td :title="row.notes" class="detail-table-value">{{ row.notes }}</td>
                 </tr>
               </tbody>
             </table>
