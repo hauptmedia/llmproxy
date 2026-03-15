@@ -320,18 +320,19 @@ export function useBackendControls(
     closeServerEditorState(state);
   }
 
-  async function saveServerEditor(): Promise<void> {
+  async function saveServerEditor(fieldsOverride?: ServerEditorFields): Promise<void> {
     state.serverEditor.error = "";
+    const fields = fieldsOverride ?? state.serverEditor.fields;
 
     try {
       const requestBody = {
-        host: state.serverEditor.fields.host.trim(),
-        port: parsePositiveIntegerField(state.serverEditor.fields.port, "port"),
-        requestTimeoutMs: parsePositiveIntegerField(state.serverEditor.fields.requestTimeoutMs, "requestTimeoutMs"),
-        queueTimeoutMs: parsePositiveIntegerField(state.serverEditor.fields.queueTimeoutMs, "queueTimeoutMs"),
-        healthCheckIntervalMs: parsePositiveIntegerField(state.serverEditor.fields.healthCheckIntervalMs, "healthCheckIntervalMs"),
-        recentRequestLimit: parsePositiveIntegerField(state.serverEditor.fields.recentRequestLimit, "recentRequestLimit"),
-        mcpServerEnabled: state.serverEditor.fields.mcpServerEnabled,
+        host: fields.host.trim(),
+        port: parsePositiveIntegerField(fields.port, "port"),
+        requestTimeoutMs: parsePositiveIntegerField(fields.requestTimeoutMs, "requestTimeoutMs"),
+        queueTimeoutMs: parsePositiveIntegerField(fields.queueTimeoutMs, "queueTimeoutMs"),
+        healthCheckIntervalMs: parsePositiveIntegerField(fields.healthCheckIntervalMs, "healthCheckIntervalMs"),
+        recentRequestLimit: parsePositiveIntegerField(fields.recentRequestLimit, "recentRequestLimit"),
+        mcpServerEnabled: fields.mcpServerEnabled,
       };
 
       state.serverEditor.saving = true;

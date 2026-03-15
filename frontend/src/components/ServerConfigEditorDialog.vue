@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, reactive, watch } from "vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
 import type { EditableServerConfig, ServerEditorState } from "../types/dashboard";
 
@@ -10,7 +10,15 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: "close"): void;
-  (event: "save"): void;
+  (event: "save", fields: {
+    host: string;
+    port: string;
+    requestTimeoutMs: string;
+    queueTimeoutMs: string;
+    healthCheckIntervalMs: string;
+    recentRequestLimit: string;
+    mcpServerEnabled: boolean;
+  }): void;
 }>();
 
 const restartFieldLabels: Record<"host" | "port", string> = {
@@ -30,6 +38,36 @@ const noticeClass = computed(() => {
   return "config-notice";
 });
 
+const draftFields = reactive({
+  host: "",
+  port: "",
+  requestTimeoutMs: "",
+  queueTimeoutMs: "",
+  healthCheckIntervalMs: "",
+  recentRequestLimit: "",
+  mcpServerEnabled: true,
+});
+
+function assignDraftFields(): void {
+  draftFields.host = props.state.fields.host;
+  draftFields.port = props.state.fields.port;
+  draftFields.requestTimeoutMs = props.state.fields.requestTimeoutMs;
+  draftFields.queueTimeoutMs = props.state.fields.queueTimeoutMs;
+  draftFields.healthCheckIntervalMs = props.state.fields.healthCheckIntervalMs;
+  draftFields.recentRequestLimit = props.state.fields.recentRequestLimit;
+  draftFields.mcpServerEnabled = props.state.fields.mcpServerEnabled;
+}
+
+watch(
+  () => props.state.open,
+  (open) => {
+    if (open) {
+      assignDraftFields();
+    }
+  },
+  { immediate: true },
+);
+
 function closeDialog(): void {
   if (props.state.saving) {
     return;
@@ -39,7 +77,15 @@ function closeDialog(): void {
 }
 
 function submitDialog(): void {
-  emit("save");
+  emit("save", {
+    host: draftFields.host,
+    port: draftFields.port,
+    requestTimeoutMs: draftFields.requestTimeoutMs,
+    queueTimeoutMs: draftFields.queueTimeoutMs,
+    healthCheckIntervalMs: draftFields.healthCheckIntervalMs,
+    recentRequestLimit: draftFields.recentRequestLimit,
+    mcpServerEnabled: draftFields.mcpServerEnabled,
+  });
 }
 
 function normalizeStringValue(value: string | undefined): string {
@@ -54,11 +100,11 @@ const pendingRestartFields = computed(() => {
 
   const changed: Array<keyof typeof restartFieldLabels> = [];
 
-  if (normalizeStringValue(props.state.fields.host) !== normalizeStringValue(current.host)) {
+  if (normalizeStringValue(draftFields.host) !== normalizeStringValue(current.host)) {
     changed.push("host");
   }
 
-  if (normalizeStringValue(props.state.fields.port) !== String(current.port)) {
+  if (normalizeStringValue(draftFields.port) !== String(current.port)) {
     changed.push("port");
   }
 
@@ -82,7 +128,7 @@ const hasPendingRestartEdits = computed(() => pendingRestartFields.value.length 
   <Teleport to="body">
     <div
       v-if="state.open"
-      class="request-detail-overlay"
+      class="request-detail-overlay server-editor-overlay"
       @click.self="closeDialog"
     >
       <div class="request-detail-dialog server-editor-dialog">
@@ -105,39 +151,39 @@ const hasPendingRestartEdits = computed(() => pendingRestartFields.value.length 
             <div class="field-grid backend-form-grid">
               <label class="field">
                 <span class="field-label">Host</span>
-                <input v-model="state.fields.host" type="text" autocomplete="off" spellcheck="false" placeholder="0.0.0.0" />
+                <input v-model="draftFields.host" type="text" autocomplete="off" spellcheck="false" placeholder="0.0.0.0" />
               </label>
 
               <label class="field">
                 <span class="field-label">Port</span>
-                <input v-model="state.fields.port" type="number" min="1" step="1" inputmode="numeric" />
+                <input v-model="draftFields.port" type="number" min="1" step="1" inputmode="numeric" />
               </label>
 
               <label class="field">
                 <span class="field-label">Request timeout (ms)</span>
-                <input v-model="state.fields.requestTimeoutMs" type="number" min="1" step="1" inputmode="numeric" />
+                <input v-model="draftFields.requestTimeoutMs" type="number" min="1" step="1" inputmode="numeric" />
               </label>
 
               <label class="field">
                 <span class="field-label">Queue timeout (ms)</span>
-                <input v-model="state.fields.queueTimeoutMs" type="number" min="1" step="1" inputmode="numeric" />
+                <input v-model="draftFields.queueTimeoutMs" type="number" min="1" step="1" inputmode="numeric" />
               </label>
 
               <label class="field">
                 <span class="field-label">Health check interval (ms)</span>
-                <input v-model="state.fields.healthCheckIntervalMs" type="number" min="1" step="1" inputmode="numeric" />
+                <input v-model="draftFields.healthCheckIntervalMs" type="number" min="1" step="1" inputmode="numeric" />
               </label>
 
               <label class="field">
                 <span class="field-label">Recent request limit</span>
-                <input v-model="state.fields.recentRequestLimit" type="number" min="1" step="1" inputmode="numeric" />
+                <input v-model="draftFields.recentRequestLimit" type="number" min="1" step="1" inputmode="numeric" />
               </label>
 
               <label class="field field-span-2">
                 <span class="field-label">MCP server</span>
                 <label class="chat-composer-tool-toggle server-editor-toggle">
                   <input
-                    v-model="state.fields.mcpServerEnabled"
+                    v-model="draftFields.mcpServerEnabled"
                     type="checkbox"
                   >
                   <span>Enable MCP endpoint and tools</span>

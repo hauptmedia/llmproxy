@@ -66,6 +66,98 @@ function isMarkdownBlockBoundary(line: string): boolean {
   );
 }
 
+type MarkdownTableAlignment = "left" | "center" | "right" | "";
+
+function splitMarkdownTableRow(line: string): string[] {
+  let normalized = line.trim();
+
+  if (normalized.startsWith("|")) {
+    normalized = normalized.slice(1);
+  }
+
+  if (normalized.endsWith("|")) {
+    normalized = normalized.slice(0, -1);
+  }
+
+  return normalized.split("|").map((cell) => cell.trim());
+}
+
+function parseMarkdownTableAlignments(line: string): MarkdownTableAlignment[] | null {
+  const cells = splitMarkdownTableRow(line);
+  if (cells.length === 0) {
+    return null;
+  }
+
+  const alignments: MarkdownTableAlignment[] = [];
+
+  for (const cell of cells) {
+    if (!/^:?-{3,}:?$/.test(cell)) {
+      return null;
+    }
+
+    const startsWithColon = cell.startsWith(":");
+    const endsWithColon = cell.endsWith(":");
+
+    if (startsWithColon && endsWithColon) {
+      alignments.push("center");
+    } else if (endsWithColon) {
+      alignments.push("right");
+    } else if (startsWithColon) {
+      alignments.push("left");
+    } else {
+      alignments.push("");
+    }
+  }
+
+  return alignments;
+}
+
+function isMarkdownTableStart(lines: string[], index: number): boolean {
+  if (index + 1 >= lines.length) {
+    return false;
+  }
+
+  if (!lines[index].includes("|")) {
+    return false;
+  }
+
+  const headerCells = splitMarkdownTableRow(lines[index]);
+  const alignments = parseMarkdownTableAlignments(lines[index + 1]);
+
+  return headerCells.length > 1 && alignments !== null && alignments.length === headerCells.length;
+}
+
+function renderMarkdownTableHtml(
+  headerCells: string[],
+  alignments: MarkdownTableAlignment[],
+  bodyRows: string[][],
+): string {
+  const normalizedRows = bodyRows.map((row) => {
+    const nextRow = [...row];
+
+    while (nextRow.length < headerCells.length) {
+      nextRow.push("");
+    }
+
+    return nextRow.slice(0, headerCells.length);
+  });
+
+  const renderAlignedCell = (tag: "th" | "td", cell: string, index: number) => {
+    const alignment = alignments[index];
+    const alignAttr = alignment ? ` style="text-align:${alignment}"` : "";
+    return `<${tag}${alignAttr}>${renderMarkdownInline(cell)}</${tag}>`;
+  };
+
+  return (
+    `<div class="markdown-table-wrap">` +
+      `<table class="markdown-table">` +
+        `<thead><tr>${headerCells.map((cell, index) => renderAlignedCell("th", cell, index)).join("")}</tr></thead>` +
+        `<tbody>${normalizedRows.map((row) => `<tr>${row.map((cell, index) => renderAlignedCell("td", cell, index)).join("")}</tr>`).join("")}</tbody>` +
+      `</table>` +
+    `</div>`
+  );
+}
+
 function renderMarkdownToHtml(markdown: unknown): string {
   const normalized = String(markdown ?? "").replace(/\r\n?/g, "\n").trim();
 
@@ -109,6 +201,36 @@ function renderMarkdownToHtml(markdown: unknown): string {
       const rendered = renderCodeInnerBlock(codeValue);
       const codeClass = "turn-content" + (rendered.isJson || language === "json" ? " json-view" : "");
       blocks.push(`<pre class="${escapeHtml(codeClass)}"><code>${rendered.html}</code></pre>`);
+      continue;
+    }
+
+    if (isMarkdownTableStart(lines, index)) {
+      const headerCells = splitMarkdownTableRow(lines[index]);
+      const alignments = parseMarkdownTableAlignments(lines[index + 1]) ?? headerCells.map(() => "");
+      index += 2;
+
+      const bodyRows: string[][] = [];
+
+      while (index < lines.length) {
+        const rowLine = lines[index];
+        if (!rowLine.trim()) {
+          break;
+        }
+
+        if (isMarkdownBlockBoundary(rowLine) || !rowLine.includes("|")) {
+          break;
+        }
+
+        const rowCells = splitMarkdownTableRow(rowLine);
+        if (rowCells.length < 2) {
+          break;
+        }
+
+        bodyRows.push(rowCells);
+        index += 1;
+      }
+
+      blocks.push(renderMarkdownTableHtml(headerCells, alignments, bodyRows));
       continue;
     }
 
@@ -513,6 +635,18 @@ type CompactBubbleStaticOptions = {
   extraRootClasses?: string[];
 };
 
+function renderCompactBubbleIconHtml(iconClass: string, iconHtml: string): string {
+  if (!iconHtml.trim()) {
+    return "";
+  }
+
+  return (
+    `<span class="compact-bubble-icon ${escapeHtml(iconClass)}" aria-hidden="true">` +
+      iconHtml +
+    `</span>`
+  );
+}
+
 function renderCompactBubbleDisclosure(options: CompactBubbleDisclosureOptions): string {
   if (!options.bodyHtml && !options.allowEmptyBody) {
     return "";
@@ -529,9 +663,7 @@ function renderCompactBubbleDisclosure(options: CompactBubbleDisclosureOptions):
       `<summary class="compact-bubble-summary" title="${escapeHtml(
         options.collapsed ? options.collapsedTitle : options.expandedTitle,
       )}">` +
-        `<span class="compact-bubble-icon ${escapeHtml(options.iconClass)}" aria-hidden="true">` +
-          options.iconHtml +
-        `</span>` +
+        renderCompactBubbleIconHtml(options.iconClass, options.iconHtml) +
         (options.labelText
           ? `<span class="compact-bubble-label"${options.labelTitle ? ` title="${escapeHtml(options.labelTitle)}"` : ""}>${escapeHtml(options.labelText)}</span>`
           : "") +
@@ -567,9 +699,7 @@ function renderCompactBubbleStatic(options: CompactBubbleStaticOptions): string 
   return (
     `<div class="${escapeHtml(rootClasses)}">` +
       `<div class="compact-bubble-summary compact-bubble-summary-static">` +
-        `<span class="compact-bubble-icon ${escapeHtml(options.iconClass)}" aria-hidden="true">` +
-          options.iconHtml +
-        `</span>` +
+        renderCompactBubbleIconHtml(options.iconClass, options.iconHtml) +
         (options.labelText
           ? `<span class="compact-bubble-label"${options.labelTitle ? ` title="${escapeHtml(options.labelTitle)}"` : ""}>${escapeHtml(options.labelText)}</span>`
           : "") +
@@ -632,11 +762,7 @@ function renderToolCallIconHtml(): string {
 }
 
 function renderToolReturnIconHtml(): string {
-  return (
-    `<span class="tool-flow-icon" aria-hidden="true">` +
-      `<span class="tool-flow-glyph">fn</span>` +
-    `</span>`
-  );
+  return "";
 }
 
 function renderToolPayloadBubble(options: {
@@ -1192,6 +1318,7 @@ function renderFunctionInvocationHtml(
     labelText: name,
     labelTitle: hoverDetails || undefined,
     iconHtml: renderToolCallIconHtml(),
+    extraRootClasses: ["function-call-bubble"],
     collapsedTitle: "Tool call captured for this assistant message. Expand it to inspect the sent arguments.",
     expandedTitle: "Tool call captured for this assistant message. Collapse it to focus on the conversation flow.",
   });
