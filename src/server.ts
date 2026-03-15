@@ -133,7 +133,9 @@ interface LlmProxyServerOptions {
   listenBacklog?: number;
 }
 
-const DEFAULT_MAX_SSE_CLIENT_BUFFER_BYTES = 1_000_000;
+// Live request_detail frames can now include full retained history, so the dashboard
+// feed needs a bit more headroom before we assume the browser client is stalled.
+const DEFAULT_MAX_SSE_CLIENT_BUFFER_BYTES = 4_000_000;
 
 export function isSupportedProxyRoute(method: string, pathname: string): boolean {
   if (method !== "POST") {
