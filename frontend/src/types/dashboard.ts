@@ -238,7 +238,7 @@ export interface DebugParams {
   top_k: number;
   min_p: number;
   repeat_penalty: number;
-  max_tokens: number;
+  max_completion_tokens: number;
   tool_choice: "auto" | "required" | "none";
 }
 

@@ -82,7 +82,7 @@ export function useDebugChat(
       top_k: source.top_k,
       min_p: source.min_p,
       repeat_penalty: source.repeat_penalty,
-      max_tokens: source.max_tokens,
+      max_completion_tokens: source.max_completion_tokens,
       tool_choice: source.tool_choice,
     };
   }
@@ -337,7 +337,7 @@ export function useDebugChat(
           top_k: Math.round(params.top_k),
           min_p: params.min_p,
           repeat_penalty: params.repeat_penalty,
-          max_tokens: Math.max(1, Math.round(params.max_tokens)),
+          max_completion_tokens: Math.max(1, Math.round(params.max_completion_tokens)),
           ...(diagnosticTools ? { tools: diagnosticTools } : {}),
           ...(diagnosticTools ? { tool_choice: params.tool_choice } : {}),
         };

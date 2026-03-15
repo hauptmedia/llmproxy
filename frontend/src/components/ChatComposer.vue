@@ -8,7 +8,7 @@ interface AdvancedParamHelp {
   top_k: string;
   min_p: string;
   repeat_penalty: string;
-  max_tokens: string;
+  max_completion_tokens: string;
   tool_choice: string;
 }
 

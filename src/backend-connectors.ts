@@ -562,11 +562,6 @@ function sanitizeOpenAiChatRequestBody(
   }
 
   const sanitized = { ...parsedBody };
-  if (!("max_completion_tokens" in sanitized) && "max_tokens" in sanitized) {
-    sanitized.max_completion_tokens = sanitized.max_tokens;
-  }
-
-  delete sanitized.max_tokens;
   delete sanitized.top_k;
   delete sanitized.min_p;
   delete sanitized.repeat_penalty;

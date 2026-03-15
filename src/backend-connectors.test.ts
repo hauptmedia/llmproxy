@@ -216,7 +216,7 @@ test("routes Ollama chat completions to the native /api/chat endpoint", () => {
   assert.equal(plan.responseMode, "ollama-ndjson");
 });
 
-test("rewrites legacy OpenAI chat fields before forwarding chat requests", () => {
+test("drops unsupported sampler fields before forwarding OpenAI chat requests", () => {
   const backend: BackendConfig = {
     id: "openai-test",
     name: "OpenAI Test",
@@ -253,14 +253,14 @@ test("rewrites legacy OpenAI chat fields before forwarding chat requests", () =>
   assert.equal(payload.stream, true);
   assert.equal(payload.temperature, 0.7);
   assert.equal(payload.top_p, 0.95);
-  assert.equal(payload.max_completion_tokens, 256);
-  assert.equal("max_tokens" in payload, false);
+  assert.equal(payload.max_tokens, 256);
+  assert.equal("max_completion_tokens" in payload, false);
   assert.equal("top_k" in payload, false);
   assert.equal("min_p" in payload, false);
   assert.equal("repeat_penalty" in payload, false);
 });
 
-test("preserves explicit max_completion_tokens for OpenAI chat requests", () => {
+test("preserves explicit token limit fields for OpenAI chat requests", () => {
   const backend: BackendConfig = {
     id: "openai-test",
     name: "OpenAI Test",
@@ -290,7 +290,7 @@ test("preserves explicit max_completion_tokens for OpenAI chat requests", () => 
 
   assert.equal(plan.responseMode, "raw");
   assert.equal(payload.max_completion_tokens, 128);
-  assert.equal("max_tokens" in payload, false);
+  assert.equal(payload.max_tokens, 256);
 });
 
 test("preserves llama.cpp sampler fields on the OpenAI-compatible chat route", () => {

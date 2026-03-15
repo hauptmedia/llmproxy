@@ -7,7 +7,7 @@ interface AdvancedParamHelp {
   top_k: string;
   min_p: string;
   repeat_penalty: string;
-  max_tokens: string;
+  max_completion_tokens: string;
   tool_choice: string;
 }
 
@@ -98,13 +98,13 @@ defineProps<{
         </div>
         <div class="field">
           <div class="field-label-row">
-            <label class="field-label" :for="`${idPrefix}-max-tokens`">Max Tokens</label>
-            <span class="chat-param-help" :title="help.max_tokens" aria-label="Max Tokens help">i</span>
+            <label class="field-label mono" :for="`${idPrefix}-max-completion-tokens`">max_completion_tokens</label>
+            <span class="chat-param-help" :title="help.max_completion_tokens" aria-label="max_completion_tokens help">i</span>
           </div>
           <input
-            :id="`${idPrefix}-max-tokens`"
-            v-model.number="params.max_tokens"
-            :title="help.max_tokens"
+            :id="`${idPrefix}-max-completion-tokens`"
+            v-model.number="params.max_completion_tokens"
+            :title="help.max_completion_tokens"
             type="number"
             step="1"
             min="1"

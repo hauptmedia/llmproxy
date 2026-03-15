@@ -102,7 +102,7 @@ function createInitialState(): DashboardState {
         top_k: 40,
         min_p: 0.05,
         repeat_penalty: 1.1,
-        max_tokens: 20000,
+        max_completion_tokens: 20000,
         tool_choice: "auto",
       },
       dialogOpen: false,
