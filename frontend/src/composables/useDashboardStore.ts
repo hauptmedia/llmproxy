@@ -94,7 +94,6 @@ function createInitialState(): DashboardState {
       lastRequestId: "",
       rawRequest: "",
       rawResponse: "",
-      liveDetail: null,
       transcript: [],
       metrics: createInitialDebugMetrics(),
       params: {
@@ -183,7 +182,6 @@ function createDashboardStoreInternal() {
 
   const applyLiveRequestDetail = (detail: NonNullable<DashboardState["requestDetail"]["detail"]>): void => {
     requestDetail.applyLiveRequestDetail(detail);
-    debugChat.applyLiveDebugDetail(detail);
   };
 
   const liveFeed = useLiveFeed(state, applySnapshot, applyLiveRequestDetail, showToast);

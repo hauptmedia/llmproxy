@@ -8,14 +8,10 @@ import SuggestionActionCards from "./SuggestionActionCards.vue";
 import type {
   ConversationTranscriptItem,
   DebugTranscriptEntry,
-  RequestLogDetail,
   UiBadge,
 } from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
-import {
-  buildConversationItemsFromDebugTranscript,
-  buildRequestConversationItems,
-} from "../utils/conversation-transcript";
+import { buildConversationItemsFromDebugTranscript } from "../utils/conversation-transcript";
 import { isClientRecord } from "../utils/guards";
 import {
   debugChatFirstMessageSuggestions,
@@ -141,18 +137,12 @@ function getTranscriptEntrySignature(entry: DebugTranscriptEntry): string {
   ].join(":");
 }
 
-function findLastAssistantTranscriptIndex(transcript: DebugTranscriptEntry[]): number {
-  for (let index = transcript.length - 1; index >= 0; index -= 1) {
-    if (transcript[index]?.role === "assistant") {
-      return index;
-    }
-  }
-
-  return -1;
+function getDebugTranscript(): DebugTranscriptEntry[] {
+  return store.state.debug.transcript as unknown as DebugTranscriptEntry[];
 }
 
 const chatConversationSignature = computed<string>(() => {
-  const transcript = store.state.debug.transcript as unknown as DebugTranscriptEntry[];
+  const transcript = getDebugTranscript();
   const transcriptBits: string[] = [];
   for (let index = 0; index < transcript.length; index += 1) {
     transcriptBits.push(getTranscriptEntrySignature(transcript[index] as DebugTranscriptEntry));
@@ -161,38 +151,18 @@ const chatConversationSignature = computed<string>(() => {
   const queuedBits = store.state.debug.queuedMessages.map((entry, index) => (
     `${index}:${entry.model}:${entry.enableDiagnosticTools ? "tools" : "plain"}:${entry.prompt.length}`
   ));
-  const liveResponseSource = store.state.debug.liveDetail as { responseBody?: unknown } | null;
-  const liveResponse = isClientRecord(liveResponseSource?.responseBody)
-    ? liveResponseSource.responseBody as Record<string, unknown>
-    : null;
-  const liveChoices = Array.isArray(liveResponse?.choices) ? liveResponse.choices : [];
-  const liveBits = liveChoices.map((choice, index) => {
-    if (!isClientRecord(choice)) {
-      return `${index}:unknown`;
-    }
-
-    const message = isClientRecord(choice.message) ? choice.message as Record<string, unknown> : null;
-    return [
-      index,
-      typeof message?.role === "string" ? message.role : "assistant",
-      typeof message?.content === "string" ? message.content.length : 0,
-      typeof message?.reasoning_content === "string" ? message.reasoning_content.length : 0,
-      typeof choice.finish_reason === "string" ? choice.finish_reason : "",
-    ].join(":");
-  });
 
   return [
     hasTranscript.value ? "ready" : "initial",
     trimmedSystemPrompt.value,
     store.state.debug.sending ? "sending" : "idle",
     transcriptBits.join("|"),
-    liveBits.join("|"),
     queuedBits.join("|"),
   ].join("|");
 });
 
 const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
-  const transcript = store.state.debug.transcript as unknown as DebugTranscriptEntry[];
+  const transcript = getDebugTranscript();
   const items: ConversationTranscriptItem[] = [];
 
   if (hasTranscript.value && trimmedSystemPrompt.value) {
@@ -215,33 +185,6 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
     reasoningCollapsed: shouldCollapseDebugReasoning(transcript[index] as DebugTranscriptEntry, index),
     extraBadges: [] as UiBadge[],
   }));
-
-  const liveDetail = store.state.debug.liveDetail as RequestLogDetail | null;
-  if (
-    liveDetail &&
-    liveDetail.entry.id === store.state.debug.lastRequestId
-  ) {
-    const liveResponseItems = buildRequestConversationItems(liveDetail, {
-      startIndex: 0,
-      includeRequestMessages: false,
-      hideFinishBadge: true,
-      reasoningCollapsed: true,
-      responseKeyPrefix: "chat-live-response",
-    });
-    const lastAssistantIndex = findLastAssistantTranscriptIndex(transcript);
-
-    if (liveResponseItems.length > 0 && lastAssistantIndex >= 0 && lastAssistantIndex < transcriptItems.length) {
-      const baseKey = transcriptItems[lastAssistantIndex]?.key ?? `chat-live-response:${lastAssistantIndex}`;
-      const replacementStartIndex = transcriptItems[lastAssistantIndex]?.index ?? (offset + lastAssistantIndex);
-      const normalizedLiveItems: ConversationTranscriptItem[] = liveResponseItems.map((item, liveIndex) => ({
-        ...item,
-        key: liveIndex === 0 ? baseKey : `${baseKey}:live:${liveIndex}`,
-        index: replacementStartIndex + liveIndex,
-      }));
-
-      transcriptItems.splice(lastAssistantIndex, 1, ...normalizedLiveItems);
-    }
-  }
 
   const queuedOffset = offset + transcriptItems.length;
   const queuedItems: ConversationTranscriptItem[] = store.state.debug.queuedMessages.map((entry, index) => ({

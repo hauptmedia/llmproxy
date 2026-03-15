@@ -1,3 +1,4 @@
+import { nextTick } from "vue";
 import type {
   DashboardState,
   DebugQueuedMessage,
@@ -34,6 +35,18 @@ export function useDebugChat(
   const maxFunctionRounds = 100;
   let metricsTicker: number | undefined;
   let activeRunId = 0;
+
+  async function yieldDebugChatPaint(): Promise<void> {
+    await nextTick();
+    await new Promise<void>((resolve) => {
+      if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(() => resolve());
+        return;
+      }
+
+      setTimeout(resolve, 0);
+    });
+  }
 
   function ensureDefaultDebugPrompt(): void {
     if (state.debug.defaultPromptDismissed) {
@@ -261,7 +274,6 @@ export function useDebugChat(
     state.debug.lastRequestId = requestId;
     state.debug.rawRequest = "";
     state.debug.rawResponse = "";
-    state.debug.liveDetail = null;
     if (!queuedMessage) {
       state.debug.prompt = "";
     }
@@ -269,6 +281,8 @@ export function useDebugChat(
     startDebugMetricsTicker();
 
     try {
+      await yieldDebugChatPaint();
+
       let currentAssistantTurn = assistantTurn;
       let currentRequestId = requestId;
 
@@ -362,7 +376,6 @@ export function useDebugChat(
         currentAssistantTurn = state.debug.transcript[state.debug.transcript.length - 1] as DebugTranscriptEntry;
         assistantTurn = currentAssistantTurn;
         currentRequestId = createClientDebugRequestId();
-        state.debug.liveDetail = null;
       }
     } catch (error) {
       if (runId !== activeRunId || isExpectedDebugAbort(error)) {
@@ -400,7 +413,6 @@ export function useDebugChat(
     state.debug.sending = false;
     state.debug.abortController = null;
     state.debug.queuedMessages.splice(0);
-    state.debug.liveDetail = null;
     stopDebugMetricsTicker();
   }
 
@@ -414,7 +426,6 @@ export function useDebugChat(
     state.debug.queuedMessages.splice(0);
     state.debug.rawRequest = "";
     state.debug.rawResponse = "";
-    state.debug.liveDetail = null;
     state.debug.status = "";
     state.debug.usage = "";
     state.debug.error = "";
@@ -436,7 +447,6 @@ export function useDebugChat(
     state.debug.queuedMessages.splice(0);
     state.debug.rawRequest = "";
     state.debug.rawResponse = "";
-    state.debug.liveDetail = null;
     state.debug.status = "";
     state.debug.usage = "";
     state.debug.error = "";
@@ -448,16 +458,7 @@ export function useDebugChat(
     resetDebugMetrics();
   }
 
-  function applyLiveDebugDetail(detail: DashboardState["debug"]["liveDetail"]): void {
-    if (!detail || state.debug.lastRequestId !== detail.entry.id) {
-      return;
-    }
-
-    state.debug.liveDetail = detail;
-  }
-
   return {
-    applyLiveDebugDetail,
     clearDebugChat,
     ensureDefaultDebugPrompt,
     prepareDebugChatDraft,

@@ -2940,6 +2940,12 @@
     @apply px-3.5 pb-3.5;
   }
 
+  .reasoning-stream-content {
+    @apply rounded-2xl bg-stone-900/5 px-3.5 py-3 text-[0.94rem] leading-relaxed text-stone-950;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
   .turn-content,
   .raw-box pre {
     @apply m-0 overflow-auto rounded-2xl bg-stone-900/5 p-3.5;

@@ -1231,13 +1231,7 @@ export class LlmProxyServer {
     }
 
     if (clientStream) {
-      response.statusCode = upstreamResponse.status;
-      copyResponseHeaders(upstreamResponse.headers, response);
-      response.setHeader("x-llmproxy-request-id", requestId);
-      response.setHeader("x-llmproxy-backend", backendId);
-      if (model) {
-        response.setHeader("x-llmproxy-model", model);
-      }
+      this.writeStreamingResponseHeaders(response, upstreamResponse.status, requestId, backendId, model);
     }
 
     const decoder = new TextDecoder();
@@ -1292,7 +1286,7 @@ export class LlmProxyServer {
     }
 
     if (clientStream) {
-      this.writeStreamingResponseHeaders(response, upstreamResponse.status, backendId, model);
+      this.writeStreamingResponseHeaders(response, upstreamResponse.status, requestId, backendId, model);
     }
 
     const decoder = new TextDecoder();
@@ -1455,16 +1449,19 @@ export class LlmProxyServer {
     response.end(JSON.stringify(payload));
   }
 
-  private writeStreamingResponseHeaders(response: ServerResponse, statusCode: number, backendId: string, model?: string): void {
+  private writeStreamingResponseHeaders(response: ServerResponse, statusCode: number, requestId: string, backendId: string, model?: string): void {
     response.statusCode = statusCode;
     response.setHeader("content-type", "text/event-stream; charset=utf-8");
     response.setHeader("cache-control", "no-cache, no-transform");
     response.setHeader("connection", "keep-alive");
     response.setHeader("x-accel-buffering", "no");
+    response.setHeader("x-llmproxy-request-id", requestId);
     response.setHeader("x-llmproxy-backend", backendId);
     if (model) {
       response.setHeader("x-llmproxy-model", model);
     }
+    response.flushHeaders?.();
+    response.socket?.setNoDelay?.(true);
   }
 
   private buildUpstreamHeaders(

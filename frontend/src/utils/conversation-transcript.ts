@@ -52,7 +52,7 @@ export function buildConversationItemsFromDebugTranscript(
   const keyPrefix = options.keyPrefix ?? "transcript";
 
   return transcript.map((entry, index) => ({
-    key: `${keyPrefix}:${index}:${entry.role}:${entry.backend || ""}`,
+    key: `${keyPrefix}:${index}:${entry.role}`,
     message: buildConversationMessageFromDebugEntry(entry),
     index: startIndex + index,
     finishReason: entry.finish_reason || "",
@@ -147,4 +147,3 @@ export function buildRequestConversationItems(
 
   return [...requestItems, ...responseItems];
 }
-

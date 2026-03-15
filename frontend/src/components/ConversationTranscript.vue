@@ -16,6 +16,7 @@ withDefaults(defineProps<{
     <MessageCard
       v-for="item in items"
       :key="item.key"
+      :item-key="item.key"
       :message="item.message"
       :index="item.index"
       :bubble-layout="bubbleLayout"

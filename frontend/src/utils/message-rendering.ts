@@ -500,6 +500,7 @@ type CompactBubbleDisclosureOptions = {
   collapsedTitle: string;
   expandedTitle: string;
   extraRootClasses?: string[];
+  allowEmptyBody?: boolean;
 };
 
 type CompactBubbleStaticOptions = {
@@ -513,7 +514,7 @@ type CompactBubbleStaticOptions = {
 };
 
 function renderCompactBubbleDisclosure(options: CompactBubbleDisclosureOptions): string {
-  if (!options.bodyHtml) {
+  if (!options.bodyHtml && !options.allowEmptyBody) {
     return "";
   }
 
@@ -536,10 +537,22 @@ function renderCompactBubbleDisclosure(options: CompactBubbleDisclosureOptions):
           : "") +
         `<span class="compact-bubble-chevron" aria-hidden="true"></span>` +
       `</summary>` +
-      `<div class="compact-bubble-content ${escapeHtml(options.contentClass)}">` +
-        options.bodyHtml +
-      `</div>` +
+      (options.bodyHtml
+        ? (
+          `<div class="compact-bubble-content ${escapeHtml(options.contentClass)}">` +
+            options.bodyHtml +
+          `</div>`
+        )
+        : "") +
     `</details>`
+  );
+}
+
+function renderLiveReasoningContentHtml(reasoningContent: string): string {
+  return (
+    `<div class="reasoning-stream-content">` +
+      escapeHtml(reasoningContent).replace(/\n/g, "<br />") +
+    `</div>`
   );
 }
 
@@ -571,6 +584,10 @@ function renderReasoningBubble(reasoningContent: unknown, collapsed: boolean, li
     return "";
   }
 
+  const bodyHtml = collapsed
+    ? ""
+    : (live ? renderLiveReasoningContentHtml(reasoningContent) : renderMessageStringHtml(reasoningContent));
+
   return renderCompactBubbleDisclosure({
     kindClass: "compact-bubble-panel-reasoning",
     contentClass: "reasoning-content",
@@ -583,11 +600,12 @@ function renderReasoningBubble(reasoningContent: unknown, collapsed: boolean, li
         `<path d="M8.5 10.5h2"></path>` +
         `<path d="M13.5 10.5h2"></path>` +
       `</svg>`,
-    bodyHtml: renderMessageStringHtml(reasoningContent),
+    bodyHtml,
     collapsed,
     collapsedTitle: "Model reasoning captured for this message. Expand it to inspect the reasoning output.",
     expandedTitle: "Model reasoning captured for this message. Collapse it to focus on the final content.",
     extraRootClasses: live ? ["reasoning-live"] : [],
+    allowEmptyBody: true,
   });
 }
 

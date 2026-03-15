@@ -15,6 +15,17 @@ import {
 type DebugStateSlice = DashboardState["debug"];
 type ReplaceTranscriptEntry = (entry: DebugTranscriptEntry) => DebugTranscriptEntry;
 
+async function yieldToBrowserPaint(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => resolve());
+      return;
+    }
+
+    setTimeout(resolve, 0);
+  });
+}
+
 function hasVisibleFunctionCallDelta(value: unknown): boolean {
   if (!isClientRecord(value)) {
     return false;
@@ -180,9 +191,10 @@ function processStreamBuffer(
   assistantTurn: DebugTranscriptEntry,
   replaceTranscriptEntry: ReplaceTranscriptEntry,
   flush: boolean,
-): { buffer: string; assistantTurn: DebugTranscriptEntry } {
+): { buffer: string; assistantTurn: DebugTranscriptEntry; updated: boolean } {
   let working = buffer;
   let currentAssistantTurn = assistantTurn;
+  let updated = false;
 
   while (true) {
     const windowsBreak = working.indexOf("\r\n\r\n");
@@ -204,7 +216,11 @@ function processStreamBuffer(
 
     const block = working.slice(0, breakIndex);
     working = working.slice(breakIndex + breakLength);
-    currentAssistantTurn = processStreamBlock(debugState, block, rawEvents, currentAssistantTurn, replaceTranscriptEntry);
+    const nextAssistantTurn = processStreamBlock(debugState, block, rawEvents, currentAssistantTurn, replaceTranscriptEntry);
+    if (nextAssistantTurn !== currentAssistantTurn) {
+      updated = true;
+    }
+    currentAssistantTurn = nextAssistantTurn;
   }
 
   if (flush && working.trim()) {
@@ -212,12 +228,14 @@ function processStreamBuffer(
     return {
       buffer: "",
       assistantTurn: currentAssistantTurn,
+      updated: true,
     };
   }
 
   return {
     buffer: working,
     assistantTurn: currentAssistantTurn,
+    updated,
   };
 }
 
@@ -247,10 +265,19 @@ export async function consumeStreamingResponse(
     const update = processStreamBuffer(debugState, buffer, rawEvents, currentAssistantTurn, replaceTranscriptEntry, false);
     buffer = update.buffer;
     currentAssistantTurn = update.assistantTurn;
+    if (update.updated) {
+      await yieldToBrowserPaint();
+    }
   }
 
   buffer += decoder.decode();
-  currentAssistantTurn = processStreamBuffer(debugState, buffer, rawEvents, currentAssistantTurn, replaceTranscriptEntry, true).assistantTurn;
+  {
+    const update = processStreamBuffer(debugState, buffer, rawEvents, currentAssistantTurn, replaceTranscriptEntry, true);
+    currentAssistantTurn = update.assistantTurn;
+    if (update.updated) {
+      await yieldToBrowserPaint();
+    }
+  }
   debugState.rawResponse = rawEvents.join("\n\n");
   return currentAssistantTurn;
 }

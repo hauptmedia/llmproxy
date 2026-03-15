@@ -282,7 +282,6 @@ export interface DebugState {
   lastRequestId: string;
   rawRequest: string;
   rawResponse: string;
-  liveDetail: RequestLogDetail | null;
   transcript: DebugTranscriptEntry[];
   metrics: DebugMetrics;
   params: DebugParams;

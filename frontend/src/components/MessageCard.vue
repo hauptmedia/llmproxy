@@ -13,9 +13,12 @@ interface MessageLike extends Record<string, unknown> {
   role?: string;
 }
 
+const persistedReasoningState = new Map<string, boolean>();
+
 const props = withDefaults(defineProps<{
   message: MessageLike;
   index: number;
+  itemKey?: string | number;
   heading?: string;
   bubbleLayout?: boolean;
   finishReason?: string;
@@ -34,6 +37,17 @@ const props = withDefaults(defineProps<{
 const hostEl = ref<HTMLElement | null>(null);
 const reasoningExpanded = ref(false);
 const inlineAceEditors: AceViewerController[] = [];
+const reasoningStateKey = computed(() => String(
+  props.itemKey ?? `${props.index}:${typeof props.message.role === "string" ? props.message.role : "unknown"}`,
+));
+
+watch(
+  reasoningStateKey,
+  (nextKey) => {
+    reasoningExpanded.value = persistedReasoningState.get(nextKey) ?? false;
+  },
+  { immediate: true },
+);
 
 function destroyInlineAceEditors(): void {
   while (inlineAceEditors.length > 0) {
@@ -55,6 +69,7 @@ function handleReasoningToggle(event: Event): void {
 
   if (target.classList.contains("compact-bubble-panel-reasoning")) {
     reasoningExpanded.value = target.open;
+    persistedReasoningState.set(reasoningStateKey.value, target.open);
   }
 
   if (target.classList.contains("compact-bubble-panel-tool")) {
@@ -88,6 +103,7 @@ function handleReasoningClick(event: Event): void {
 
   if (panel.classList.contains("compact-bubble-panel-reasoning")) {
     reasoningExpanded.value = !panel.open;
+    persistedReasoningState.set(reasoningStateKey.value, !panel.open);
   }
 }
 
