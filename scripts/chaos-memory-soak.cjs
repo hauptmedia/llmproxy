@@ -13,7 +13,8 @@ const { LlmProxyServer } = require("../dist/server.js");
 
 const CHAOS_DURATION_MS = 20_000;
 const SAMPLE_INTERVAL_MS = 500;
-const MAX_RECENT_DETAIL_BYTES = 3_500_000;
+const MAX_CHAOS_RECENT_DETAIL_BYTES = 3_500_000;
+const MAX_ACTIVE_STREAM_RECENT_DETAIL_BYTES = 18_000_000;
 const MAX_FINAL_HEAP_GROWTH_MB = 70;
 const MAX_SSE_BUFFER_BYTES = 12_000_000;
 const ACTIVE_STREAM_CLIENT_AGENT = new HttpAgent({
@@ -191,6 +192,69 @@ function buildRequestedStreamPlan(targetCompletionTokens, requestedChunkDelayMs)
     contentSize,
     reasoningSize,
     chunkDelayMs,
+  };
+}
+
+function inspectRetainedActiveStreamDetail(loadBalancer) {
+  const recentRequests = loadBalancer.getSnapshot().recentRequests ?? [];
+  const sampleEntry =
+    recentRequests.find((entry) => entry.outcome === "success" && entry.hasDetail && entry.requestType === "json") ??
+    recentRequests.find((entry) => entry.outcome === "success" && entry.hasDetail);
+
+  if (!sampleEntry) {
+    return {
+      sample: null,
+      verdicts: ["active-streams run did not retain a successful request detail sample"],
+    };
+  }
+
+  const detail = loadBalancer.getRequestLogDetail(sampleEntry.id);
+  const requestBody = detail?.requestBody;
+  const responseBody = detail?.responseBody;
+  const targetTokens = readRequestedTargetTokens(requestBody);
+  const chunkDelayMs = readRequestedChunkDelayMs(requestBody);
+  const streamPlan = targetTokens ? buildRequestedStreamPlan(targetTokens, chunkDelayMs) : undefined;
+  const content = Array.isArray(responseBody?.choices)
+    ? responseBody.choices?.[0]?.message?.content
+    : undefined;
+  const verdicts = [];
+
+  if (!detail || !requestBody || !responseBody) {
+    verdicts.push(`retained detail sample ${sampleEntry.id} was missing request or response data`);
+  }
+
+  if (!streamPlan) {
+    verdicts.push(`retained detail sample ${sampleEntry.id} did not expose chaos_target_tokens`);
+  }
+
+  if (typeof content !== "string") {
+    verdicts.push(`retained detail sample ${sampleEntry.id} had no assistant content`);
+  }
+
+  if (typeof content === "string") {
+    if (content.includes("truncated to reduce memory usage") || content.includes("truncated to protect memory")) {
+      verdicts.push(`retained detail sample ${sampleEntry.id} still contained a truncation marker`);
+    }
+
+    if (streamPlan) {
+      const expectedContentLength = streamPlan.segmentCount * streamPlan.contentSize;
+      if (content.length !== expectedContentLength) {
+        verdicts.push(
+          `retained detail sample ${sampleEntry.id} stored ${content.length} bytes instead of ${expectedContentLength}`,
+        );
+      }
+    }
+  }
+
+  return {
+    sample: {
+      requestId: sampleEntry.id,
+      requestType: sampleEntry.requestType,
+      targetTokens: targetTokens ?? 0,
+      expectedContentLength: streamPlan ? streamPlan.segmentCount * streamPlan.contentSize : 0,
+      retainedContentLength: typeof content === "string" ? content.length : 0,
+    },
+    verdicts,
   };
 }
 
@@ -1665,6 +1729,14 @@ async function main() {
     await forceGc();
     const finalMemory = memorySnapshot();
     const samples = sampler.samples;
+    const retainedDetailBudgetBytes =
+      RUN_MODE === "active-streams"
+        ? MAX_ACTIVE_STREAM_RECENT_DETAIL_BYTES
+        : MAX_CHAOS_RECENT_DETAIL_BYTES;
+    const retainedActiveStreamDetail =
+      RUN_MODE === "active-streams"
+        ? inspectRetainedActiveStreamDetail(loadBalancer)
+        : { sample: null, verdicts: [] };
     const retainedDetailBytes = Array.from(loadBalancer.recentRequestDetails.values()).reduce((sum, detail) => (
       sum + Buffer.byteLength(JSON.stringify(detail))
     ), 0);
@@ -1687,6 +1759,7 @@ async function main() {
       config: {
         sampleIntervalMs: SAMPLE_INTERVAL_MS,
         backendCount: chaosBackends.length,
+        retainedDetailBudgetBytes,
         ...execution.extraConfig,
       },
       memory: {
@@ -1706,6 +1779,7 @@ async function main() {
         retainedDetailBytes,
         retainedRequestCount: loadBalancer.recentRequestDetails.size,
         recentRequestLimit: config.server.recentRequestLimit,
+        retainedDetailSample: retainedActiveStreamDetail.sample,
         peakSseBufferedBytes,
         finalSseClientCount: server.sseClients.size,
         ...execution.extraLoad,
@@ -1718,7 +1792,7 @@ async function main() {
     if (heapGrowthMb > MAX_FINAL_HEAP_GROWTH_MB) {
       verdicts.push(`final heap grew by ${heapGrowthMb} MB`);
     }
-    if (retainedDetailBytes > MAX_RECENT_DETAIL_BYTES) {
+    if (retainedDetailBytes > retainedDetailBudgetBytes) {
       verdicts.push(`retained request detail bytes reached ${retainedDetailBytes}`);
     }
     if (peakSseBufferedBytes > MAX_SSE_BUFFER_BYTES) {
@@ -1729,6 +1803,9 @@ async function main() {
     }
     if (loadBalancer.getSnapshot().queueDepth !== 0 || server.activeConnections.size !== 0) {
       verdicts.push("proxy did not fully drain active or queued requests");
+    }
+    for (const verdict of retainedActiveStreamDetail.verdicts) {
+      verdicts.push(verdict);
     }
     for (const verdict of execution.extraVerdicts) {
       verdicts.push(verdict);

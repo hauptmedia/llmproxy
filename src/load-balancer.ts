@@ -16,7 +16,7 @@ import { getBackendConnector, getDefaultHealthPaths } from "./backend-connectors
 import { joinUrl, toErrorMessage } from "./utils";
 import { resolveBackendHeaders } from "./config-store";
 import { buildDiagnosticReport, selectPrimaryDiagnosticIssue } from "./diagnostics";
-import { compactJsonForRetention } from "./detail-retention";
+import { cloneJsonForRetention, compactJsonForRetention } from "./detail-retention";
 
 interface BackendRuntime {
   config: ProxyConfig["backends"][number];
@@ -722,8 +722,8 @@ export class LoadBalancer extends EventEmitter {
   ): void {
     if (requestBody !== undefined || responseBody !== undefined) {
       this.recentRequestDetails.set(requestId, {
-        requestBody: compactJsonForRetention(requestBody),
-        responseBody: compactJsonForRetention(responseBody),
+        requestBody: cloneJsonForRetention(requestBody),
+        responseBody: cloneJsonForRetention(responseBody),
       });
     } else {
       this.recentRequestDetails.delete(requestId);

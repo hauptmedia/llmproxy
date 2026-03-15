@@ -8,6 +8,23 @@ const RETAINED_TRUNCATION_MARKER = "\n...[llmproxy truncated to reduce memory us
 const RETAINED_NESTED_MARKER = "[llmproxy truncated nested data]";
 const RETAINED_TRUNCATED_KEYS_FIELD = "__llmproxy_truncated_keys__";
 
+function cloneJsonInner(value: JsonValue): JsonValue {
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => cloneJsonInner(entry));
+  }
+
+  const clone: Record<string, JsonValue> = {};
+  for (const [key, nestedValue] of Object.entries(value)) {
+    clone[key] = cloneJsonInner(nestedValue);
+  }
+
+  return clone;
+}
+
 function truncateRetainedString(value: string): string {
   if (value.length <= RETAINED_STRING_LIMIT) {
     return value;
@@ -47,6 +64,14 @@ function compactJsonInner(value: JsonValue, depth: number): JsonValue {
   }
 
   return compacted;
+}
+
+export function cloneJsonForRetention(value: JsonValue | undefined): JsonValue | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return cloneJsonInner(value);
 }
 
 export function compactJsonForRetention(value: JsonValue | undefined): JsonValue | undefined {

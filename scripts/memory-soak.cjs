@@ -284,12 +284,21 @@ async function main() {
     const retainedBytes = Array.from(recentRequestDetails.values()).reduce((sum, detail) => (
       sum + Buffer.byteLength(JSON.stringify(detail))
     ), 0);
+    const sampleRetainedDetail = Array.from(recentRequestDetails.values())[0];
 
     assert.equal(snapshot.activeConnections.length, 0);
     assert.equal(snapshot.recentRequests.length, config.server.recentRequestLimit);
     assert.equal(recentRequestDetails.size, config.server.recentRequestLimit);
     assert.equal(diagnosedRequestIds.size, config.server.recentRequestLimit);
-    assert.ok(retainedBytes < 2_000_000);
+    assert.ok(sampleRetainedDetail);
+    assert.equal(sampleRetainedDetail.requestBody.messages.length, requestPayload.messages.length);
+    assert.equal(sampleRetainedDetail.requestBody.messages[179].content, requestPayload.messages[179].content);
+    assert.equal(sampleRetainedDetail.requestBody.metadata.field_179, "z".repeat(256));
+    assert.equal(sampleRetainedDetail.responseBody, undefined);
+    assert.equal(
+      retainedBytes,
+      config.server.recentRequestLimit * Buffer.byteLength(JSON.stringify(sampleRetainedDetail)),
+    );
     assert.ok(finalHeapMb <= baselineHeapMb + 35);
 
     const sseConnections = await Promise.all(

@@ -878,7 +878,7 @@ test("retains only the configured number of recent requests", async () => {
   assert.equal(balancer.getRequestLogDetail("req-limit-2")?.entry.id, "req-limit-2");
 });
 
-test("memory retention stays bounded under many large completed requests", async () => {
+test("memory retention keeps full detail but stays bounded by recentRequestLimit", async () => {
   const recentRequestLimit = 5;
   const balancer = new LoadBalancer({
     ...TEST_CONFIG,
@@ -960,26 +960,26 @@ test("memory retention stays bounded under many large completed requests", async
   assert.equal(internals.diagnosedRequestIds.size, recentRequestLimit);
 
   const retainedDetail = balancer.getRequestLogDetail("req-pressure-29");
+  const retainedSnapshot = internals.recentRequestDetails.get("req-pressure-29");
   assert.ok(retainedDetail);
+  assert.ok(retainedSnapshot);
   assert.equal(Array.isArray((retainedDetail?.requestBody as Record<string, unknown>)?.messages), true);
-  assert.equal(((retainedDetail?.requestBody as Record<string, any>)?.messages ?? []).length, 24);
+  assert.equal(((retainedDetail?.requestBody as Record<string, any>)?.messages ?? []).length, 180);
+  assert.equal((retainedDetail?.requestBody as Record<string, any>)?.metadata?.field_179, `value-179-${"z".repeat(256)}`);
+  assert.equal("__llmproxy_truncated_keys__" in ((retainedDetail?.requestBody as Record<string, any>)?.metadata ?? {}), false);
   assert.equal(
-    ((retainedDetail?.requestBody as Record<string, any>)?.metadata?.__llmproxy_truncated_keys__ ?? 0) > 0,
-    true,
-  );
-  assert.equal(
-    ((((retainedDetail?.responseBody as Record<string, any>)?.choices?.[0]?.message?.content) ?? "") as string).length < 17_000,
-    true,
+    ((((retainedDetail?.responseBody as Record<string, any>)?.choices?.[0]?.message?.content) ?? "") as string).length,
+    90_000,
   );
   assert.equal(
     ((((retainedDetail?.responseBody as Record<string, any>)?.choices?.[0]?.message?.tool_calls) ?? []) as unknown[]).length,
-    24,
+    120,
   );
 
   const retainedBytes = Array.from(internals.recentRequestDetails.values()).reduce((sum, detail) => (
     sum + Buffer.byteLength(JSON.stringify(detail))
   ), 0);
-  assert.ok(retainedBytes < 1_200_000);
+  assert.equal(retainedBytes, recentRequestLimit * Buffer.byteLength(JSON.stringify(retainedSnapshot)));
 });
 
 test("stop rejects queued acquires and clears the queue immediately", async () => {

@@ -12,7 +12,7 @@ import {
 } from "./backend-connectors";
 import { renderDashboardHtml } from "./dashboard";
 import { buildDiagnosticReport } from "./diagnostics";
-import { compactJsonForRetention } from "./detail-retention";
+import { cloneJsonForRetention, compactJsonForRetention } from "./detail-retention";
 import { LoadBalancer } from "./load-balancer";
 import {
   RESTART_REQUIRED_SERVER_FIELDS,
@@ -925,8 +925,8 @@ export class LlmProxyServer {
           latencyMs: Date.now() - route.receivedAt,
           statusCode: upstreamResponse.status,
           queuedMs: lease.queueMs,
-          responseBody: synthesizedResponse as JsonValue | undefined,
           ...this.buildReleaseMetrics(route.id),
+          responseBody: synthesizedResponse as JsonValue | undefined,
         });
         return;
       }
@@ -953,8 +953,8 @@ export class LlmProxyServer {
           latencyMs: Date.now() - route.receivedAt,
           statusCode: upstreamResponse.status,
           queuedMs: lease.queueMs,
-          responseBody: synthesizedResponse as JsonValue | undefined,
           ...this.buildReleaseMetrics(route.id),
+          responseBody: synthesizedResponse as JsonValue | undefined,
         });
         return;
       }
@@ -1055,7 +1055,7 @@ export class LlmProxyServer {
       textTokens: 0,
       metricsExact: false,
       requestedCompletionTokenLimit: resolveRequestedCompletionLimit(route.requestBody),
-      requestBody: compactJsonForRetention(route.requestBody),
+      requestBody: cloneJsonForRetention(route.requestBody),
     });
     this.broadcastRequestDetail(route.id);
     this.broadcastCurrentSnapshot();

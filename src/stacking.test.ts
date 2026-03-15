@@ -1395,7 +1395,7 @@ test("ollama connector keeps the client surface OpenAI-compatible", async (t) =>
   });
 });
 
-test("proxy rewrites legacy max_tokens for OpenAI-compatible non-streaming chat clients", async (t) => {
+test("proxy preserves OpenAI token limit fields for non-streaming chat clients", async (t) => {
   const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-tool-flow-"));
   const receivedPayloads: Array<Record<string, unknown>> = [];
   const cleanup: Array<() => Promise<void>> = [];
@@ -1600,13 +1600,13 @@ test("proxy rewrites legacy max_tokens for OpenAI-compatible non-streaming chat 
 
   assert.equal(receivedPayloads.length, 1);
   assert.equal(receivedPayloads[0]?.stream, true);
-  assert.equal(receivedPayloads[0]?.max_completion_tokens, 777);
-  assert.equal("max_tokens" in receivedPayloads[0]!, false);
+  assert.equal(receivedPayloads[0]?.max_tokens, 777);
+  assert.equal("max_completion_tokens" in receivedPayloads[0]!, false);
   assert.equal(Array.isArray(receivedPayloads[0]?.tools), true);
   assert.equal((receivedPayloads[0]?.tools as unknown[]).length, 2);
 });
 
-test("non-streaming clients receive the full synthesized response before retention truncates stored detail", async (t) => {
+test("non-streaming clients and retained history both keep the full synthesized response", async (t) => {
   const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-long-json-from-stream-"));
   const cleanup: Array<() => Promise<void>> = [];
 
@@ -1718,8 +1718,9 @@ test("non-streaming clients receive the full synthesized response before retenti
   };
 
   const retainedContent = detailPayload.responseBody?.choices?.[0]?.message?.content ?? "";
-  assert.equal(retainedContent.length < expectedContent.length, true);
-  assert.match(retainedContent, /truncated to reduce memory usage/);
+  assert.equal(retainedContent.length, expectedContent.length);
+  assert.equal(retainedContent, expectedContent);
+  assert.doesNotMatch(retainedContent, /truncated to reduce memory usage/);
 });
 
 test("active connections expose live request details for chat history inspection", async (t) => {
@@ -1785,6 +1786,10 @@ test("active connections expose live request details for chat history inspection
   const baseUrl = `http://127.0.0.1:${routerPort}`;
   await waitForHealthyBackend(baseUrl, "mock-live-upstream");
   const requestedRequestId = "chat-debug-live-request";
+  const liveMessages = Array.from({ length: 80 }, (_, index) => ({
+    role: index % 2 === 0 ? "user" : "assistant",
+    content: `history-${index}`,
+  }));
 
   const liveResponsePromise = fetch(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
@@ -1796,16 +1801,7 @@ test("active connections expose live request details for chat history inspection
       model: "mock-live-model",
       max_completion_tokens: 128,
       stream: true,
-      messages: [
-        {
-          role: "system",
-          content: "Stay concise.",
-        },
-        {
-          role: "user",
-          content: "Show me a live request.",
-        },
-      ],
+      messages: liveMessages,
     }),
   });
 
@@ -1841,10 +1837,11 @@ test("active connections expose live request details for chat history inspection
   assert.equal(detailPayload.requestBody?.model, "mock-live-model");
   assert.equal(detailPayload.requestBody?.max_completion_tokens, 128);
   assert.equal(detailPayload.requestBody?.stream, true);
-  assert.equal(detailPayload.requestBody?.messages?.[0]?.role, "system");
-  assert.equal(detailPayload.requestBody?.messages?.[0]?.content, "Stay concise.");
-  assert.equal(detailPayload.requestBody?.messages?.[1]?.role, "user");
-  assert.equal(detailPayload.requestBody?.messages?.[1]?.content, "Show me a live request.");
+  assert.equal(detailPayload.requestBody?.messages?.length, liveMessages.length);
+  assert.equal(detailPayload.requestBody?.messages?.[0]?.role, liveMessages[0]?.role);
+  assert.equal(detailPayload.requestBody?.messages?.[0]?.content, liveMessages[0]?.content);
+  assert.equal(detailPayload.requestBody?.messages?.[79]?.role, liveMessages[79]?.role);
+  assert.equal(detailPayload.requestBody?.messages?.[79]?.content, liveMessages[79]?.content);
   assert.match(detailPayload.responseBody?.choices?.[0]?.message?.content ?? "", /Streaming/);
 
   const liveResponse = await liveResponsePromise;
