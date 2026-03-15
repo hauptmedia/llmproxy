@@ -71,6 +71,15 @@ export function selectProxyStatus(
   return 502;
 }
 
+export function isErrorStatus(statusCode: number | undefined): boolean {
+  return typeof statusCode === "number" && (statusCode < 200 || statusCode >= 300);
+}
+
+export function extractErrorMessageFromPayload(value: JsonValue | undefined): string | undefined {
+  const message = extractNestedErrorMessage(value, 0);
+  return typeof message === "string" && message.trim().length > 0 ? message.trim() : undefined;
+}
+
 export function extractApiRequestId(pathname: string, suffix = ""): string | undefined {
   const prefix = "/api/requests/";
   if (!pathname.startsWith(prefix)) {
@@ -238,6 +247,75 @@ function readPositiveInteger(value: unknown): number | undefined {
     const parsed = Number(value.trim());
     if (Number.isInteger(parsed) && parsed > 0) {
       return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+function extractNestedErrorMessage(value: JsonValue | undefined, depth: number): string | undefined {
+  if (depth > 5 || value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const nested = extractNestedErrorMessage(entry, depth + 1);
+      if (nested) {
+        return nested;
+      }
+    }
+
+    return undefined;
+  }
+
+  if (!isJsonRecord(value)) {
+    return undefined;
+  }
+
+  const directError = value.error;
+  if (typeof directError === "string" && directError.trim().length > 0) {
+    return directError.trim();
+  }
+
+  const directMessage = readNonEmptyString(value, ["message", "detail", "reason", "title"]);
+  if (directMessage) {
+    return directMessage;
+  }
+
+  const nestedError = extractNestedErrorMessage(directError, depth + 1);
+  if (nestedError) {
+    return nestedError;
+  }
+
+  const nestedErrors = extractNestedErrorMessage(value.errors, depth + 1);
+  if (nestedErrors) {
+    return nestedErrors;
+  }
+
+  for (const nestedValue of Object.values(value)) {
+    if (!Array.isArray(nestedValue) && !isJsonRecord(nestedValue)) {
+      continue;
+    }
+
+    const nested = extractNestedErrorMessage(nestedValue, depth + 1);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return undefined;
+}
+
+function readNonEmptyString(value: Record<string, JsonValue>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
     }
   }
 

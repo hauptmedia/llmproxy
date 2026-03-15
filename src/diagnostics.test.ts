@@ -352,6 +352,54 @@ test("diagnostics detect interrupted responses that only retained reasoning", ()
   assert.ok(report.findings.some((finding) => finding.code === "interrupted_response"));
 });
 
+test("diagnostics analyze retained raw upstream error payloads", () => {
+  const snapshot = createSnapshot();
+  const detail: RequestLogDetail = {
+    entry: {
+      id: "request-raw-upstream-error",
+      time: new Date().toISOString(),
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "demo-model",
+      backendId: "backend-a",
+      backendName: "Backend A",
+      outcome: "error",
+      latencyMs: 440,
+      queuedMs: 0,
+      statusCode: 400,
+      hasDetail: true,
+    },
+    requestBody: {
+      model: "demo-model",
+      messages: [
+        {
+          role: "user",
+          content: "Help.",
+        },
+      ],
+    },
+    responseBody: {
+      error: {
+        message: "messages[1].content must be a string.",
+        type: "invalid_request_error",
+        code: "bad_request",
+      },
+    },
+  };
+
+  const report = buildDiagnosticReport(detail, snapshot);
+  const finding = report.findings.find((candidate) => candidate.code === "upstream_error");
+
+  assert.equal(report.signals.upstreamError, true);
+  assert.match(report.summary, /HTTP 400/);
+  assert.match(report.summary, /messages\[1\]\.content must be a string/);
+  assert.match(report.outputPreview, /invalid_request_error/);
+  assert.ok(finding);
+  assert.match(finding?.summary ?? "", /HTTP 400/);
+  assert.match((finding?.evidence ?? []).join(" "), /Retained raw response:/);
+  assert.match((finding?.evidence ?? []).join(" "), /messages\[1\]\.content must be a string/);
+});
+
 test("diagnostics prompts expose a general request diagnosis playbook", () => {
   const snapshot = createSnapshot();
   const detail: RequestLogDetail = {

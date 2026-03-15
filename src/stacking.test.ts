@@ -2414,6 +2414,398 @@ test("cancelled requests retain the partial streamed response in request history
   assert.match(detailPayload.responseBody?.choices?.[0]?.message?.content ?? "", /Streaming/);
 });
 
+test("raw upstream HTTP 400 responses are retained, noted, and diagnosed as errors", async (t) => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-raw-upstream-400-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  t.after(async () => {
+    for (const entry of cleanup.reverse()) {
+      await entry();
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  const mockPort = await getFreePort();
+  const routerPort = await getFreePort();
+
+  const mockServer = createServer(async (request: IncomingMessage, response: ServerResponse) => {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    const method = request.method?.toUpperCase() ?? "GET";
+
+    if (method === "GET" && url.pathname === "/v1/models") {
+      response.writeHead(200, {
+        "content-type": "application/json; charset=utf-8",
+      });
+      response.end(JSON.stringify({
+        object: "list",
+        data: [
+          {
+            id: "mock-bad-request-model",
+            object: "model",
+            created: 0,
+            owned_by: "mock-openai-backend",
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/chat/completions") {
+      await readRequestBody(request);
+      response.writeHead(400, {
+        "content-type": "application/json; charset=utf-8",
+        "x-mock-error": "true",
+      });
+      response.end(JSON.stringify({
+        error: {
+          message: "messages[1].content must be a string.",
+          type: "invalid_request_error",
+          code: "bad_request",
+        },
+      }));
+      return;
+    }
+
+    response.writeHead(404, {
+      "content-type": "application/json; charset=utf-8",
+    });
+    response.end(JSON.stringify({
+      error: {
+        message: `Unhandled mock route ${method} ${url.pathname}`,
+        type: "invalid_request_error",
+      },
+    }));
+  });
+  cleanup.push(async () => {
+    await new Promise<void>((resolve, reject) => {
+      mockServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    mockServer.once("error", reject);
+    mockServer.listen(mockPort, "127.0.0.1", () => {
+      mockServer.off("error", reject);
+      resolve();
+    });
+  });
+
+  const config: ProxyConfig = {
+    server: {
+      host: "127.0.0.1",
+      port: routerPort,
+      requestTimeoutMs: 15_000,
+      queueTimeoutMs: 2_000,
+      healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
+      mcpServerEnabled: true,
+    },
+    backends: [
+      {
+        id: "mock-raw-error-upstream",
+        name: "mock raw error upstream",
+        baseUrl: `http://127.0.0.1:${mockPort}`,
+        enabled: true,
+        maxConcurrency: 1,
+        healthPath: "/v1/models",
+        models: ["mock-bad-request-model"],
+      },
+    ],
+  };
+
+  const router = await startRouter(config, path.join(tempDir, "raw-upstream-400-router.config.json"));
+  cleanup.push(async () => {
+    await router.server.stop();
+    await router.loadBalancer.stop();
+  });
+
+  const baseUrl = `http://127.0.0.1:${routerPort}`;
+  await waitForHealthyBackend(baseUrl, "mock-raw-error-upstream");
+
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "mock-bad-request-model",
+      stream: false,
+      messages: [
+        {
+          role: "user",
+          content: "Hello.",
+        },
+      ],
+    }),
+  });
+
+  const requestId = response.headers.get("x-llmproxy-request-id");
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("x-mock-error"), "true");
+  assert.ok(requestId);
+
+  const responsePayload = await response.json() as {
+    error?: {
+      message?: string;
+      type?: string;
+      code?: string;
+    };
+  };
+  assert.equal(responsePayload.error?.message, "messages[1].content must be a string.");
+  assert.equal(responsePayload.error?.type, "invalid_request_error");
+  assert.equal(responsePayload.error?.code, "bad_request");
+
+  await waitForRecentRequest(baseUrl, (entry) => (
+    entry.id === requestId && entry.outcome === "error"
+  ));
+
+  const stateResponse = await fetch(`${baseUrl}/api/state`);
+  assert.equal(stateResponse.status, 200);
+  const statePayload = await stateResponse.json() as {
+    recentRequests: Array<{
+      id: string;
+      outcome: string;
+      statusCode?: number;
+      error?: string;
+    }>;
+    backends: Array<{
+      id: string;
+      healthy: boolean;
+      failedRequests: number;
+    }>;
+  };
+  const recentEntry = statePayload.recentRequests.find((entry) => entry.id === requestId);
+  const backendState = statePayload.backends.find((backend) => backend.id === "mock-raw-error-upstream");
+
+  assert.equal(recentEntry?.outcome, "error");
+  assert.equal(recentEntry?.statusCode, 400);
+  assert.equal(recentEntry?.error, "messages[1].content must be a string.");
+  assert.equal(backendState?.healthy, false);
+  assert.equal(backendState?.failedRequests, 1);
+
+  const detailResponse = await fetch(`${baseUrl}/api/requests/${encodeURIComponent(requestId ?? "")}`);
+  assert.equal(detailResponse.status, 200);
+  const detailPayload = await detailResponse.json() as {
+    entry: {
+      outcome: string;
+      statusCode?: number;
+      error?: string;
+    };
+    responseBody?: {
+      error?: {
+        message?: string;
+        type?: string;
+        code?: string;
+      };
+    };
+  };
+
+  assert.equal(detailPayload.entry.outcome, "error");
+  assert.equal(detailPayload.entry.statusCode, 400);
+  assert.equal(detailPayload.entry.error, "messages[1].content must be a string.");
+  assert.equal(detailPayload.responseBody?.error?.message, "messages[1].content must be a string.");
+  assert.equal(detailPayload.responseBody?.error?.type, "invalid_request_error");
+
+  const diagnosticsResponse = await fetch(`${baseUrl}/api/diagnostics/requests/${encodeURIComponent(requestId ?? "")}`);
+  assert.equal(diagnosticsResponse.status, 200);
+  const diagnosticsPayload = await diagnosticsResponse.json() as {
+    report: {
+      summary: string;
+      outputPreview: string;
+      signals: {
+        upstreamError: boolean;
+      };
+      findings: Array<{
+        code: string;
+        evidence?: string[];
+      }>;
+    };
+  };
+  const upstreamFinding = diagnosticsPayload.report.findings.find((finding) => finding.code === "upstream_error");
+
+  assert.equal(diagnosticsPayload.report.signals.upstreamError, true);
+  assert.match(diagnosticsPayload.report.summary, /HTTP 400/);
+  assert.match(diagnosticsPayload.report.outputPreview, /messages\[1\]\.content must be a string/);
+  assert.ok(upstreamFinding);
+  assert.match((upstreamFinding?.evidence ?? []).join(" "), /Retained raw response:/);
+});
+
+test("raw upstream HTTP 302 responses stay visible and count as errors", async (t) => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-raw-upstream-302-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  t.after(async () => {
+    for (const entry of cleanup.reverse()) {
+      await entry();
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  const mockPort = await getFreePort();
+  const routerPort = await getFreePort();
+
+  const mockServer = createServer(async (request: IncomingMessage, response: ServerResponse) => {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    const method = request.method?.toUpperCase() ?? "GET";
+
+    if (method === "GET" && url.pathname === "/v1/models") {
+      response.writeHead(200, {
+        "content-type": "application/json; charset=utf-8",
+      });
+      response.end(JSON.stringify({
+        object: "list",
+        data: [
+          {
+            id: "mock-redirect-model",
+            object: "model",
+            created: 0,
+            owned_by: "mock-openai-backend",
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/chat/completions") {
+      await readRequestBody(request);
+      response.writeHead(302, {
+        location: "https://example.invalid/redirected",
+        "content-type": "application/json; charset=utf-8",
+      });
+      response.end(JSON.stringify({
+        error: {
+          message: "Upstream redirected the request instead of answering it.",
+          type: "redirect",
+        },
+      }));
+      return;
+    }
+
+    response.writeHead(404, {
+      "content-type": "application/json; charset=utf-8",
+    });
+    response.end(JSON.stringify({
+      error: {
+        message: `Unhandled mock route ${method} ${url.pathname}`,
+        type: "invalid_request_error",
+      },
+    }));
+  });
+  cleanup.push(async () => {
+    await new Promise<void>((resolve, reject) => {
+      mockServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    mockServer.once("error", reject);
+    mockServer.listen(mockPort, "127.0.0.1", () => {
+      mockServer.off("error", reject);
+      resolve();
+    });
+  });
+
+  const config: ProxyConfig = {
+    server: {
+      host: "127.0.0.1",
+      port: routerPort,
+      requestTimeoutMs: 15_000,
+      queueTimeoutMs: 2_000,
+      healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
+      mcpServerEnabled: true,
+    },
+    backends: [
+      {
+        id: "mock-raw-redirect-upstream",
+        name: "mock raw redirect upstream",
+        baseUrl: `http://127.0.0.1:${mockPort}`,
+        enabled: true,
+        maxConcurrency: 1,
+        healthPath: "/v1/models",
+        models: ["mock-redirect-model"],
+      },
+    ],
+  };
+
+  const router = await startRouter(config, path.join(tempDir, "raw-upstream-302-router.config.json"));
+  cleanup.push(async () => {
+    await router.server.stop();
+    await router.loadBalancer.stop();
+  });
+
+  const baseUrl = `http://127.0.0.1:${routerPort}`;
+  await waitForHealthyBackend(baseUrl, "mock-raw-redirect-upstream");
+
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    redirect: "manual",
+    body: JSON.stringify({
+      model: "mock-redirect-model",
+      stream: false,
+      messages: [
+        {
+          role: "user",
+          content: "Hello.",
+        },
+      ],
+    }),
+  });
+
+  const requestId = response.headers.get("x-llmproxy-request-id");
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), "https://example.invalid/redirected");
+  assert.ok(requestId);
+
+  const responsePayload = await response.json() as {
+    error?: {
+      message?: string;
+      type?: string;
+    };
+  };
+  assert.equal(responsePayload.error?.message, "Upstream redirected the request instead of answering it.");
+  assert.equal(responsePayload.error?.type, "redirect");
+
+  await waitForRecentRequest(baseUrl, (entry) => (
+    entry.id === requestId && entry.outcome === "error"
+  ));
+
+  const stateResponse = await fetch(`${baseUrl}/api/state`);
+  assert.equal(stateResponse.status, 200);
+  const statePayload = await stateResponse.json() as {
+    recentRequests: Array<{
+      id: string;
+      outcome: string;
+      statusCode?: number;
+      error?: string;
+    }>;
+  };
+  const recentEntry = statePayload.recentRequests.find((entry) => entry.id === requestId);
+
+  assert.equal(recentEntry?.outcome, "error");
+  assert.equal(recentEntry?.statusCode, 302);
+  assert.equal(recentEntry?.error, "Upstream redirected the request instead of answering it.");
+});
+
 test("dashboard can cancel a live connection and retain the partial response in history", async (t) => {
   const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-dashboard-cancel-"));
   const cleanup: Array<() => Promise<void>> = [];

@@ -469,7 +469,11 @@ export function buildRecentRequestBadges(entry: RequestLogEntry): UiBadge[] {
   }
 
   if (entry.statusCode !== undefined) {
-    items.push(badgeSpec(`HTTP ${entry.statusCode}`, entry.statusCode >= 500 ? "bad" : "good", "Final upstream status code."));
+    items.push(badgeSpec(
+      `HTTP ${entry.statusCode}`,
+      entry.statusCode < 200 || entry.statusCode >= 300 ? "bad" : "good",
+      "Final upstream status code.",
+    ));
   }
 
   if (entry.finishReason) {

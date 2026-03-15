@@ -34,8 +34,10 @@ import {
   applySelectedModel,
   canSendBody,
   copyResponseHeaders,
+  extractErrorMessageFromPayload,
   extractApiRequestId,
   isEventStream,
+  isErrorStatus,
   proxyError,
   readRequestedProxyRequestId,
   resolveEffectiveCompletionTokenLimit,
@@ -884,6 +886,7 @@ export class LlmProxyServer {
         method,
         headers: this.buildUpstreamHeaders(request.headers, lease, route.clientIp),
         body: requestPlan.body ? new Uint8Array(requestPlan.body) : undefined,
+        redirect: "manual",
         signal: abortController.signal,
       });
 
@@ -903,6 +906,8 @@ export class LlmProxyServer {
         });
         return;
       }
+
+      const upstreamOutcome = isErrorStatus(upstreamResponse.status) ? "error" : "success";
 
       if (
         requestPlan.responseMode === "ollama-ndjson" &&
@@ -949,7 +954,7 @@ export class LlmProxyServer {
         });
 
         lease.release({
-          outcome: upstreamResponse.status >= 500 ? "error" : "success",
+          outcome: upstreamOutcome,
           latencyMs: Date.now() - route.receivedAt,
           statusCode: upstreamResponse.status,
           queuedMs: lease.queueMs,
@@ -968,20 +973,67 @@ export class LlmProxyServer {
       }
 
       if (!upstreamResponse.body) {
+        const errorMessage = upstreamOutcome === "error"
+          ? `Upstream backend returned HTTP ${upstreamResponse.status}.`
+          : undefined;
+        if (errorMessage) {
+          this.updateActiveConnection(route.id, { error: errorMessage }, true);
+        }
         response.end();
         lease.release({
-          outcome: upstreamResponse.status >= 500 ? "error" : "success",
+          outcome: upstreamOutcome,
           latencyMs: Date.now() - route.receivedAt,
           statusCode: upstreamResponse.status,
           queuedMs: lease.queueMs,
+          error: errorMessage,
           ...this.buildReleaseMetrics(route.id),
+        });
+        return;
+      }
+
+      if (upstreamOutcome === "error") {
+        const responseBuffer = Buffer.from(await upstreamResponse.arrayBuffer());
+        const retainedResponseBody = parseRetainedUpstreamResponseBody(
+          responseBuffer,
+          upstreamResponse.headers.get("content-type"),
+        );
+        const errorMessage =
+          extractErrorMessageFromPayload(retainedResponseBody)
+          ?? `Upstream backend returned HTTP ${upstreamResponse.status}.`;
+
+        this.updateActiveConnection(route.id, {
+          error: errorMessage,
+          responseBody: compactJsonForRetention(retainedResponseBody),
+        }, true);
+
+        await new Promise<void>((resolve, reject) => {
+          const onError = (error: Error) => {
+            response.off("error", onError);
+            reject(error);
+          };
+
+          response.once("error", onError);
+          response.end(responseBuffer, () => {
+            response.off("error", onError);
+            resolve();
+          });
+        });
+
+        lease.release({
+          outcome: upstreamOutcome,
+          latencyMs: Date.now() - route.receivedAt,
+          statusCode: upstreamResponse.status,
+          queuedMs: lease.queueMs,
+          error: errorMessage,
+          ...this.buildReleaseMetrics(route.id),
+          responseBody: retainedResponseBody,
         });
         return;
       }
 
       await pipeline(Readable.fromWeb(upstreamResponse.body as never), response);
       lease.release({
-        outcome: upstreamResponse.status >= 500 ? "error" : "success",
+        outcome: upstreamOutcome,
         latencyMs: Date.now() - route.receivedAt,
         statusCode: upstreamResponse.status,
         queuedMs: lease.queueMs,
@@ -1425,7 +1477,7 @@ export class LlmProxyServer {
         backendName: snapshot.backendName,
         outcome: connection.cancelSource === "dashboard" || connection.cancelSource === "client_disconnect"
           ? "cancelled"
-          : (snapshot.error ? "error" : "success"),
+          : (snapshot.error || isErrorStatus(snapshot.statusCode) ? "error" : "success"),
         latencyMs: snapshot.elapsedMs,
         queuedMs: snapshot.queueMs,
         statusCode: snapshot.statusCode,
@@ -1531,8 +1583,9 @@ export class LlmProxyServer {
   private async readOllamaErrorMessage(response: Response): Promise<string> {
     try {
       const body = await response.json() as { error?: unknown };
-      if (typeof body.error === "string" && body.error.length > 0) {
-        return body.error;
+      const errorMessage = extractErrorMessageFromPayload(body as JsonValue);
+      if (errorMessage) {
+        return errorMessage;
       }
     } catch {
       // ignore parse failure and fall back to generic error
@@ -1609,4 +1662,43 @@ export class LlmProxyServer {
   private readonly handleLoadBalancerSnapshot = (): void => {
     this.broadcastCurrentSnapshot();
   };
+}
+
+function parseRetainedUpstreamResponseBody(
+  body: Buffer,
+  contentType: string | null,
+): JsonValue | undefined {
+  if (body.length === 0) {
+    return undefined;
+  }
+
+  const normalizedContentType = contentType?.toLowerCase() ?? "";
+  const text = body.toString("utf8");
+  const trimmed = text.trim();
+
+  if (
+    normalizedContentType.includes("json")
+    || normalizedContentType.includes("+json")
+    || trimmed.startsWith("{")
+    || trimmed.startsWith("[")
+  ) {
+    try {
+      return JSON.parse(text) as JsonValue;
+    } catch {
+      if (trimmed.length > 0) {
+        return text;
+      }
+    }
+  }
+
+  if (
+    normalizedContentType.startsWith("text/")
+    || normalizedContentType.includes("xml")
+    || normalizedContentType.includes("javascript")
+    || normalizedContentType.includes("charset=")
+  ) {
+    return text;
+  }
+
+  return undefined;
 }

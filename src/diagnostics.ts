@@ -5,6 +5,7 @@ import {
   RequestLogEntry,
 } from "./types";
 import {
+  extractErrorMessageFromPayload,
   resolveEffectiveCompletionTokenLimit,
   resolveModelCompletionLimit,
   resolveRequestedCompletionLimit,
@@ -178,9 +179,12 @@ export function buildDiagnosticReport(
   snapshot: ProxySnapshot,
 ): DiagnosticReport {
   const outputText = extractPrimaryAssistantText(detail.responseBody);
-  const outputPreview = outputText.length > 600
-    ? `${outputText.slice(0, 597).trimEnd()}...`
-    : outputText;
+  const rawResponsePreview = buildResponseBodyPreview(detail.responseBody);
+  const upstreamErrorMessage = detail.entry.error?.trim() || extractErrorMessageFromPayload(detail.responseBody);
+  const outputPreviewSource = outputText || rawResponsePreview;
+  const outputPreview = outputPreviewSource.length > 600
+    ? `${outputPreviewSource.slice(0, 597).trimEnd()}...`
+    : outputPreviewSource;
   const requestTokenLimit = resolveRequestedCompletionLimit(detail.requestBody);
   const modelTokenLimit = resolveModelCompletionLimit(
     detail.entry.model,
@@ -269,12 +273,8 @@ export function buildDiagnosticReport(
       code: "upstream_error",
       severity: "bad",
       title: "Backend request failed after routing",
-      summary: "The request was assigned to a backend, but the upstream call still failed before a successful completion.",
-      evidence: [
-        detail.entry.backendName ? `Backend: ${detail.entry.backendName}.` : "A backend had already been assigned.",
-        detail.entry.statusCode ? `HTTP status: ${detail.entry.statusCode}.` : "No final upstream status code was stored.",
-        detail.entry.error ? `Error: ${detail.entry.error}` : "The upstream backend returned an unspecified error.",
-      ],
+      summary: buildUpstreamErrorSummary(detail.entry.statusCode, upstreamErrorMessage),
+      evidence: buildUpstreamErrorEvidence(detail.entry, upstreamErrorMessage, rawResponsePreview),
       troubleshooting: [
         "Inspect the backend health state and upstream logs for the selected backend.",
         "Verify connector compatibility, request schema, and model availability on that backend.",
@@ -515,6 +515,49 @@ function buildDiagnosticSummary(findings: DiagnosticFinding[], entry: RequestLog
   }
 
   return "The retained request data does not point to one dominant failure mode yet.";
+}
+
+function buildUpstreamErrorSummary(
+  statusCode: number | undefined,
+  errorMessage: string | undefined,
+): string {
+  if (typeof statusCode === "number" && errorMessage) {
+    return `The request reached a backend, but the upstream returned HTTP ${statusCode}: ${errorMessage}`;
+  }
+
+  if (typeof statusCode === "number") {
+    return `The request reached a backend, but the upstream returned HTTP ${statusCode}.`;
+  }
+
+  if (errorMessage) {
+    return `The request reached a backend, but the upstream call still failed: ${errorMessage}`;
+  }
+
+  return "The request was assigned to a backend, but the upstream call still failed before a successful completion.";
+}
+
+function buildUpstreamErrorEvidence(
+  entry: RequestLogEntry,
+  errorMessage: string | undefined,
+  rawResponsePreview: string,
+): string[] {
+  const evidence = [
+    entry.backendName ? `Backend: ${entry.backendName}.` : "A backend had already been assigned.",
+    entry.statusCode ? `HTTP status: ${entry.statusCode}.` : "No final upstream status code was stored.",
+  ];
+
+  if (errorMessage) {
+    evidence.push(`Error: ${truncate(errorMessage, 220)}.`);
+  } else {
+    evidence.push("The upstream backend returned an unspecified error.");
+  }
+
+  const normalizedPreview = normalizeWhitespace(rawResponsePreview);
+  if (normalizedPreview) {
+    evidence.push(`Retained raw response: ${truncate(normalizedPreview, 220)}.`);
+  }
+
+  return evidence;
 }
 
 function buildMaxTokenEvidence(
@@ -826,6 +869,10 @@ function extractPrimaryAssistantReasoning(value: JsonValue | undefined): string 
 function buildResponseBodyPreview(value: JsonValue | undefined): string {
   if (value === undefined) {
     return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
   }
 
   const serialized = JSON.stringify(value, null, 2);
