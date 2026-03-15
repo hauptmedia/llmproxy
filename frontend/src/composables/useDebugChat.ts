@@ -95,6 +95,45 @@ export function useDebugChat(
     };
   }
 
+  function cloneDebugValue<T>(value: T): T {
+    if (Array.isArray(value)) {
+      return value.map((entry) => cloneDebugValue(entry)) as T;
+    }
+
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, nestedValue]) => [key, cloneDebugValue(nestedValue)]),
+      ) as T;
+    }
+
+    return value;
+  }
+
+  function cloneDebugTranscriptEntry(entry: DebugTranscriptEntry): DebugTranscriptEntry {
+    return cloneDebugValue(entry);
+  }
+
+  function findLastSentUserTurn(): DebugTranscriptEntry | null {
+    for (let index = state.debug.transcript.length - 1; index >= 0; index -= 1) {
+      const entry = state.debug.transcript[index];
+      if (!entry || entry.role !== "user" || typeof entry.content !== "string") {
+        continue;
+      }
+
+      const prompt = entry.content.trim();
+      if (!prompt) {
+        continue;
+      }
+
+      return {
+        ...cloneDebugTranscriptEntry(entry),
+        content: prompt,
+      };
+    }
+
+    return null;
+  }
+
   function queueCurrentDebugMessage(): boolean {
     const prompt = state.debug.prompt.trim();
     if (!prompt) {
@@ -196,37 +235,35 @@ export function useDebugChat(
     const model = queuedMessage?.model ?? state.debug.model;
     const enableDiagnosticTools = queuedMessage?.enableDiagnosticTools ?? state.debug.enableDiagnosticTools;
     const params = queuedMessage?.params ?? state.debug.params;
-    const lastTranscriptEntry = state.debug.transcript[state.debug.transcript.length - 1];
-    const regenerateAssistantReply =
-      queuedMessage === null &&
-      prompt.length === 0 &&
-      state.debug.transcript.length > 0 &&
-      typeof lastTranscriptEntry?.role === "string" &&
-      lastTranscriptEntry.role === "assistant";
-    const transcriptForReplay = regenerateAssistantReply
-      ? state.debug.transcript.slice(0, -1)
-      : state.debug.transcript;
+    const resendLastUserTurn = queuedMessage === null && prompt.length === 0
+      ? findLastSentUserTurn()
+      : null;
+    const effectivePrompt = resendLastUserTurn?.content ?? prompt;
 
     if (!model) {
       state.debug.error = "Please select a model first.";
       return;
     }
 
-    if (!prompt && !regenerateAssistantReply) {
+    if (!effectivePrompt) {
       state.debug.error = "Please enter a user message.";
       return;
     }
 
-    const history = transcriptForReplay
-      .map((entry) => buildDebugHistoryMessage(entry))
-      .filter((entry): entry is Record<string, any> => hasReplayableDebugMessage(entry));
-
-    if (prompt) {
-      history.push({
-        role: "user",
-        content: prompt,
-      });
-    }
+    const history = resendLastUserTurn
+      ? [{
+          role: "user",
+          content: effectivePrompt,
+        }]
+      : [
+          ...state.debug.transcript
+            .map((entry) => buildDebugHistoryMessage(entry))
+            .filter((entry): entry is Record<string, any> => hasReplayableDebugMessage(entry)),
+          {
+            role: "user",
+            content: effectivePrompt,
+          },
+        ];
 
     const diagnosticsAllowed = state.serverConfig?.mcpServerEnabled !== false;
     let diagnosticTools: Array<Record<string, unknown>> | undefined;
@@ -241,26 +278,21 @@ export function useDebugChat(
       }
     }
 
-    const userTurn: DebugTranscriptEntry | null = prompt
-      ? {
-          role: "user",
-          content: prompt,
-        }
-      : null;
+    const userTurn: DebugTranscriptEntry = resendLastUserTurn ?? {
+      role: "user",
+      content: effectivePrompt,
+    };
     const initialWaitingTitle = "Waiting for model response.";
     let assistantTurn = createPendingAssistantTurn(initialWaitingTitle);
     const requestId = createClientDebugRequestId();
-    const removedAssistantTurn = regenerateAssistantReply && lastTranscriptEntry
-      ? { ...lastTranscriptEntry } as DebugTranscriptEntry
+    const previousTranscript = queuedMessage === null && resendLastUserTurn
+      ? state.debug.transcript.map((entry) => cloneDebugTranscriptEntry(entry))
       : null;
 
-    if (regenerateAssistantReply) {
-      state.debug.transcript.pop();
-    }
-
     state.debug.sending = true;
-
-    if (userTurn) {
+    if (queuedMessage === null && resendLastUserTurn) {
+      state.debug.transcript.splice(0, state.debug.transcript.length, userTurn);
+    } else {
       state.debug.transcript.push(userTurn);
     }
 
@@ -390,8 +422,8 @@ export function useDebugChat(
       if (!hasVisibleAssistantTurnPayload(assistantTurn)) {
         state.debug.transcript.pop();
 
-        if (removedAssistantTurn) {
-          state.debug.transcript.push(removedAssistantTurn);
+        if (previousTranscript) {
+          state.debug.transcript.splice(0, state.debug.transcript.length, ...previousTranscript);
         }
       }
     } finally {
