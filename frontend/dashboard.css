@@ -1537,8 +1537,8 @@
   }
 
   .log-issue-cell {
-    padding-left: 0;
-    padding-right: 0;
+    position: relative;
+    padding: 0;
   }
 
   .log-issue-cell,
@@ -1576,9 +1576,15 @@
   }
 
   .log-warning-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    width: 16px;
+    height: 16px;
+    transform: translate(-50%, -50%);
     color: #b45309;
     flex: 0 0 auto;
   }
@@ -1590,11 +1596,15 @@
   }
 
   .log-warning-placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 16px;
     height: 16px;
+    transform: translate(-50%, -50%);
   }
 
   .log-time-stack {
