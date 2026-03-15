@@ -38,7 +38,7 @@ export const debugChatFirstMessageSuggestions: readonly DebugChatSuggestion[] = 
     key: "hello",
     title: "Quick hello",
     description: "Simple sanity check that confirms which model actually answered.",
-    value: "Say hello briefly and mention the model you are using.",
+    value: "Say hello briefly and mention which model you are.",
     highlighted: true,
   },
   {
