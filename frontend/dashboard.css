@@ -2857,9 +2857,16 @@
 }
 
   .conversation-bubble-transcript .message-card-host.role-user .compact-bubble-panel-embedded {
+    background: rgba(255, 247, 237, 0.82);
+    border-color: rgba(180, 83, 9, 0.14);
     --inline-json-ace-border: rgba(194, 65, 12, 0.16);
     --inline-json-ace-background: linear-gradient(180deg, rgba(255, 251, 245, 0.97), rgba(255, 242, 226, 0.93));
     --inline-json-ace-gutter-bg: rgba(255, 236, 216, 0.96);
+  }
+
+  .conversation-bubble-transcript .message-card-host.role-user .compact-bubble-panel-embedded > .compact-bubble-summary,
+  .conversation-bubble-transcript .message-card-host.role-user .compact-bubble-panel-embedded .compact-bubble-icon {
+    color: #9a3412;
   }
 
   .conversation-bubble-transcript .message-card-host.role-assistant .compact-bubble-panel-embedded {
@@ -3234,13 +3241,11 @@
     width: 100%;
     height: 320px;
     min-height: 320px;
-    border: 1px solid var(--inline-json-ace-border, rgba(180, 83, 9, 0.14));
+    border: 0;
     border-radius: 1rem;
     background: var(--inline-json-ace-background, linear-gradient(180deg, rgba(255, 251, 247, 0.96), rgba(255, 245, 238, 0.92)));
     overflow: hidden;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.78),
-      0 1px 3px rgba(180, 83, 9, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
   }
 
   .inline-ace-host.ace_editor,
@@ -3255,6 +3260,7 @@
   .inline-ace-host.ace_editor .ace_gutter-layer,
   .inline-ace-host .ace_gutter-layer {
     background: var(--inline-json-ace-gutter-bg, rgba(250, 237, 228, 0.96));
+    border-right: 0;
   }
 
   .inline-ace-host.ace_editor .ace_gutter-cell,
