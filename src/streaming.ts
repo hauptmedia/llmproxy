@@ -6,9 +6,7 @@ interface ChatChoiceState {
   index: number;
   role: string;
   content: string;
-  contentTruncated: boolean;
   reasoningContent: string;
-  reasoningTruncated: boolean;
   functionCall?: LegacyFunctionCallState;
   toolCalls: Map<number, ToolCallState>;
   finishReason?: string;
@@ -17,14 +15,12 @@ interface ChatChoiceState {
 interface CompletionChoiceState {
   index: number;
   text: string;
-  textTruncated: boolean;
   finishReason?: string;
 }
 
 interface LegacyFunctionCallState {
   name?: string;
   arguments: string;
-  argumentsTruncated?: boolean;
 }
 
 interface ToolCallState {
@@ -41,45 +37,12 @@ interface StreamingDeltaCounts {
   addedTextTokens: number;
 }
 
-const STREAM_CONTENT_CHAR_LIMIT = 128_000;
-const STREAM_REASONING_CHAR_LIMIT = 128_000;
-const STREAM_TEXT_CHAR_LIMIT = 128_000;
-const STREAM_FUNCTION_ARGUMENT_CHAR_LIMIT = 32_000;
-const STREAM_TRUNCATION_MARKER = "\n...[llmproxy truncated to protect memory]";
-
-function appendWithCharacterLimit(
-  current: string,
-  fragment: string,
-  limit: number,
-  truncated: boolean,
-): { value: string; truncated: boolean } {
-  if (!fragment || truncated) {
-    return {
-      value: current,
-      truncated,
-    };
+function appendFragment(current: string, fragment: string): string {
+  if (!fragment) {
+    return current;
   }
 
-  const remaining = limit - current.length;
-  if (remaining <= 0) {
-    return {
-      value: current.endsWith(STREAM_TRUNCATION_MARKER) ? current : `${current}${STREAM_TRUNCATION_MARKER}`,
-      truncated: true,
-    };
-  }
-
-  if (fragment.length <= remaining) {
-    return {
-      value: `${current}${fragment}`,
-      truncated: false,
-    };
-  }
-
-  const visibleLength = Math.max(0, remaining - STREAM_TRUNCATION_MARKER.length);
-  return {
-    value: `${current}${fragment.slice(0, visibleLength)}${STREAM_TRUNCATION_MARKER}`,
-    truncated: true,
-  };
+  return `${current}${fragment}`;
 }
 
 export interface StreamingMetricsSnapshot {
@@ -267,14 +230,7 @@ export class StreamingAccumulator {
       }
 
       if (typeof source.content === "string") {
-        const nextContent = appendWithCharacterLimit(
-          state.content,
-          source.content,
-          STREAM_CONTENT_CHAR_LIMIT,
-          state.contentTruncated,
-        );
-        state.content = nextContent.value;
-        state.contentTruncated = nextContent.truncated;
+        state.content = appendFragment(state.content, source.content);
         if (source.content.length > 0) {
           counts.addedCompletionTokens += 1;
           counts.addedContentTokens += 1;
@@ -287,14 +243,7 @@ export class StreamingAccumulator {
           ? source.reasoning_content
           : (typeof source.reasoning === "string" ? source.reasoning : undefined);
       if (typeof reasoningDelta === "string") {
-        const nextReasoning = appendWithCharacterLimit(
-          state.reasoningContent,
-          reasoningDelta,
-          STREAM_REASONING_CHAR_LIMIT,
-          state.reasoningTruncated,
-        );
-        state.reasoningContent = nextReasoning.value;
-        state.reasoningTruncated = nextReasoning.truncated;
+        state.reasoningContent = appendFragment(state.reasoningContent, reasoningDelta);
         if (reasoningDelta.length > 0) {
           counts.addedCompletionTokens += 1;
           counts.addedReasoningTokens += 1;
@@ -324,14 +273,7 @@ export class StreamingAccumulator {
         : (isRecord(choice.delta) && typeof choice.delta.text === "string" ? choice.delta.text : undefined);
 
     if (typeof deltaText === "string") {
-      const nextText = appendWithCharacterLimit(
-        state.text,
-        deltaText,
-        STREAM_TEXT_CHAR_LIMIT,
-        state.textTruncated,
-      );
-      state.text = nextText.value;
-      state.textTruncated = nextText.truncated;
+      state.text = appendFragment(state.text, deltaText);
       if (deltaText.length > 0) {
         counts.addedCompletionTokens += 1;
         counts.addedTextTokens += 1;
@@ -474,9 +416,7 @@ export class StreamingAccumulator {
       index,
       role: "assistant",
       content: "",
-      contentTruncated: false,
       reasoningContent: "",
-      reasoningTruncated: false,
       toolCalls: new Map<number, ToolCallState>(),
     };
     this.chatChoices.set(index, state);
@@ -492,7 +432,6 @@ export class StreamingAccumulator {
     const state: CompletionChoiceState = {
       index,
       text: "",
-      textTruncated: false,
     };
     this.completionChoices.set(index, state);
     return state;
@@ -512,14 +451,7 @@ export class StreamingAccumulator {
     }
 
     if (typeof value.arguments === "string") {
-      const nextArguments = appendWithCharacterLimit(
-        functionCall.arguments,
-        value.arguments,
-        STREAM_FUNCTION_ARGUMENT_CHAR_LIMIT,
-        functionCall.argumentsTruncated === true,
-      );
-      functionCall.arguments = nextArguments.value;
-      functionCall.argumentsTruncated = nextArguments.truncated;
+      functionCall.arguments = appendFragment(functionCall.arguments, value.arguments);
     }
 
     state.functionCall = functionCall;
@@ -559,14 +491,7 @@ export class StreamingAccumulator {
         }
 
         if (typeof rawToolCall.function.arguments === "string") {
-          const nextArguments = appendWithCharacterLimit(
-            nextFunction.arguments,
-            rawToolCall.function.arguments,
-            STREAM_FUNCTION_ARGUMENT_CHAR_LIMIT,
-            nextFunction.argumentsTruncated === true,
-          );
-          nextFunction.arguments = nextArguments.value;
-          nextFunction.argumentsTruncated = nextArguments.truncated;
+          nextFunction.arguments = appendFragment(nextFunction.arguments, rawToolCall.function.arguments);
         }
 
         toolCall.function = nextFunction;

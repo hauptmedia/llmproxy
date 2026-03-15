@@ -27,6 +27,10 @@ function readCliOption(name) {
   return match ? match.slice(prefix.length) : undefined;
 }
 
+function hasCliFlag(name) {
+  return process.argv.slice(2).includes(`--${name}`);
+}
+
 function parsePositiveInteger(value, fallback) {
   if (typeof value !== "string" || value.trim().length === 0) {
     return fallback;
@@ -40,6 +44,8 @@ const RUN_MODE = readCliOption("mode") ?? "chaos";
 const ACTIVE_STREAM_CONNECTIONS = parsePositiveInteger(readCliOption("connections"), 500);
 const ACTIVE_STREAM_MIN_TOKENS = parsePositiveInteger(readCliOption("min-tokens"), 1_000);
 const ACTIVE_STREAM_MAX_TOKENS = parsePositiveInteger(readCliOption("max-tokens"), 40_000);
+const REQUESTED_PROXY_PORT = parsePositiveInteger(readCliOption("proxy-port"), 0);
+const HOLD_OPEN_AFTER_RUN = hasCliFlag("hold-open");
 
 async function getFreePort() {
   return await new Promise((resolve, reject) => {
@@ -1359,8 +1365,8 @@ async function runActiveStreamWorker(baseUrl, connections, requestOffset, worker
       `--min-tokens=${ACTIVE_STREAM_MIN_TOKENS}`,
       `--max-tokens=${ACTIVE_STREAM_MAX_TOKENS}`,
       `--request-offset=${requestOffset}`,
-      "--start-spacing-ms=100",
-      `--start-offset-ms=${workerIndex * 10}`,
+      "--start-spacing-ms=120",
+      `--start-offset-ms=${workerIndex * 12}`,
     ], {
       stdio: ["ignore", "ignore", "ignore", "ipc"],
     });
@@ -1511,9 +1517,11 @@ async function runActiveStreamsProfile(baseUrl, server, loadBalancer, clientStat
   let tokenTargetSum = 0;
   let tokenTargetMin = Number.POSITIVE_INFINITY;
   let tokenTargetMax = 0;
+  const requestMix = {};
 
   for (const workerResult of workerResults) {
     mergeClientStats(clientStats, workerResult.clientStats);
+    mergeCounterMaps(requestMix, workerResult.requestMix);
 
     const tokenTargets = workerResult.tokenTargets;
     if (tokenTargets && typeof tokenTargets === "object") {
@@ -1550,15 +1558,16 @@ async function runActiveStreamsProfile(baseUrl, server, loadBalancer, clientStat
       peakObservedActiveConnections: peakActiveConnections,
       peakObservedStreamingConnections: peakStreamingConnections,
       requestedConnections: ACTIVE_STREAM_CONNECTIONS,
+      requestMix,
       tokenTargets: {
         min: tokenTargetCount > 0 ? tokenTargetMin : 0,
         max: tokenTargetCount > 0 ? tokenTargetMax : 0,
         average: tokenTargetCount > 0 ? Math.round((tokenTargetSum / tokenTargetCount) * 10) / 10 : 0,
       },
     },
-    extraVerdicts: peakStreamingConnections >= ACTIVE_STREAM_CONNECTIONS
+    extraVerdicts: peakActiveConnections >= ACTIVE_STREAM_CONNECTIONS
       ? []
-      : [`streaming connections peaked at ${peakStreamingConnections} instead of ${ACTIVE_STREAM_CONNECTIONS}`],
+      : [`active connections peaked at ${peakActiveConnections} instead of ${ACTIVE_STREAM_CONNECTIONS}`],
   };
 }
 
@@ -1594,7 +1603,7 @@ async function main() {
       });
     }
 
-    const proxyPort = await getFreePort();
+    const proxyPort = REQUESTED_PROXY_PORT > 0 ? REQUESTED_PROXY_PORT : await getFreePort();
     const serverConfig = RUN_MODE === "active-streams"
       ? {
         host: "127.0.0.1",
@@ -1637,6 +1646,7 @@ async function main() {
     });
 
     const baseUrl = `http://127.0.0.1:${proxyPort}`;
+    const dashboardUrl = `${baseUrl}/dashboard`;
     await waitForCondition(() => {
       const snapshot = loadBalancer.getSnapshot();
       return snapshot.backends.some((backend) => backend.healthy && backend.discoveredModels.includes("chaos-shared-model"));
@@ -1670,6 +1680,10 @@ async function main() {
 
     const report = {
       ok: true,
+      server: {
+        baseUrl,
+        dashboardUrl,
+      },
       config: {
         sampleIntervalMs: SAMPLE_INTERVAL_MS,
         backendCount: chaosBackends.length,
@@ -1733,6 +1747,8 @@ async function main() {
     process.stdout.write(`${JSON.stringify({
       reportPath,
       mode: RUN_MODE,
+      baseUrl,
+      dashboardUrl,
       ok: report.ok,
       heapGrowthMb,
       peakHeapMb,
@@ -1750,6 +1766,19 @@ async function main() {
 
     if (!report.ok) {
       process.exitCode = 1;
+    }
+
+    if (HOLD_OPEN_AFTER_RUN) {
+      process.stdout.write(`${JSON.stringify({
+        holdOpen: true,
+        dashboardUrl,
+      }, null, 2)}\n`);
+
+      await new Promise((resolve) => {
+        const finish = () => resolve();
+        process.once("SIGINT", finish);
+        process.once("SIGTERM", finish);
+      });
     }
   } finally {
     for (const connection of Array.from(dashboardStalls)) {

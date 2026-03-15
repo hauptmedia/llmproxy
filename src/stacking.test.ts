@@ -560,6 +560,109 @@ async function startMockSlowStreamingBackend(
   return server;
 }
 
+function buildLongStreamingFragments(fragmentCount: number, fragmentSize: number): string[] {
+  return Array.from({ length: fragmentCount }, (_, index) => {
+    const prefix = `segment-${String(index).padStart(4, "0")}:`;
+    return `${prefix}${"x".repeat(Math.max(0, fragmentSize - prefix.length))}`;
+  });
+}
+
+async function startMockLongStreamingBackend(
+  port: number,
+  fragments: string[],
+): Promise<Server> {
+  const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    const method = request.method?.toUpperCase() ?? "GET";
+
+    if (method === "GET" && url.pathname === "/v1/models") {
+      response.writeHead(200, {
+        "content-type": "application/json; charset=utf-8",
+      });
+      response.end(JSON.stringify({
+        object: "list",
+        data: [
+          {
+            id: "mock-long-model",
+            object: "model",
+            created: 0,
+            owned_by: "mock-long-backend",
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/chat/completions") {
+      response.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+      });
+
+      for (let index = 0; index < fragments.length; index += 1) {
+        response.write(`data: ${JSON.stringify({
+          id: "chatcmpl-long-stream",
+          object: "chat.completion.chunk",
+          created: 1710000300,
+          model: "mock-long-model",
+          choices: [
+            {
+              index: 0,
+              delta: {
+                ...(index === 0 ? { role: "assistant" } : {}),
+                content: fragments[index],
+              },
+              finish_reason: null,
+            },
+          ],
+        })}\n\n`);
+      }
+
+      response.write(`data: ${JSON.stringify({
+        id: "chatcmpl-long-stream",
+        object: "chat.completion.chunk",
+        created: 1710000300,
+        model: "mock-long-model",
+        choices: [
+          {
+            index: 0,
+            delta: {},
+            finish_reason: "stop",
+          },
+        ],
+        usage: {
+          prompt_tokens: 16,
+          completion_tokens: fragments.length,
+          total_tokens: 16 + fragments.length,
+        },
+      })}\n\n`);
+      response.end("data: [DONE]\n\n");
+      return;
+    }
+
+    response.writeHead(404, {
+      "content-type": "application/json; charset=utf-8",
+    });
+    response.end(JSON.stringify({
+      error: {
+        message: `Unhandled mock route ${method} ${url.pathname}`,
+        type: "invalid_request_error",
+      },
+    }));
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+
+  return server;
+}
+
 async function startRouter(
   config: ProxyConfig,
   configPath: string,
@@ -1501,6 +1604,122 @@ test("proxy rewrites legacy max_tokens for OpenAI-compatible non-streaming chat 
   assert.equal("max_tokens" in receivedPayloads[0]!, false);
   assert.equal(Array.isArray(receivedPayloads[0]?.tools), true);
   assert.equal((receivedPayloads[0]?.tools as unknown[]).length, 2);
+});
+
+test("non-streaming clients receive the full synthesized response before retention truncates stored detail", async (t) => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-long-json-from-stream-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  t.after(async () => {
+    for (const entry of cleanup.reverse()) {
+      await entry();
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  const mockPort = await getFreePort();
+  const routerPort = await getFreePort();
+  const fragments = buildLongStreamingFragments(140, 1_120);
+  const expectedContent = fragments.join("");
+
+  const mockServer = await startMockLongStreamingBackend(mockPort, fragments);
+  cleanup.push(async () => {
+    await new Promise<void>((resolve, reject) => {
+      mockServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  });
+
+  const config: ProxyConfig = {
+    server: {
+      host: "127.0.0.1",
+      port: routerPort,
+      requestTimeoutMs: 15_000,
+      queueTimeoutMs: 2_000,
+      healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
+      mcpServerEnabled: true,
+    },
+    backends: [
+      {
+        id: "mock-long-upstream",
+        name: "mock long upstream",
+        baseUrl: `http://127.0.0.1:${mockPort}`,
+        enabled: true,
+        maxConcurrency: 1,
+        healthPath: "/v1/models",
+        models: ["mock-long-model"],
+      },
+    ],
+  };
+
+  const router = await startRouter(config, path.join(tempDir, "long-json-from-stream-router.config.json"));
+  cleanup.push(async () => {
+    await router.server.stop();
+    await router.loadBalancer.stop();
+  });
+
+  const baseUrl = `http://127.0.0.1:${routerPort}`;
+  await waitForHealthyBackend(baseUrl, "mock-long-upstream");
+
+  const requestId = "long-json-from-stream-request";
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-llmproxy-request-id": requestId,
+    },
+    body: JSON.stringify({
+      model: "mock-long-model",
+      stream: false,
+      messages: [
+        {
+          role: "user",
+          content: "Return a very long answer.",
+        },
+      ],
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-llmproxy-request-id"), requestId);
+  const payload = await response.json() as {
+    choices?: Array<{
+      message?: {
+        content?: string | null;
+      };
+    }>;
+  };
+
+  const content = payload.choices?.[0]?.message?.content ?? "";
+  assert.equal(content.length, expectedContent.length);
+  assert.equal(content, expectedContent);
+  assert.doesNotMatch(content, /truncated to protect memory/);
+  assert.doesNotMatch(content, /truncated to reduce memory usage/);
+
+  await waitForRecentRequest(baseUrl, (entry) => entry.id === requestId);
+  const detailResponse = await fetch(`${baseUrl}/api/requests/${encodeURIComponent(requestId)}`);
+  assert.equal(detailResponse.status, 200);
+  const detailPayload = await detailResponse.json() as {
+    responseBody?: {
+      choices?: Array<{
+        message?: {
+          content?: string | null;
+        };
+      }>;
+    };
+  };
+
+  const retainedContent = detailPayload.responseBody?.choices?.[0]?.message?.content ?? "";
+  assert.equal(retainedContent.length < expectedContent.length, true);
+  assert.match(retainedContent, /truncated to reduce memory usage/);
 });
 
 test("active connections expose live request details for chat history inspection", async (t) => {
