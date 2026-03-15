@@ -86,13 +86,13 @@ function handleReasoningClick(event: Event): void {
     return;
   }
 
-  const summary = target.closest("summary");
+  const summary = target.closest(".compact-bubble-summary");
   if (!(summary instanceof HTMLElement)) {
     return;
   }
 
-  const panel = summary.parentElement;
-  if (!(panel instanceof HTMLDetailsElement)) {
+  const panel = summary.closest(".compact-bubble-panel");
+  if (!(panel instanceof HTMLElement)) {
     return;
   }
 

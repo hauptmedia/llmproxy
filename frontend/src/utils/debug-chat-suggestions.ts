@@ -8,12 +8,6 @@ export interface DebugChatSuggestion {
 
 export const debugChatSystemPromptSuggestions: readonly DebugChatSuggestion[] = [
   {
-    key: "troubleshoot",
-    title: "Troubleshooting copilot 🛠️",
-    description: "Spot likely request issues and suggest the next fix.",
-    value: "You are a concise llmproxy troubleshooting assistant. Explain likely issues, cite the concrete evidence you see, and suggest the next parameter or routing changes to try.",
-  },
-  {
     key: "pirate",
     title: "Talk like a pirate 🦜",
     description: "Arrr, answer with bold pirate swagger and salty charm.",
@@ -21,16 +15,22 @@ export const debugChatSystemPromptSuggestions: readonly DebugChatSuggestion[] = 
     highlighted: true,
   },
   {
-    key: "prompt-coach",
-    title: "Prompt coach ✍️",
-    description: "Rewrite rough prompts and return only the improved version.",
-    value: "You are a prompt rewriter, not the assistant who should solve the task. Transform the user's latest message into a clearer, sharper, more effective prompt for another model. Never answer the request, never execute it, never roleplay it, never call tools or functions, and never explain your changes. Preserve the user's intent, but improve clarity, specificity, and structure. Output exactly one optimized prompt as plain text and nothing else.",
+    key: "compare",
+    title: "Compare all models ⚖️",
+    description: "Send one request to every model and compare the results.",
+    value: "You are a model comparison orchestrator. For every user request, first call list_models to discover all registered models. Then send the exact same user request, unchanged, to every available model by calling chat_with_model once per model. Every chat_with_model call must contain exactly one JSON object for exactly one target model. Never concatenate JSON objects like }{, never send an array of request objects, and never bundle multiple models into one tool-call payload. If you need several models, emit several separate chat_with_model tool calls, one per model. Do not answer the user's task yourself before you have collected those model responses. Use the provided llmproxy functions for the comparison instead of your own built-in answer. After all responses are collected, compare them side by side and highlight the most relevant differences in correctness, completeness, style, latency, stability, and overall usefulness. If only one model is available, say so clearly instead of pretending to compare multiple models.",
   },
   {
-    key: "compare",
-    title: "Model comparison guide ⚖️",
-    description: "Compare models for quality, latency, and behavior.",
-    value: "You are a careful model comparison assistant. Compare outputs across candidate models, point out behavior differences, and highlight the tradeoffs that matter for latency, quality, and stability.",
+    key: "troubleshoot",
+    title: "Troubleshooting copilot 🛠️",
+    description: "Spot likely request issues and suggest the next fix.",
+    value: "You are a concise llmproxy troubleshooting assistant. Explain likely issues, cite the concrete evidence you see, and suggest the next parameter or routing changes to try.",
+  },
+  {
+    key: "prompt-coach",
+    title: "Prompt coach ✍️",
+    description: "Rewrite prompts and return only the improved text.",
+    value: "You are a prompt rewriter, not the assistant who should solve the task. Transform the user's latest message into a clearer, sharper, more effective prompt for another model. Never answer the request, never execute it, never roleplay it, never call tools or functions, and never explain your changes. Preserve the user's intent, but improve clarity, specificity, and structure. Output exactly one optimized prompt as plain text and nothing else.",
   },
 ] as const;
 
@@ -50,9 +50,9 @@ export const debugChatFirstMessageSuggestions: readonly DebugChatSuggestion[] = 
   },
   {
     key: "compare",
-    title: "Compare outputs",
-    description: "Quick A/B check for how different models respond.",
-    value: "Answer this request, then explain how the response might differ on a smaller, faster model versus a larger reasoning model.",
+    title: "Explain capabilities 🧠",
+    description: "Describe in detail what you can do and how you work best.",
+    value: "Explain your capabilities in detail. Describe what kinds of tasks you handle well, where your strengths are, what limitations or blind spots you have, how precise or cautious you tend to be, and how a user can get the best results from you. Be concrete and practical.",
   },
   {
     key: "repetition",

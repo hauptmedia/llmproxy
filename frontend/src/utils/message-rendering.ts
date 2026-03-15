@@ -588,31 +588,45 @@ function renderReasoningBubble(reasoningContent: unknown, collapsed: boolean, li
     ? ""
     : (live ? renderLiveReasoningContentHtml(reasoningContent) : renderMessageStringHtml(reasoningContent));
 
-  return renderCompactBubbleDisclosure({
-    kindClass: "compact-bubble-panel-reasoning",
-    contentClass: "reasoning-content",
-    iconClass: "reasoning-icon",
-    iconHtml:
-      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
-        `<path d="M9 7.5a3 3 0 0 1 5.2-2.05A3.2 3.2 0 0 1 19 8.1c0 1.08-.44 2.06-1.16 2.77.75.58 1.23 1.49 1.23 2.51A3.12 3.12 0 0 1 15.95 16.5H15.5a2.5 2.5 0 0 1-4.78.72A2.8 2.8 0 0 1 8.5 18a3 3 0 0 1-2.96-3.43 3.02 3.02 0 0 1-1.54-2.63c0-1.03.5-1.94 1.27-2.52A3.17 3.17 0 0 1 5 8.1a3.2 3.2 0 0 1 4-3.09"></path>` +
-        `<path d="M10.5 8.75v6.5"></path>` +
-        `<path d="M13.5 8.75v6.5"></path>` +
-        `<path d="M8.5 10.5h2"></path>` +
-        `<path d="M13.5 10.5h2"></path>` +
-      `</svg>`,
-    bodyHtml,
-    collapsed,
-    collapsedTitle: "Model reasoning captured for this message. Expand it to inspect the reasoning output.",
-    expandedTitle: "Model reasoning captured for this message. Collapse it to focus on the final content.",
-    extraRootClasses: live ? ["reasoning-live"] : [],
-    allowEmptyBody: true,
-  });
+  return (
+    `<div class="compact-bubble-panel compact-bubble-panel-reasoning${live ? " reasoning-live" : ""}${collapsed ? "" : " is-open"}">` +
+      `<button type="button" class="compact-bubble-summary compact-bubble-summary-button" title="${escapeHtml(
+        collapsed
+          ? "Model reasoning captured for this message. Expand it to inspect the reasoning output."
+          : "Model reasoning captured for this message. Collapse it to focus on the final content.",
+      )}">` +
+        `<span class="compact-bubble-icon reasoning-icon" aria-hidden="true">` +
+          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
+            `<path d="M9 7.5a3 3 0 0 1 5.2-2.05A3.2 3.2 0 0 1 19 8.1c0 1.08-.44 2.06-1.16 2.77.75.58 1.23 1.49 1.23 2.51A3.12 3.12 0 0 1 15.95 16.5H15.5a2.5 2.5 0 0 1-4.78.72A2.8 2.8 0 0 1 8.5 18a3 3 0 0 1-2.96-3.43 3.02 3.02 0 0 1-1.54-2.63c0-1.03.5-1.94 1.27-2.52A3.17 3.17 0 0 1 5 8.1a3.2 3.2 0 0 1 4-3.09"></path>` +
+            `<path d="M10.5 8.75v6.5"></path>` +
+            `<path d="M13.5 8.75v6.5"></path>` +
+            `<path d="M8.5 10.5h2"></path>` +
+            `<path d="M13.5 10.5h2"></path>` +
+          `</svg>` +
+        `</span>` +
+        `<span class="compact-bubble-chevron" aria-hidden="true">▼</span>` +
+      `</button>` +
+      (bodyHtml
+        ? (
+          `<div class="compact-bubble-content reasoning-content">` +
+            bodyHtml +
+          `</div>`
+        )
+        : "") +
+    `</div>`
+  );
 }
 
 function renderToolCallIconHtml(): string {
   return (
     `<span class="tool-flow-icon" aria-hidden="true">` +
-      `<span class="tool-flow-glyph">fn</span>` +
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">` +
+        `<path d="M14.8 4.9a3.5 3.5 0 0 0 4.3 4.3l-4.9 4.9a2.3 2.3 0 0 1-3.25 0l-.85-.85a2.3 2.3 0 0 1 0-3.25Z"></path>` +
+        `<path d="m9.9 14.1-3.7 3.7"></path>` +
+        `<path d="M5.5 18.4 4.4 19.5"></path>` +
+        `<path d="M15.1 8.9 18.8 5.2"></path>` +
+        `<circle cx="8.35" cy="15.65" r="0.85" fill="currentColor" stroke="none"></circle>` +
+      `</svg>` +
     `</span>`
   );
 }
@@ -708,13 +722,10 @@ function renderPendingToolBubble(toolName: string, toolCallId: string, title: st
     return renderCompactBubbleStatic({
       kindClass: "compact-bubble-panel-tool",
       iconClass: "tool-response-icon",
-      iconHtml:
-        `<span class="compact-bubble-icon-stack">` +
-          renderToolReturnIconHtml() +
-          `<span class="chat-loading-spinner compact-bubble-inline-spinner compact-bubble-icon-spinner" aria-hidden="true"></span>` +
-        `</span>`,
+      iconHtml: renderToolReturnIconHtml(),
       labelText: toolName || "Tool response",
       labelTitle: toolCallId ? `Tool call id: ${toolCallId}` : undefined,
+      trailingHtml: `<span class="chat-loading-spinner compact-bubble-inline-spinner compact-bubble-trailing-spinner" aria-hidden="true"></span>`,
       extraRootClasses: ["compact-bubble-static-tool", "compact-bubble-pending-tool"],
     }).replace(
     '<div class="compact-bubble-summary compact-bubble-summary-static">',

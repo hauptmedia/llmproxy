@@ -194,7 +194,11 @@ export function hasVisibleAssistantTurnPayload(entry: DebugTranscriptEntry): boo
   );
 }
 
-export function parseDebugToolArguments(value: unknown): Record<string, unknown> {
+function looksLikeConcatenatedJsonObjects(value: string): boolean {
+  return /}\s*{/.test(value);
+}
+
+export function parseDebugToolArguments(value: unknown, toolName = "tool"): Record<string, unknown> {
   if (isClientRecord(value)) {
     return { ...value };
   }
@@ -208,9 +212,24 @@ export function parseDebugToolArguments(value: unknown): Record<string, unknown>
     return {};
   }
 
-  const parsed = JSON.parse(trimmed) as unknown;
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(trimmed) as unknown;
+  } catch {
+    if (toolName === "chat_with_model" && looksLikeConcatenatedJsonObjects(trimmed)) {
+      throw new Error('The llmproxy function "chat_with_model" expects exactly one JSON object per tool call. You appear to have concatenated multiple JSON objects. Emit multiple separate chat_with_model tool calls instead, one per model.');
+    }
+
+    throw new Error("Tool arguments must resolve to one JSON object.");
+  }
+
+  if (toolName === "chat_with_model" && Array.isArray(parsed)) {
+    throw new Error('The llmproxy function "chat_with_model" expects exactly one JSON object per tool call, not an array. Emit multiple separate chat_with_model tool calls instead, one per model.');
+  }
+
   if (!isClientRecord(parsed)) {
-    throw new Error("Tool arguments must resolve to a JSON object.");
+    throw new Error("Tool arguments must resolve to one JSON object.");
   }
 
   return parsed;
@@ -238,7 +257,7 @@ export function extractDebugToolCalls(entry: DebugTranscriptEntry): DebugToolCal
       continue;
     }
 
-    const parsedArgs = parseDebugToolArguments(functionRecord.arguments);
+    const parsedArgs = parseDebugToolArguments(functionRecord.arguments, functionRecord.name);
     calls.push({
       id: typeof toolCallRecord.id === "string" && toolCallRecord.id.length > 0
         ? toolCallRecord.id

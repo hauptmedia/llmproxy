@@ -342,12 +342,16 @@ function buildChatToolChoiceSchema(): Record<string, unknown> {
 function buildChatInputSchema(): Record<string, unknown> {
   return {
     type: "object",
+    description: "Arguments for one non-streaming chat request to exactly one target model. Each chat_with_model tool call must contain exactly one JSON object for exactly one model. Never concatenate multiple JSON objects, never send an array of request objects, and never bundle multiple models into one payload. If you need multiple models, emit multiple separate chat_with_model tool calls.",
     properties: {
       model: {
         type: "string",
-        description: "Requested model name. Use auto or omit it to let llmproxy choose.",
+        description: "Exactly one target model id for this call. Do not pass multiple model ids here, do not pass an array, and do not concatenate multiple request objects. If you want multiple models, emit multiple separate chat_with_model tool calls.",
       },
-      messages: buildChatMessagesSchema(),
+      messages: {
+        ...buildChatMessagesSchema(),
+        description: "Ordered chat history for this one request to this one target model. Reuse the same messages in separate tool calls when querying several models, instead of combining several request payloads into one arguments object.",
+      },
       temperature: {
         type: "number",
       },
@@ -394,7 +398,18 @@ function buildChatInputSchema(): Record<string, unknown> {
       },
       tool_choice: buildChatToolChoiceSchema(),
     },
-    required: ["messages"],
+    required: ["model", "messages"],
+    examples: [
+      {
+        model: "qwen3.5-35b-a3b",
+        messages: [
+          {
+            role: "user",
+            content: "Say hello briefly and clearly reveal your own model identity.",
+          },
+        ],
+      },
+    ],
     additionalProperties: false,
   };
 }
@@ -718,7 +733,9 @@ function validateChatToolArguments(args: Record<string, unknown>): void {
     CHAT_TOOL_ALLOWED_TOP_LEVEL_KEYS,
     'The llmproxy MCP tool "chat_with_model" received unsupported argument "{key}".',
   );
-  validateOptionalString(args.model, 'The llmproxy MCP tool "chat_with_model" argument "model" must be a non-empty string when provided.');
+  if (typeof args.model !== "string" || args.model.trim().length === 0) {
+    throw new Error('The llmproxy MCP tool "chat_with_model" argument "model" must be a non-empty string.');
+  }
 
   if (!Array.isArray(args.messages) || args.messages.length === 0) {
     throw new Error('The llmproxy MCP tool "chat_with_model" argument "messages" must be a non-empty array.');
@@ -769,12 +786,12 @@ function buildOpenAiCompatMcpService(context: McpContext): McpService {
             additionalProperties: false,
           },
         },
-        {
-          name: "chat_with_model",
-          title: "Chat",
-          description: "Write to the models registered in llmproxy using the normal OpenAI-compatible chat-completions request body shape, and always receive one final non-streaming completion JSON payload.",
-          inputSchema: buildChatInputSchema(),
-        },
+          {
+            name: "chat_with_model",
+            title: "Chat with one model",
+            description: "Send one OpenAI-compatible chat request to exactly one registered llmproxy model and receive one final non-streaming completion JSON payload. Use exactly one JSON object per tool call. Never concatenate multiple JSON objects, never send an array of request objects, and never combine several models into one payload. If you need multiple models, emit multiple separate chat_with_model tool calls.",
+            inputSchema: buildChatInputSchema(),
+          },
       ],
       prompts: [],
     },
