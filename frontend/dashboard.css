@@ -3611,7 +3611,8 @@
   }
 
   .debug-chat-overlay {
-    @apply fixed inset-0 z-80 grid place-items-center p-3;
+    @apply fixed inset-0 grid place-items-center p-3;
+    z-index: 110;
     background: rgba(28, 25, 23, 0.34);
     backdrop-filter: blur(8px);
   }
