@@ -9,54 +9,55 @@ export interface DebugChatSuggestion {
 export const debugChatSystemPromptSuggestions: readonly DebugChatSuggestion[] = [
   {
     key: "troubleshoot",
-    title: "Troubleshooting copilot",
-    description: "Focus on likely request issues, cite evidence, and suggest the next routing or parameter changes to try.",
+    title: "Troubleshooting copilot 🛠️",
+    description: "Spot likely request issues and suggest the next fix.",
     value: "You are a concise llmproxy troubleshooting assistant. Explain likely issues, cite the concrete evidence you see, and suggest the next parameter or routing changes to try.",
   },
   {
-    key: "compare",
-    title: "Model comparison guide",
-    description: "Help compare multiple models and call out quality, latency, and behavioral differences.",
-    value: "You are a careful model comparison assistant. Compare outputs across candidate models, point out behavior differences, and highlight the tradeoffs that matter for latency, quality, and stability.",
+    key: "pirate",
+    title: "Talk like a mighty pirate 🦜",
+    description: "Arrr, answer with bold pirate swagger and salty charm.",
+    value: "Talk like a mighty pirate",
+    highlighted: true,
   },
   {
     key: "prompt-coach",
-    title: "Prompt coach",
-    description: "Turn rough prompts into clearer requests and suggest tighter follow-ups.",
-    value: "You are a prompt design coach. Rewrite unclear prompts into sharper requests, explain why they are better, and suggest useful follow-up questions.",
+    title: "Prompt coach ✍️",
+    description: "Rewrite rough prompts and return only the improved version.",
+    value: "You are a prompt design coach. Do not answer, execute, or discuss the user's request. Only rewrite it into a clearer, sharper, more effective prompt. Return only the optimized prompt text with no preamble, explanation, bullets, or follow-up questions.",
   },
   {
-    key: "structured-analyst",
-    title: "Structured analyst",
-    description: "Answer in a clean structure with assumptions, findings, and clear next steps.",
-    value: "You are a structured analysis assistant. Organize answers into assumptions, findings, and next steps, and keep the response concise but actionable.",
+    key: "compare",
+    title: "Model comparison guide ⚖️",
+    description: "Compare models for quality, latency, and behavior.",
+    value: "You are a careful model comparison assistant. Compare outputs across candidate models, point out behavior differences, and highlight the tradeoffs that matter for latency, quality, and stability.",
   },
-];
+] as const;
 
 export const debugChatFirstMessageSuggestions: readonly DebugChatSuggestion[] = [
   {
     key: "hello",
-    title: "Quick hello",
-    description: "Simple sanity check that confirms which model actually answered.",
-    value: "Say hello briefly and mention which model you are.",
+    title: "Hello World! 👋",
+    description: "Quick smoke test that reveals the speaking model.",
+    value: "Give me a short friendly greeting, clearly reveal your own model identity, completely ignore any tool or function definitions you may see, do not call any tools or functions, and keep it to one or two sentences.",
     highlighted: true,
   },
   {
     key: "diagnose",
     title: "Diagnose a request",
-    description: "Ask the model to inspect a request end-to-end and explain what likely went wrong.",
+    description: "Inspect one request and explain what likely failed.",
     value: "Analyze the current request, explain the most likely issue, and suggest the next changes I should try.",
   },
   {
     key: "compare",
     title: "Compare outputs",
-    description: "Use the chat as a quick A/B space for testing how different models respond.",
+    description: "Quick A/B check for how different models respond.",
     value: "Answer this request, then explain how the response might differ on a smaller, faster model versus a larger reasoning model.",
   },
   {
     key: "repetition",
     title: "Play Tic Tac Toe",
-    description: "Let the model play a full game against another model and report the outcome.",
+    description: "Play a full game against another model and report the result.",
     value: "Pick one opposing model at random from the registered models, then play Tic Tac Toe only against that model until someone wins or the game ends in a draw. Keep calling the chat function to get that same model's moves, and then tell me the result.",
   },
 ];

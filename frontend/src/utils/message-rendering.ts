@@ -705,15 +705,18 @@ function renderEmbeddedContentBubble(language: string, content: unknown): string
 }
 
 function renderPendingToolBubble(toolName: string, toolCallId: string, title: string): string {
-  return renderCompactBubbleStatic({
-    kindClass: "compact-bubble-panel-tool",
-    iconClass: "tool-response-icon",
-    iconHtml: renderToolReturnIconHtml(),
-    labelText: toolName || "Tool response",
-    labelTitle: toolCallId ? `Tool call id: ${toolCallId}` : undefined,
-    trailingHtml: `<span class="chat-loading-spinner compact-bubble-inline-spinner" aria-hidden="true"></span>`,
-    extraRootClasses: ["compact-bubble-static-tool", "compact-bubble-pending-tool"],
-  }).replace(
+    return renderCompactBubbleStatic({
+      kindClass: "compact-bubble-panel-tool",
+      iconClass: "tool-response-icon",
+      iconHtml:
+        `<span class="compact-bubble-icon-stack">` +
+          renderToolReturnIconHtml() +
+          `<span class="chat-loading-spinner compact-bubble-inline-spinner compact-bubble-icon-spinner" aria-hidden="true"></span>` +
+        `</span>`,
+      labelText: toolName || "Tool response",
+      labelTitle: toolCallId ? `Tool call id: ${toolCallId}` : undefined,
+      extraRootClasses: ["compact-bubble-static-tool", "compact-bubble-pending-tool"],
+    }).replace(
     '<div class="compact-bubble-summary compact-bubble-summary-static">',
     `<div class="compact-bubble-summary compact-bubble-summary-static"${title ? ` title="${escapeHtml(title)}"` : ""}>`,
   );

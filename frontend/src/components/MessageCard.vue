@@ -67,11 +67,6 @@ function handleReasoningToggle(event: Event): void {
     return;
   }
 
-  if (target.classList.contains("compact-bubble-panel-reasoning")) {
-    reasoningExpanded.value = target.open;
-    persistedReasoningState.set(reasoningStateKey.value, target.open);
-  }
-
   if (target.classList.contains("compact-bubble-panel-tool")) {
     window.requestAnimationFrame(() => {
       resizeInlineAceEditors();
@@ -102,8 +97,10 @@ function handleReasoningClick(event: Event): void {
   }
 
   if (panel.classList.contains("compact-bubble-panel-reasoning")) {
-    reasoningExpanded.value = !panel.open;
-    persistedReasoningState.set(reasoningStateKey.value, !panel.open);
+    event.preventDefault();
+    const nextExpanded = !reasoningExpanded.value;
+    reasoningExpanded.value = nextExpanded;
+    persistedReasoningState.set(reasoningStateKey.value, nextExpanded);
   }
 }
 
@@ -280,11 +277,11 @@ watch(html, () => {
       aria-hidden="true"
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 7V6a3 3 0 0 1 6 0v1"></path>
-        <path d="M4.75 8.5h14.5"></path>
-        <path d="M6.25 8.5h11.5a1.5 1.5 0 0 1 1.5 1.5v6.75a2 2 0 0 1-2 2H6.75a2 2 0 0 1-2-2V10a1.5 1.5 0 0 1 1.5-1.5Z"></path>
-        <path d="M10 12h4"></path>
-        <path d="M12 10v4"></path>
+        <path d="M14.8 4.9a3.5 3.5 0 0 0 4.3 4.3l-4.9 4.9a2.3 2.3 0 0 1-3.25 0l-.85-.85a2.3 2.3 0 0 1 0-3.25Z"></path>
+        <path d="m9.9 14.1-3.7 3.7"></path>
+        <path d="M5.5 18.4 4.4 19.5"></path>
+        <path d="M15.1 8.9 18.8 5.2"></path>
+        <circle cx="8.35" cy="15.65" r="0.85" fill="currentColor" stroke="none"></circle>
       </svg>
     </div>
 

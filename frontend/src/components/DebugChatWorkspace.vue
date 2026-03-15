@@ -64,6 +64,7 @@ const systemPromptSuggestionItems = computed(() => (
     title: entry.title,
     description: entry.description,
     active: store.state.debug.systemPrompt.trim() === entry.value.trim(),
+    highlighted: entry.highlighted === true,
   }))
 ));
 
