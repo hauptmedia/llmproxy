@@ -218,6 +218,8 @@ watch(html, () => {
       </svg>
     </div>
 
+    <div ref="hostEl" class="message-card-body" v-html="html"></div>
+
     <div
       v-if="showAvatar && role === 'tool'"
       class="message-avatar"
@@ -233,8 +235,6 @@ watch(html, () => {
         <path d="M12 10v4"></path>
       </svg>
     </div>
-
-    <div ref="hostEl" class="message-card-body" v-html="html"></div>
 
     <div
       v-if="showAvatar && role === 'user'"

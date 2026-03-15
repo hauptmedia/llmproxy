@@ -57,7 +57,7 @@ export const debugChatFirstMessageSuggestions: readonly DebugChatSuggestion[] = 
     key: "repetition",
     title: "Play Tic Tac Toe",
     description: "Let the model play a full game against another model and report the outcome.",
-    value: "Play Tic Tac Toe with another model until someone wins or the game ends in a draw, then tell me the result. Keep calling the chat function to get the other model's moves.",
+    value: "Pick one opposing model at random from the registered models, then play Tic Tac Toe only against that model until someone wins or the game ends in a draw. Keep calling the chat function to get that same model's moves, and then tell me the result.",
   },
 ];
 

@@ -584,17 +584,47 @@ function renderToolReturnIconHtml(): string {
   );
 }
 
-function renderToolResponseBubble(content: unknown, collapsed: boolean, toolName: string, toolCallId: string): string {
-  const bodyHtml = renderInlineJsonAceHtml(content);
+function renderToolPayloadBubble(options: {
+  bodyHtml: string;
+  collapsed: boolean;
+  labelText: string;
+  labelTitle?: string;
+  iconHtml: string;
+  collapsedTitle: string;
+  expandedTitle: string;
+}): string {
+  if (!options.bodyHtml) {
+    return renderCompactBubbleStatic({
+      kindClass: "compact-bubble-panel-tool",
+      iconClass: "tool-response-icon",
+      iconHtml: options.iconHtml,
+      labelText: options.labelText,
+      labelTitle: options.labelTitle,
+      extraRootClasses: ["compact-bubble-static-tool"],
+    });
+  }
+
   return renderCompactBubbleDisclosure({
     kindClass: "compact-bubble-panel-tool",
     contentClass: "tool-response-content",
     iconClass: "tool-response-icon",
-    iconHtml: renderToolReturnIconHtml(),
+    iconHtml: options.iconHtml,
+    labelText: options.labelText,
+    labelTitle: options.labelTitle,
+    bodyHtml: options.bodyHtml,
+    collapsed: options.collapsed,
+    collapsedTitle: options.collapsedTitle,
+    expandedTitle: options.expandedTitle,
+  });
+}
+
+function renderToolResponseBubble(content: unknown, collapsed: boolean, toolName: string, toolCallId: string): string {
+  return renderToolPayloadBubble({
+    bodyHtml: renderInlineJsonAceHtml(content),
+    collapsed,
     labelText: toolName || "Tool response",
     labelTitle: toolCallId ? `Tool call id: ${toolCallId}` : "",
-    bodyHtml,
-    collapsed,
+    iconHtml: renderToolReturnIconHtml(),
     collapsedTitle: "Tool response captured for this message. Expand it to inspect the returned payload.",
     expandedTitle: "Tool response captured for this message. Collapse it to focus on the conversation flow.",
   });
@@ -1024,49 +1054,13 @@ function renderFunctionInvocationHtml(
     options.type && options.type !== "function" ? `type: ${options.type}` : "",
   ].filter(Boolean).join("\n");
   const argumentsValue = parseStructuredArguments(payload.arguments);
-  const argumentRows = renderInvocationArgumentListHtml(argumentsValue);
   const rawArgumentsHtml = renderInlineJsonAceHtml(argumentsValue);
-  const bodyParts: string[] = [];
-  const hasArgumentsContent = Boolean(argumentRows || rawArgumentsHtml);
-
-  if (options.note) {
-    bodyParts.push(`<div class="tool-parameter-note">${escapeHtml(options.note)}</div>`);
-  }
-
-  if (argumentRows) {
-    bodyParts.push(
-      `<div class="tool-parameter-panel">` +
-        argumentRows +
-      `</div>`,
-    );
-  } else {
-    bodyParts.push(`<div class="tool-parameter-note">This call did not include any arguments.</div>`);
-  }
-
-  if (rawArgumentsHtml) {
-    bodyParts.push(rawArgumentsHtml);
-  }
-
-  if (!hasArgumentsContent) {
-    return renderCompactBubbleStatic({
-      kindClass: "compact-bubble-panel-tool",
-      iconClass: "tool-response-icon",
-      iconHtml: renderToolCallIconHtml(),
-      labelText: name,
-      labelTitle: hoverDetails || undefined,
-      extraRootClasses: ["compact-bubble-static-tool"],
-    });
-  }
-
-  return renderCompactBubbleDisclosure({
-    kindClass: "compact-bubble-panel-tool",
-    contentClass: "tool-invocation-content",
-    iconClass: "tool-response-icon",
-    iconHtml: renderToolCallIconHtml(),
+  return renderToolPayloadBubble({
+    bodyHtml: rawArgumentsHtml,
+    collapsed: true,
     labelText: name,
     labelTitle: hoverDetails || undefined,
-    bodyHtml: bodyParts.join(""),
-    collapsed: true,
+    iconHtml: renderToolCallIconHtml(),
     collapsedTitle: "Tool call captured for this assistant message. Expand it to inspect the sent arguments.",
     expandedTitle: "Tool call captured for this assistant message. Collapse it to focus on the conversation flow.",
   });
