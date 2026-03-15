@@ -6,6 +6,7 @@ import {
   buildRequestResponseMetricRows,
   buildRequestStateBadge,
 } from "../utils/dashboard-badges";
+import { buildRequestConversationItems } from "../utils/conversation-transcript";
 import { formatDate, shortId } from "../utils/formatters";
 import { isClientRecord } from "../utils/guards";
 import { readErrorResponse } from "../utils/http";
@@ -197,10 +198,6 @@ export function useRequestDetail(
     ].filter(Boolean).join(" · ");
   });
 
-  const requestMessages = computed(() => (
-    Array.isArray(requestBody.value?.messages) ? requestBody.value.messages : []
-  ));
-
   const requestDetailIsLive = computed(() => state.requestDetail.detail?.live === true);
 
   const requestLiveConnection = computed(() => {
@@ -234,62 +231,13 @@ export function useRequestDetail(
     requestBody.value,
     state.requestDetail.detail?.entry.requestType,
   ));
-  const requestConversationItems = computed<ConversationTranscriptItem[]>(() => {
-    const requestItems: ConversationTranscriptItem[] = requestMessages.value.map((message, index) => ({
-      key: `request:${index}:${typeof message?.role === "string" ? message.role : "unknown"}`,
-      message: isClientRecord(message) ? message as Record<string, unknown> : { role: "unknown", content: message },
-      index,
+  const requestConversationItems = computed<ConversationTranscriptItem[]>(() => (
+    buildRequestConversationItems(state.requestDetail.detail, {
+      includeRequestMessages: true,
       hideFinishBadge: true,
       reasoningCollapsed: true,
-    }));
-
-    const responseBody = state.requestDetail.detail?.responseBody;
-    const responseRecord = isClientRecord(responseBody) ? responseBody as Record<string, unknown> : null;
-    const choices = Array.isArray(responseRecord?.choices) ? responseRecord.choices : null;
-    if (!responseRecord || !choices || choices.length === 0) {
-      return requestItems;
-    }
-
-    const resolvedModel =
-      typeof responseRecord.model === "string" && responseRecord.model.trim().length > 0
-        ? responseRecord.model.trim()
-        : (state.requestDetail.detail?.entry.model ?? "");
-
-    const responseItems = choices.flatMap((choice: unknown, choiceIndex: number): ConversationTranscriptItem[] => {
-      if (isClientRecord(choice) && isClientRecord(choice.message)) {
-        return [{
-          key: `response:${choiceIndex}:message`,
-          message: {
-            ...choice.message,
-            ...(resolvedModel ? { model: resolvedModel } : {}),
-          } as Record<string, unknown>,
-          index: requestItems.length + choiceIndex,
-          finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
-          hideFinishBadge: true,
-          reasoningCollapsed: true,
-        }];
-      }
-
-      if (isClientRecord(choice) && typeof choice.text === "string") {
-        return [{
-          key: `response:${choiceIndex}:text`,
-          message: {
-            role: "assistant",
-            content: choice.text,
-            ...(resolvedModel ? { model: resolvedModel } : {}),
-          },
-          index: requestItems.length + choiceIndex,
-          finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : "",
-          hideFinishBadge: true,
-          reasoningCollapsed: true,
-        }];
-      }
-
-      return [];
-    });
-
-    return [...requestItems, ...responseItems];
-  });
+    })
+  ));
 
   return {
     closeRequestDetail,

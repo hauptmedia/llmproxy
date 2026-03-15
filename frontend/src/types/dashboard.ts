@@ -157,6 +157,8 @@ export interface DebugTranscriptEntry {
   model?: string;
   backend?: string;
   finish_reason?: string;
+  pending?: boolean;
+  pending_title?: string;
 }
 
 export interface EditableBackendConfig {
@@ -280,6 +282,7 @@ export interface DebugState {
   lastRequestId: string;
   rawRequest: string;
   rawResponse: string;
+  liveDetail: RequestLogDetail | null;
   transcript: DebugTranscriptEntry[];
   metrics: DebugMetrics;
   params: DebugParams;

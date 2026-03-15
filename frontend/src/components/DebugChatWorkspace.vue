@@ -5,13 +5,22 @@ import ConversationTranscript from "./ConversationTranscript.vue";
 import ConversationSurface from "./ConversationSurface.vue";
 import DialogCloseButton from "./DialogCloseButton.vue";
 import SuggestionActionCards from "./SuggestionActionCards.vue";
-import type { ConversationTranscriptItem, DebugTranscriptEntry, UiBadge } from "../types/dashboard";
+import type {
+  ConversationTranscriptItem,
+  DebugTranscriptEntry,
+  RequestLogDetail,
+  UiBadge,
+} from "../types/dashboard";
 import { useDashboardStore } from "../composables/useDashboardStore";
+import {
+  buildConversationItemsFromDebugTranscript,
+  buildRequestConversationItems,
+} from "../utils/conversation-transcript";
+import { isClientRecord } from "../utils/guards";
 import {
   debugChatFirstMessageSuggestions,
   debugChatSystemPromptSuggestions,
 } from "../utils/debug-chat-suggestions";
-import { hasVisibleMessageContent } from "../utils/message-rendering";
 
 const props = withDefaults(defineProps<{
   showCloseButton?: boolean;
@@ -79,12 +88,23 @@ function applySystemPromptSuggestion(key: string): void {
     return;
   }
 
+  if (store.state.debug.systemPrompt.trim() === match.value.trim()) {
+    store.state.debug.systemPrompt = "";
+    return;
+  }
+
   store.state.debug.systemPrompt = match.value;
 }
 
 function applyFirstMessageSuggestion(key: string): void {
   const match = debugChatFirstMessageSuggestions.find((entry) => entry.key === key);
   if (!match) {
+    return;
+  }
+
+  if (store.state.debug.prompt.trim() === match.value.trim()) {
+    store.state.debug.prompt = "";
+    store.state.debug.defaultPromptDismissed = true;
     return;
   }
 
@@ -100,51 +120,6 @@ function shouldCollapseDebugReasoning(entry: DebugTranscriptEntry, index: number
   return true;
 }
 
-function hasRenderableAssistantPayload(entry: DebugTranscriptEntry): boolean {
-  return (
-    hasVisibleMessageContent(entry.content) ||
-    (typeof entry.reasoning_content === "string" && entry.reasoning_content.length > 0) ||
-    (typeof entry.refusal === "string" && entry.refusal.length > 0) ||
-    typeof entry.function_call === "object" ||
-    (Array.isArray(entry.tool_calls) && entry.tool_calls.length > 0) ||
-    typeof entry.audio === "object"
-  );
-}
-
-function isPendingAssistantEntry(entry: DebugTranscriptEntry, index: number): boolean {
-  return (
-    store.state.debug.sending &&
-    entry.role === "assistant" &&
-    index === store.state.debug.transcript.length - 1 &&
-    !hasRenderableAssistantPayload(entry)
-  );
-}
-
-function getPendingAssistantCopy(entry: DebugTranscriptEntry, index: number): Record<string, unknown> {
-  if (!isPendingAssistantEntry(entry, index)) {
-    return { ...entry };
-  }
-
-  const waitingTitle = store.state.debug.status.startsWith("Running ")
-    ? "Running llmproxy functions and waiting for the next model response."
-    : "Waiting for model response.";
-
-  return {
-    ...entry,
-    content: "",
-    pending: true,
-    pending_title: waitingTitle,
-  };
-}
-
-function getPendingAssistantBadges(entry: DebugTranscriptEntry, index: number): UiBadge[] {
-  if (!isPendingAssistantEntry(entry, index)) {
-    return [];
-  }
-
-  return [];
-}
-
 function getTranscriptContentLength(entry: DebugTranscriptEntry): number {
   return typeof entry.content === "string"
     ? entry.content.length
@@ -154,11 +129,26 @@ function getTranscriptContentLength(entry: DebugTranscriptEntry): number {
 function getTranscriptEntrySignature(entry: DebugTranscriptEntry): string {
   return [
     entry.role,
+    entry.pending ? "pending" : "ready",
+    entry.pending_title?.length ?? 0,
     getTranscriptContentLength(entry),
     entry.reasoning_content?.length ?? 0,
+    typeof entry.refusal === "string" ? entry.refusal.length : 0,
+    isClientRecord(entry.function_call) ? JSON.stringify(entry.function_call).length : 0,
+    Array.isArray(entry.tool_calls) ? JSON.stringify(entry.tool_calls).length : 0,
     entry.finish_reason ?? "",
     entry.backend ?? "",
   ].join(":");
+}
+
+function findLastAssistantTranscriptIndex(transcript: DebugTranscriptEntry[]): number {
+  for (let index = transcript.length - 1; index >= 0; index -= 1) {
+    if (transcript[index]?.role === "assistant") {
+      return index;
+    }
+  }
+
+  return -1;
 }
 
 const chatConversationSignature = computed<string>(() => {
@@ -171,12 +161,32 @@ const chatConversationSignature = computed<string>(() => {
   const queuedBits = store.state.debug.queuedMessages.map((entry, index) => (
     `${index}:${entry.model}:${entry.enableDiagnosticTools ? "tools" : "plain"}:${entry.prompt.length}`
   ));
+  const liveResponseSource = store.state.debug.liveDetail as { responseBody?: unknown } | null;
+  const liveResponse = isClientRecord(liveResponseSource?.responseBody)
+    ? liveResponseSource.responseBody as Record<string, unknown>
+    : null;
+  const liveChoices = Array.isArray(liveResponse?.choices) ? liveResponse.choices : [];
+  const liveBits = liveChoices.map((choice, index) => {
+    if (!isClientRecord(choice)) {
+      return `${index}:unknown`;
+    }
+
+    const message = isClientRecord(choice.message) ? choice.message as Record<string, unknown> : null;
+    return [
+      index,
+      typeof message?.role === "string" ? message.role : "assistant",
+      typeof message?.content === "string" ? message.content.length : 0,
+      typeof message?.reasoning_content === "string" ? message.reasoning_content.length : 0,
+      typeof choice.finish_reason === "string" ? choice.finish_reason : "",
+    ].join(":");
+  });
 
   return [
     hasTranscript.value ? "ready" : "initial",
     trimmedSystemPrompt.value,
     store.state.debug.sending ? "sending" : "idle",
     transcriptBits.join("|"),
+    liveBits.join("|"),
     queuedBits.join("|"),
   ].join("|");
 });
@@ -195,19 +205,42 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
   }
 
   const offset = items.length;
-  const transcriptItems: ConversationTranscriptItem[] = [];
+  const transcriptItems: ConversationTranscriptItem[] = buildConversationItemsFromDebugTranscript(transcript, {
+    startIndex: offset,
+    hideFinishBadge: true,
+    reasoningCollapsed: true,
+    keyPrefix: "chat",
+  }).map((item, index): ConversationTranscriptItem => ({
+    ...item,
+    reasoningCollapsed: shouldCollapseDebugReasoning(transcript[index] as DebugTranscriptEntry, index),
+    extraBadges: [] as UiBadge[],
+  }));
 
-  for (let index = 0; index < transcript.length; index += 1) {
-    const entry = transcript[index] as DebugTranscriptEntry;
-    transcriptItems.push({
-      key: `${index}:${entry.role}:${entry.backend || ""}`,
-      message: getPendingAssistantCopy(entry, index),
-      index: index + offset,
-      finishReason: entry.finish_reason || "",
+  const liveDetail = store.state.debug.liveDetail as RequestLogDetail | null;
+  if (
+    liveDetail &&
+    liveDetail.entry.id === store.state.debug.lastRequestId
+  ) {
+    const liveResponseItems = buildRequestConversationItems(liveDetail, {
+      startIndex: 0,
+      includeRequestMessages: false,
       hideFinishBadge: true,
-      reasoningCollapsed: shouldCollapseDebugReasoning(entry, index),
-      extraBadges: getPendingAssistantBadges(entry, index),
+      reasoningCollapsed: true,
+      responseKeyPrefix: "chat-live-response",
     });
+    const lastAssistantIndex = findLastAssistantTranscriptIndex(transcript);
+
+    if (liveResponseItems.length > 0 && lastAssistantIndex >= 0 && lastAssistantIndex < transcriptItems.length) {
+      const baseKey = transcriptItems[lastAssistantIndex]?.key ?? `chat-live-response:${lastAssistantIndex}`;
+      const replacementStartIndex = transcriptItems[lastAssistantIndex]?.index ?? (offset + lastAssistantIndex);
+      const normalizedLiveItems: ConversationTranscriptItem[] = liveResponseItems.map((item, liveIndex) => ({
+        ...item,
+        key: liveIndex === 0 ? baseKey : `${baseKey}:live:${liveIndex}`,
+        index: replacementStartIndex + liveIndex,
+      }));
+
+      transcriptItems.splice(lastAssistantIndex, 1, ...normalizedLiveItems);
+    }
   }
 
   const queuedOffset = offset + transcriptItems.length;

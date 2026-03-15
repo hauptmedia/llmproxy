@@ -15,6 +15,45 @@ import {
 type DebugStateSlice = DashboardState["debug"];
 type ReplaceTranscriptEntry = (entry: DebugTranscriptEntry) => DebugTranscriptEntry;
 
+function hasVisibleFunctionCallDelta(value: unknown): boolean {
+  if (!isClientRecord(value)) {
+    return false;
+  }
+
+  return (
+    (typeof value.name === "string" && value.name.length > 0) ||
+    (typeof value.arguments === "string" && value.arguments.length > 0)
+  );
+}
+
+function hasVisibleToolCallsDelta(value: unknown): boolean {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+
+  return value.some((toolCall) => {
+    if (!isClientRecord(toolCall)) {
+      return false;
+    }
+
+    if (
+      (typeof toolCall.id === "string" && toolCall.id.length > 0) ||
+      (typeof toolCall.type === "string" && toolCall.type.length > 0)
+    ) {
+      return true;
+    }
+
+    if (!isClientRecord(toolCall.function)) {
+      return false;
+    }
+
+    return (
+      (typeof toolCall.function.name === "string" && toolCall.function.name.length > 0) ||
+      (typeof toolCall.function.arguments === "string" && toolCall.function.arguments.length > 0)
+    );
+  });
+}
+
 export function applyNonStreamingResponse(
   debugState: DebugStateSlice,
   payload: Record<string, any>,
@@ -40,6 +79,8 @@ export function applyNonStreamingResponse(
   assistantTurn.name = typeof message?.name === "string" ? message.name : "";
   assistantTurn.backend = debugState.backend;
   assistantTurn.finish_reason = typeof choice?.finish_reason === "string" ? choice.finish_reason : "";
+  assistantTurn.pending = false;
+  assistantTurn.pending_title = "";
   applyUsageMetrics(debugState.metrics, payload?.usage, payload?.timings, choice?.finish_reason);
   debugState.usage = formatUsage(payload?.usage, payload?.timings, choice?.finish_reason);
   debugState.rawResponse = prettyJson(payload);
@@ -78,6 +119,18 @@ export function applyStreamingPayload(
 
   if (typeof normalizedChoice?.finish_reason === "string" && normalizedChoice.finish_reason.length > 0) {
     assistantTurn.finish_reason = normalizedChoice.finish_reason;
+  }
+
+  if (
+    (typeof delta?.content === "string" && delta.content.length > 0) ||
+    Boolean(reasoningDelta) ||
+    (typeof delta?.refusal === "string" && delta.refusal.length > 0) ||
+    hasVisibleFunctionCallDelta(delta?.function_call) ||
+    hasVisibleToolCallsDelta(delta?.tool_calls) ||
+    (typeof normalizedChoice?.finish_reason === "string" && normalizedChoice.finish_reason.length > 0)
+  ) {
+    assistantTurn.pending = false;
+    assistantTurn.pending_title = "";
   }
 
   assistantTurn.backend = debugState.backend;

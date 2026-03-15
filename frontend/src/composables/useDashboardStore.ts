@@ -95,6 +95,7 @@ function createInitialState(): DashboardState {
       lastRequestId: "",
       rawRequest: "",
       rawResponse: "",
+      liveDetail: null,
       transcript: [],
       metrics: createInitialDebugMetrics(),
       params: {

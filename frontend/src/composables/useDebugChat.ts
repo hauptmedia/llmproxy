@@ -1,4 +1,8 @@
-import type { DashboardState, DebugQueuedMessage, DebugTranscriptEntry } from "../types/dashboard";
+import type {
+  DashboardState,
+  DebugQueuedMessage,
+  DebugTranscriptEntry,
+} from "../types/dashboard";
 import { buildDiagnosticsChatTools } from "../utils/diagnostics-mcp";
 import { defaultDebugChatPrompt } from "../utils/debug-chat-suggestions";
 import { readErrorResponse } from "../utils/http";
@@ -29,6 +33,7 @@ export function useDebugChat(
 ) {
   const maxFunctionRounds = 100;
   let metricsTicker: number | undefined;
+  let liveTranscriptSyncTimer: number | undefined;
   let activeRunId = 0;
 
   function ensureDefaultDebugPrompt(): void {
@@ -69,6 +74,14 @@ export function useDebugChat(
     };
   }
 
+  function createPendingAssistantTurn(waitingTitle: string): DebugTranscriptEntry {
+    return {
+      ...createAssistantTurn(),
+      pending: true,
+      pending_title: waitingTitle,
+    };
+  }
+
   function queueCurrentDebugMessage(): boolean {
     const prompt = state.debug.prompt.trim();
     if (!prompt) {
@@ -101,6 +114,13 @@ export function useDebugChat(
     }
   }
 
+  function stopLiveTranscriptSync(): void {
+    if (liveTranscriptSyncTimer !== undefined) {
+      window.clearTimeout(liveTranscriptSyncTimer);
+      liveTranscriptSyncTimer = undefined;
+    }
+  }
+
   function startDebugMetricsTicker(): void {
     stopDebugMetricsTicker();
     metricsTicker = window.setInterval(() => {
@@ -116,6 +136,44 @@ export function useDebugChat(
       const seconds = Math.max(0.001, (Date.now() - metrics.firstTokenAt) / 1000);
       metrics.completionPerSecond = metrics.completionTokens / seconds;
     }, 200);
+  }
+
+  async function syncLiveTranscriptFromServer(runId: number): Promise<void> {
+    stopLiveTranscriptSync();
+
+    if (runId !== activeRunId || !state.debug.sending) {
+      return;
+    }
+
+    const requestId = state.debug.lastRequestId;
+    if (requestId) {
+      try {
+        const response = await fetch(`/api/requests/${encodeURIComponent(requestId)}`, { method: "GET" });
+        if (response.ok) {
+          const detail = await response.json();
+          if (runId === activeRunId && state.debug.sending && state.debug.lastRequestId === requestId) {
+            state.debug.liveDetail = detail;
+          }
+        }
+      } catch {
+        // Ignore polling errors for the live transcript mirror. The primary chat request remains authoritative.
+      }
+    }
+
+    if (runId !== activeRunId || !state.debug.sending) {
+      return;
+    }
+
+    liveTranscriptSyncTimer = window.setTimeout(() => {
+      void syncLiveTranscriptFromServer(runId);
+    }, 250);
+  }
+
+  function startLiveTranscriptSync(runId: number): void {
+    stopLiveTranscriptSync();
+    liveTranscriptSyncTimer = window.setTimeout(() => {
+      void syncLiveTranscriptFromServer(runId);
+    }, 150);
   }
 
   async function runSingleDebugAssistantRequest(
@@ -221,7 +279,8 @@ export function useDebugChat(
           content: prompt,
         }
       : null;
-    let assistantTurn = createAssistantTurn();
+    const initialWaitingTitle = "Waiting for model response.";
+    let assistantTurn = createPendingAssistantTurn(initialWaitingTitle);
     const requestId = createClientDebugRequestId();
     const removedAssistantTurn = regenerateAssistantReply && lastTranscriptEntry
       ? { ...lastTranscriptEntry } as DebugTranscriptEntry
@@ -248,11 +307,13 @@ export function useDebugChat(
     state.debug.lastRequestId = requestId;
     state.debug.rawRequest = "";
     state.debug.rawResponse = "";
+    state.debug.liveDetail = null;
     if (!queuedMessage) {
       state.debug.prompt = "";
     }
     state.debug.abortController = new AbortController();
     startDebugMetricsTicker();
+    startLiveTranscriptSync(runId);
 
     try {
       let currentAssistantTurn = assistantTurn;
@@ -301,10 +362,33 @@ export function useDebugChat(
         }
 
         state.debug.status = `Running ${toolCalls.length} llmproxy function call${toolCalls.length === 1 ? "" : "s"}...`;
-        const toolTurns = await executeDebugToolCalls(toolCalls);
+        const toolTurns = await executeDebugToolCalls(toolCalls, {
+          onStart(toolCall) {
+            const pendingToolTurn: DebugTranscriptEntry = {
+              role: "tool",
+              name: toolCall.name,
+              tool_call_id: toolCall.id,
+              pending: true,
+              pending_title: `Waiting for ${toolCall.name} to return...`,
+            };
+            state.debug.transcript.push(pendingToolTurn);
+            return state.debug.transcript[state.debug.transcript.length - 1] as DebugTranscriptEntry;
+          },
+          onFinish(toolTurn, _toolCall, pendingTurn) {
+            if (pendingTurn) {
+              Object.assign(pendingTurn, toolTurn, {
+                pending: false,
+                pending_title: "",
+              });
+              replaceTranscriptEntry(pendingTurn);
+              return;
+            }
+
+            state.debug.transcript.push(toolTurn);
+          },
+        });
 
         for (const toolTurn of toolTurns) {
-          state.debug.transcript.push(toolTurn);
           const toolHistoryMessage = buildDebugHistoryMessage(toolTurn);
           if (toolHistoryMessage) {
             history.push(toolHistoryMessage);
@@ -316,11 +400,12 @@ export function useDebugChat(
           break;
         }
 
-        currentAssistantTurn = createAssistantTurn();
+        currentAssistantTurn = createPendingAssistantTurn("Waiting for the next model response.");
         state.debug.transcript.push(currentAssistantTurn);
         currentAssistantTurn = state.debug.transcript[state.debug.transcript.length - 1] as DebugTranscriptEntry;
         assistantTurn = currentAssistantTurn;
         currentRequestId = createClientDebugRequestId();
+        state.debug.liveDetail = null;
       }
     } catch (error) {
       if (runId !== activeRunId || isExpectedDebugAbort(error)) {
@@ -343,6 +428,7 @@ export function useDebugChat(
         state.debug.sending = false;
         state.debug.abortController = null;
         stopDebugMetricsTicker();
+        stopLiveTranscriptSync();
 
         const nextQueuedMessage = shiftQueuedDebugMessage();
         if (nextQueuedMessage) {
@@ -358,7 +444,9 @@ export function useDebugChat(
     state.debug.sending = false;
     state.debug.abortController = null;
     state.debug.queuedMessages.splice(0);
+    state.debug.liveDetail = null;
     stopDebugMetricsTicker();
+    stopLiveTranscriptSync();
   }
 
   function clearDebugChat(): void {
@@ -367,10 +455,12 @@ export function useDebugChat(
     state.debug.sending = false;
     state.debug.abortController = null;
     stopDebugMetricsTicker();
+    stopLiveTranscriptSync();
     state.debug.transcript = [];
     state.debug.queuedMessages.splice(0);
     state.debug.rawRequest = "";
     state.debug.rawResponse = "";
+    state.debug.liveDetail = null;
     state.debug.status = "";
     state.debug.usage = "";
     state.debug.error = "";
@@ -385,6 +475,7 @@ export function useDebugChat(
   function prepareDebugChatDraft(systemPrompt: string, prompt: string): void {
     activeRunId += 1;
     stopDebugMetricsTicker();
+    stopLiveTranscriptSync();
     state.debug.abortController?.abort(new Error("Chat session reset from diagnostics."));
     state.debug.sending = false;
     state.debug.abortController = null;
@@ -392,6 +483,7 @@ export function useDebugChat(
     state.debug.queuedMessages.splice(0);
     state.debug.rawRequest = "";
     state.debug.rawResponse = "";
+    state.debug.liveDetail = null;
     state.debug.status = "";
     state.debug.usage = "";
     state.debug.error = "";
