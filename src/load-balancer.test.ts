@@ -456,7 +456,7 @@ test("completed requests store heuristic diagnostics when the built-in checks fi
   assert.match(entry?.diagnosticSummary ?? "", /completion budget was exhausted|cut off by the token budget/i);
 });
 
-test("completed requests emit one final request log line on stdout using the stored detail shape", async () => {
+test("completed requests emit one final request log line on stdout using metadata only", async () => {
   const requestLogLines: string[] = [];
   const balancer = new LoadBalancer(TEST_CONFIG, {
     fetcher: async () => jsonResponse({ object: "list", data: [] }),
@@ -502,13 +502,20 @@ test("completed requests emit one final request log line on stdout using the sto
   });
 
   assert.equal(requestLogLines.length, 1);
+  const parsed = JSON.parse(requestLogLines[0] ?? "{}");
   assert.deepEqual(
-    JSON.parse(requestLogLines[0] ?? "{}"),
-    JSON.parse(JSON.stringify(balancer.getRequestLogDetail("req-stdout-log"))),
+    parsed,
+    JSON.parse(JSON.stringify(balancer.getRequestLogDetail("req-stdout-log")?.entry)),
   );
+  assert.equal("requestBody" in parsed, false);
+  assert.equal("responseBody" in parsed, false);
+  assert.equal(requestLogLines[0]?.includes("Say hello once."), false);
+  assert.equal(requestLogLines[0]?.includes("Hello there."), false);
+  assert.equal(requestLogLines[0]?.includes("\"messages\""), false);
+  assert.equal(requestLogLines[0]?.includes("\"content\""), false);
 });
 
-test("rejected requests also emit one final request log line", async () => {
+test("rejected requests also emit one final metadata-only request log line", async () => {
   const requestLogLines: string[] = [];
   const balancer = new LoadBalancer({
     ...TEST_CONFIG,
@@ -536,10 +543,13 @@ test("rejected requests also emit one final request log line", async () => {
   );
 
   assert.equal(requestLogLines.length, 1);
+  const parsed = JSON.parse(requestLogLines[0] ?? "{}");
   assert.deepEqual(
-    JSON.parse(requestLogLines[0] ?? "{}"),
-    JSON.parse(JSON.stringify(balancer.getRequestLogDetail("req-stdout-rejected"))),
+    parsed,
+    JSON.parse(JSON.stringify(balancer.getRequestLogDetail("req-stdout-rejected")?.entry)),
   );
+  assert.equal("requestBody" in parsed, false);
+  assert.equal("responseBody" in parsed, false);
 });
 
 test("completed requests without a clear heuristic problem remain unflagged", async () => {
@@ -814,6 +824,110 @@ test("retains only the configured number of recent requests", async () => {
   assert.deepEqual(snapshot.recentRequests.map((entry) => entry.id), ["req-limit-3", "req-limit-2"]);
   assert.equal(balancer.getRequestLogDetail("req-limit-1"), undefined);
   assert.equal(balancer.getRequestLogDetail("req-limit-2")?.entry.id, "req-limit-2");
+});
+
+test("memory retention stays bounded under many large completed requests", async () => {
+  const recentRequestLimit = 5;
+  const balancer = new LoadBalancer({
+    ...TEST_CONFIG,
+    server: {
+      ...TEST_CONFIG.server,
+      recentRequestLimit,
+    },
+  }, {
+    fetcher: async () => jsonResponse({ object: "list", data: [] }),
+  });
+
+  const largeMessages = Array.from({ length: 180 }, (_, index) => ({
+    role: "user",
+    content: `message-${index}-` + "x".repeat(4096),
+  }));
+  const largeToolCalls = Array.from({ length: 120 }, (_, index) => ({
+    id: `call-${index}`,
+    type: "function",
+    function: {
+      name: `tool_${index}`,
+      arguments: JSON.stringify({
+        index,
+        payload: "y".repeat(2048),
+      }),
+    },
+  }));
+
+  for (let index = 0; index < 30; index += 1) {
+    const lease = await balancer.acquire({
+      id: `req-pressure-${index}`,
+      receivedAt: Date.now(),
+      method: "POST",
+      path: "/v1/chat/completions",
+      model: "chat-local",
+      stream: true,
+      requestBody: {
+        model: "chat-local",
+        messages: largeMessages,
+        metadata: Object.fromEntries(
+          Array.from({ length: 180 }, (_, metadataIndex) => [
+            `field_${metadataIndex}`,
+            `value-${metadataIndex}-` + "z".repeat(256),
+          ]),
+        ),
+      },
+    });
+
+    lease.release({
+      outcome: "success",
+      latencyMs: 25,
+      statusCode: 200,
+      queuedMs: lease.queueMs,
+      finishReason: "stop",
+      responseBody: {
+        choices: [
+          {
+            message: {
+              role: "assistant",
+              content: "a".repeat(90_000),
+              tool_calls: largeToolCalls,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  const snapshot = balancer.getSnapshot();
+  const internals = balancer as unknown as {
+    recentRequestDetails: Map<string, {
+      requestBody?: Record<string, unknown>;
+      responseBody?: Record<string, unknown>;
+    }>;
+    diagnosedRequestIds: Set<string>;
+  };
+
+  assert.equal(snapshot.recentRequests.length, recentRequestLimit);
+  assert.equal(internals.recentRequestDetails.size, recentRequestLimit);
+  assert.equal(internals.diagnosedRequestIds.size, recentRequestLimit);
+
+  const retainedDetail = balancer.getRequestLogDetail("req-pressure-29");
+  assert.ok(retainedDetail);
+  assert.equal(Array.isArray((retainedDetail?.requestBody as Record<string, unknown>)?.messages), true);
+  assert.equal(((retainedDetail?.requestBody as Record<string, any>)?.messages ?? []).length, 24);
+  assert.equal(
+    ((retainedDetail?.requestBody as Record<string, any>)?.metadata?.__llmproxy_truncated_keys__ ?? 0) > 0,
+    true,
+  );
+  assert.equal(
+    ((((retainedDetail?.responseBody as Record<string, any>)?.choices?.[0]?.message?.content) ?? "") as string).length < 17_000,
+    true,
+  );
+  assert.equal(
+    ((((retainedDetail?.responseBody as Record<string, any>)?.choices?.[0]?.message?.tool_calls) ?? []) as unknown[]).length,
+    24,
+  );
+
+  const retainedBytes = Array.from(internals.recentRequestDetails.values()).reduce((sum, detail) => (
+    sum + Buffer.byteLength(JSON.stringify(detail))
+  ), 0);
+  assert.ok(retainedBytes < 1_200_000);
 });
 
 test("applies health check interval changes without restarting the load balancer", async () => {

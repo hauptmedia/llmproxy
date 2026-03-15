@@ -227,3 +227,51 @@ test("accumulates multi tool call chunks into a final chat response", () => {
     total_tokens: 21,
   });
 });
+
+test("caps accumulated streaming text to avoid unbounded heap growth", () => {
+  const accumulator = new StreamingAccumulator("chat.completions");
+  const longChunk = "x".repeat(140_000);
+
+  accumulator.applyPayload({
+    choices: [
+      {
+        index: 0,
+        delta: {
+          role: "assistant",
+          content: longChunk,
+          reasoning_content: longChunk,
+        },
+      },
+    ],
+  });
+
+  accumulator.applyPayload({
+    choices: [
+      {
+        index: 0,
+        delta: {
+          tool_calls: [
+            {
+              index: 0,
+              function: {
+                name: "chat_with_model",
+                arguments: longChunk,
+              },
+            },
+          ],
+        },
+      },
+    ],
+  });
+
+  const response = accumulator.buildResponse();
+  const message = (response.choices as Array<Record<string, any>>)[0]?.message as Record<string, any>;
+  const toolArguments = message.tool_calls?.[0]?.function?.arguments as string;
+
+  assert.match(String(message.content ?? ""), /\[llmproxy truncated to protect memory\]/);
+  assert.match(String(message.reasoning_content ?? ""), /\[llmproxy truncated to protect memory\]/);
+  assert.match(String(toolArguments ?? ""), /\[llmproxy truncated to protect memory\]/);
+  assert.ok(String(message.content ?? "").length < 130_000);
+  assert.ok(String(message.reasoning_content ?? "").length < 130_000);
+  assert.ok(String(toolArguments ?? "").length < 35_000);
+});

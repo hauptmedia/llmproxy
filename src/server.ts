@@ -12,6 +12,7 @@ import {
 } from "./backend-connectors";
 import { renderDashboardHtml } from "./dashboard";
 import { buildDiagnosticReport } from "./diagnostics";
+import { compactJsonForRetention } from "./detail-retention";
 import { LoadBalancer } from "./load-balancer";
 import {
   RESTART_REQUIRED_SERVER_FIELDS,
@@ -1032,7 +1033,7 @@ export class LlmProxyServer {
       textTokens: 0,
       metricsExact: false,
       requestedCompletionTokenLimit: resolveRequestedCompletionLimit(route.requestBody),
-      requestBody: route.requestBody,
+      requestBody: compactJsonForRetention(route.requestBody),
     });
     this.broadcastRequestDetail(route.id);
     this.broadcastCurrentSnapshot();
@@ -1092,7 +1093,7 @@ export class LlmProxyServer {
     connection.finishReason = update.finishReason ?? update.metrics.finishReason;
     connection.metricsExact = update.metrics.exact;
     if (responseBody !== undefined) {
-      connection.responseBody = responseBody as JsonValue;
+      connection.responseBody = compactJsonForRetention(responseBody as JsonValue | undefined);
     }
     connection.lastUpdatedAt = now;
     this.broadcastRequestDetail(requestId);

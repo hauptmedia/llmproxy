@@ -612,6 +612,114 @@ test("MCP chat_with_model tool rejects explicit stream arguments", async () => {
   }
 });
 
+test("MCP chat_with_model tool accepts valid JSON string arguments", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-mcp-chat-json-string-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  try {
+    const backendPort = await getFreePort();
+    const routerPort = await getFreePort();
+
+    const backend = await startMockDiagnosticsBackend(backendPort);
+    cleanup.push(async () => {
+      await new Promise<void>((resolve, reject) => {
+        backend.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        });
+      });
+    });
+
+    const config: ProxyConfig = {
+      server: {
+        host: "127.0.0.1",
+        port: routerPort,
+        requestTimeoutMs: 10000,
+        queueTimeoutMs: 2000,
+        healthCheckIntervalMs: 60000,
+        recentRequestLimit: 1000,
+        mcpServerEnabled: true,
+      },
+      backends: [
+        {
+          id: "mock-diagnostics-upstream",
+          name: "mock diagnostics upstream",
+          baseUrl: `http://127.0.0.1:${backendPort}`,
+          enabled: true,
+          maxConcurrency: 1,
+          healthPath: "/v1/models",
+          models: ["diagnostics-model"],
+        },
+      ],
+    };
+
+    const router = await startRouter(config, path.join(tempDir, "mcp-chat-json-string-router.config.json"));
+    cleanup.push(async () => {
+      await router.server.stop();
+      await router.loadBalancer.stop();
+    });
+
+    const baseUrl = `http://127.0.0.1:${routerPort}`;
+    await waitForHealthyBackend(baseUrl, "mock-diagnostics-upstream");
+
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 9.5,
+        method: "tools/call",
+        params: {
+          name: "chat_with_model",
+          arguments: JSON.stringify({
+            model: "diagnostics-model",
+            messages: [
+              {
+                role: "user",
+                content: "Hello",
+              },
+            ],
+          }),
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as {
+      result?: {
+        isError?: boolean;
+        structuredContent?: {
+          object?: string;
+          model?: string;
+        };
+      };
+      error?: {
+        message?: string;
+      };
+    };
+
+    assert.equal(payload.error, undefined);
+    assert.equal(payload.result?.isError, undefined);
+    assert.equal(payload.result?.structuredContent?.object, "chat.completion");
+    assert.equal(payload.result?.structuredContent?.model, "diagnostics-model");
+  } finally {
+    while (cleanup.length > 0) {
+      const task = cleanup.pop();
+      if (task) {
+        await task();
+      }
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("MCP chat_with_model tool rejects unsupported extra arguments", async () => {
   const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-mcp-chat-extra-"));
   const cleanup: Array<() => Promise<void>> = [];

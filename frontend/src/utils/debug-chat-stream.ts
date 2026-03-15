@@ -15,6 +15,8 @@ import {
 type DebugStateSlice = DashboardState["debug"];
 type ReplaceTranscriptEntry = (entry: DebugTranscriptEntry) => DebugTranscriptEntry;
 const STREAM_UI_FLUSH_INTERVAL_MS = 24;
+const DEBUG_RAW_RESPONSE_CHAR_LIMIT = 256_000;
+const DEBUG_RAW_RESPONSE_TRUNCATION_MARKER = "\n...[llmproxy truncated raw stream output in the UI]";
 
 async function yieldToBrowserPaint(): Promise<void> {
   await new Promise<void>((resolve) => {
@@ -33,6 +35,35 @@ function nowMs(): number {
   }
 
   return Date.now();
+}
+
+function appendRawResponseChunk(current: string, fragment: string): string {
+  if (!fragment) {
+    return current;
+  }
+
+  if (current.length >= DEBUG_RAW_RESPONSE_CHAR_LIMIT) {
+    return current.endsWith(DEBUG_RAW_RESPONSE_TRUNCATION_MARKER)
+      ? current
+      : `${current}${DEBUG_RAW_RESPONSE_TRUNCATION_MARKER}`;
+  }
+
+  const remaining = DEBUG_RAW_RESPONSE_CHAR_LIMIT - current.length;
+  if (fragment.length <= remaining) {
+    return `${current}${fragment}`;
+  }
+
+  const visibleLength = Math.max(0, remaining - DEBUG_RAW_RESPONSE_TRUNCATION_MARKER.length);
+  return `${current}${fragment.slice(0, visibleLength)}${DEBUG_RAW_RESPONSE_TRUNCATION_MARKER}`;
+}
+
+export function truncateDebugRawText(value: string): string {
+  if (value.length <= DEBUG_RAW_RESPONSE_CHAR_LIMIT) {
+    return value;
+  }
+
+  const visibleLength = Math.max(0, DEBUG_RAW_RESPONSE_CHAR_LIMIT - DEBUG_RAW_RESPONSE_TRUNCATION_MARKER.length);
+  return `${value.slice(0, visibleLength)}${DEBUG_RAW_RESPONSE_TRUNCATION_MARKER}`;
 }
 
 function hasVisibleFunctionCallDelta(value: unknown): boolean {
@@ -151,7 +182,7 @@ export function applyNonStreamingResponse(
   assistantTurn.pending_title = "";
   applyUsageMetrics(debugState.metrics, payload?.usage, payload?.timings, choice?.finish_reason);
   debugState.usage = formatUsage(payload?.usage, payload?.timings, choice?.finish_reason);
-  debugState.rawResponse = prettyJson(payload);
+  debugState.rawResponse = truncateDebugRawText(prettyJson(payload));
   return replaceTranscriptEntry(assistantTurn);
 }
 
@@ -237,7 +268,10 @@ function processStreamBlock(
     return false;
   }
 
-  rawResponseState.text += rawResponseState.hasAny ? `\n\n${payloadText}` : payloadText;
+  rawResponseState.text = appendRawResponseChunk(
+    rawResponseState.text,
+    rawResponseState.hasAny ? `\n\n${payloadText}` : payloadText,
+  );
   rawResponseState.hasAny = true;
 
   try {

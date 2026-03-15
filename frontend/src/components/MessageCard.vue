@@ -14,6 +14,7 @@ interface MessageLike extends Record<string, unknown> {
 }
 
 const persistedReasoningState = new Map<string, boolean>();
+const MAX_PERSISTED_REASONING_STATES = 400;
 
 const props = withDefaults(defineProps<{
   message: MessageLike;
@@ -52,6 +53,23 @@ watch(
 function destroyInlineAceEditors(): void {
   while (inlineAceEditors.length > 0) {
     inlineAceEditors.pop()?.destroy();
+  }
+}
+
+function rememberReasoningState(key: string, expanded: boolean): void {
+  if (persistedReasoningState.has(key)) {
+    persistedReasoningState.delete(key);
+  }
+
+  persistedReasoningState.set(key, expanded);
+
+  while (persistedReasoningState.size > MAX_PERSISTED_REASONING_STATES) {
+    const oldestKey = persistedReasoningState.keys().next().value;
+    if (typeof oldestKey !== "string") {
+      break;
+    }
+
+    persistedReasoningState.delete(oldestKey);
   }
 }
 
@@ -100,7 +118,7 @@ function handleReasoningClick(event: Event): void {
     event.preventDefault();
     const nextExpanded = !reasoningExpanded.value;
     reasoningExpanded.value = nextExpanded;
-    persistedReasoningState.set(reasoningStateKey.value, nextExpanded);
+    rememberReasoningState(reasoningStateKey.value, nextExpanded);
   }
 }
 

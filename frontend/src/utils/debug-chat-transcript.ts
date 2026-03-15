@@ -203,16 +203,11 @@ export function normalizeDebugToolArgumentsForTransport(value: unknown): unknown
     return value ?? {};
   }
 
-  const trimmed = value.trim();
-  if (!trimmed) {
+  if (!value.trim()) {
     return {};
   }
 
-  try {
-    return JSON.parse(trimmed) as unknown;
-  } catch {
-    return trimmed;
-  }
+  return value;
 }
 
 export function extractDebugToolCalls(entry: DebugTranscriptEntry): DebugToolCallRequest[] {

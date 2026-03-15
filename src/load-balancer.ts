@@ -16,6 +16,7 @@ import { getBackendConnector, getDefaultHealthPaths } from "./backend-connectors
 import { joinUrl, toErrorMessage } from "./utils";
 import { resolveBackendHeaders } from "./config-store";
 import { buildDiagnosticReport, selectPrimaryDiagnosticIssue } from "./diagnostics";
+import { compactJsonForRetention } from "./detail-retention";
 
 interface BackendRuntime {
   config: ProxyConfig["backends"][number];
@@ -648,8 +649,8 @@ export class LoadBalancer extends EventEmitter {
   ): void {
     if (requestBody !== undefined || responseBody !== undefined) {
       this.recentRequestDetails.set(requestId, {
-        requestBody,
-        responseBody,
+        requestBody: compactJsonForRetention(requestBody),
+        responseBody: compactJsonForRetention(responseBody),
       });
     } else {
       this.recentRequestDetails.delete(requestId);
@@ -659,13 +660,13 @@ export class LoadBalancer extends EventEmitter {
   }
 
   private emitFinalRequestLogLine(requestId: string): void {
-    const detail = this.getRequestLogDetail(requestId);
-    if (!detail) {
+    const entry = this.recentRequests.find((candidate) => candidate.id === requestId);
+    if (!entry) {
       return;
     }
 
     try {
-      this.requestLogWriter(JSON.stringify(detail));
+      this.requestLogWriter(JSON.stringify(entry));
     } catch (error) {
       console.error(`Failed to write request log line for ${requestId}:`, error);
     }
@@ -882,20 +883,20 @@ function normalizeModelMetadata(value: unknown, modelId: string): JsonValue | un
   const normalized = normalizeJsonValue(value);
 
   if (isJsonObject(normalized)) {
-    return {
+    return compactJsonForRetention({
       id: modelId,
       ...normalized,
-    };
+    });
   }
 
   if (normalized === undefined) {
     return undefined;
   }
 
-  return {
+  return compactJsonForRetention({
     id: modelId,
     value: normalized,
-  };
+  });
 }
 
 function mergeModelMetadata(left: JsonValue | undefined, right: JsonValue | undefined): JsonValue | undefined {
@@ -908,10 +909,10 @@ function mergeModelMetadata(left: JsonValue | undefined, right: JsonValue | unde
   }
 
   if (isJsonObject(left) && isJsonObject(right)) {
-    return {
+    return compactJsonForRetention({
       ...left,
       ...right,
-    };
+    });
   }
 
   return right;

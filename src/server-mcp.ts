@@ -572,26 +572,72 @@ function buildMcpToolErrorResult(
   };
 }
 
-function validateMcpToolArguments(
-  tool: McpToolDefinition,
-  rawArgs: unknown,
-): McpToolArgumentValidationResult {
-  const validator = getMcpToolValidator(tool);
-  const valid = validator(rawArgs);
-
-  if (valid && isRecord(rawArgs)) {
+function parseMcpToolArgumentsPayload(rawArgs: unknown): {
+  ok: true;
+  args: unknown;
+} | {
+  ok: false;
+  details: string[];
+} {
+  if (typeof rawArgs !== "string") {
     return {
       ok: true,
       args: rawArgs,
     };
   }
 
-  const details = (validator.errors ?? []).map((error) => formatAjvValidationError(error));
+  const trimmed = rawArgs.trim();
+  if (!trimmed) {
+    return {
+      ok: true,
+      args: {},
+    };
+  }
+
+  try {
+    return {
+      ok: true,
+      args: JSON.parse(trimmed) as unknown,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      details: [`The tools/call "arguments" payload is not valid JSON: ${message}`],
+    };
+  }
+}
+
+function validateMcpToolArguments(
+  tool: McpToolDefinition,
+  rawArgs: unknown,
+): McpToolArgumentValidationResult {
+  const parsedArgsResult = parseMcpToolArgumentsPayload(rawArgs);
   const message = `The llmproxy MCP tool "${tool.name}" received invalid arguments.`;
+
+  if (!parsedArgsResult.ok) {
+    return {
+      ok: false,
+      result: buildMcpToolErrorResult(tool, "invalid_arguments", message, rawArgs, parsedArgsResult.details),
+    };
+  }
+
+  const normalizedArgs = parsedArgsResult.args;
+  const validator = getMcpToolValidator(tool);
+  const valid = validator(normalizedArgs);
+
+  if (valid && isRecord(normalizedArgs)) {
+    return {
+      ok: true,
+      args: normalizedArgs,
+    };
+  }
+
+  const details = (validator.errors ?? []).map((error) => formatAjvValidationError(error));
 
   return {
     ok: false,
-    result: buildMcpToolErrorResult(tool, "invalid_arguments", message, rawArgs, details),
+    result: buildMcpToolErrorResult(tool, "invalid_arguments", message, normalizedArgs, details),
   };
 }
 

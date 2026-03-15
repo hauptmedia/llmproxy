@@ -12,10 +12,26 @@ import { isClientRecord } from "../utils/guards";
 import { readErrorResponse } from "../utils/http";
 import { formatClientIp } from "../utils/client-ip";
 
+const REQUEST_DETAIL_CACHE_LIMIT = 24;
+
 export function useRequestDetail(
   state: DashboardState,
   onErrorToast: (title: string, message: string) => void,
 ) {
+  function storeRequestDetailInCache(detail: RequestLogDetail): void {
+    state.requestDetail.cache[detail.entry.id] = detail;
+
+    const cachedIds = Object.keys(state.requestDetail.cache);
+    while (cachedIds.length > REQUEST_DETAIL_CACHE_LIMIT) {
+      const oldestId = cachedIds.shift();
+      if (!oldestId) {
+        break;
+      }
+
+      delete state.requestDetail.cache[oldestId];
+    }
+  }
+
   function isActiveRequestId(requestId: string): boolean {
     return state.snapshot.activeConnections.some((connection) => connection.id === requestId);
   }
@@ -45,7 +61,7 @@ export function useRequestDetail(
       state.requestDetail.loading = false;
 
       if (!detail.live) {
-        state.requestDetail.cache[requestId] = detail;
+        storeRequestDetailInCache(detail);
       }
 
       return true;
@@ -111,6 +127,7 @@ export function useRequestDetail(
     state.requestDetail.requestId = "";
     state.requestDetail.tab = "request";
     state.requestDetail.error = "";
+    state.requestDetail.detail = null;
   }
 
   function applyLiveRequestDetail(detail: RequestLogDetail): void {
@@ -123,7 +140,7 @@ export function useRequestDetail(
     state.requestDetail.error = "";
 
     if (!detail.live) {
-      state.requestDetail.cache[detail.entry.id] = detail;
+      storeRequestDetailInCache(detail);
     }
   }
 

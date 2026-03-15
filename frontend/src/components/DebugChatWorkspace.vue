@@ -283,11 +283,9 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
                 />
               </div>
             </div>
-          </div>
 
-          <template #footer>
-            <div v-if="!hasTranscript" class="chat-initial-footer">
-              <div class="chat-editor-turn">
+            <div class="chat-initial-editors">
+              <div class="chat-editor-turn chat-initial-system-turn">
                 <div class="diagnostics-section-label">System Prompt</div>
                 <textarea
                   id="debug-system-prompt"
@@ -297,7 +295,7 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
                 ></textarea>
               </div>
 
-              <div class="chat-editor-turn">
+              <div class="chat-editor-turn chat-initial-prompt-turn">
                 <div class="diagnostics-section-label">Prompt</div>
                 <ChatComposer
                   :prompt="store.state.debug.prompt"
@@ -322,8 +320,11 @@ const debugTranscriptItems = computed<ConversationTranscriptItem[]>(() => {
                 />
               </div>
             </div>
+          </div>
+
+          <template #footer>
             <ChatComposer
-              v-else
+              v-if="hasTranscript"
               :prompt="store.state.debug.prompt"
               :model="store.state.debug.model"
               :enable-diagnostic-tools="store.state.debug.enableDiagnosticTools"

@@ -10,6 +10,7 @@ import { readErrorResponse } from "../utils/http";
 import {
   consumeStreamingResponse,
   applyNonStreamingResponse,
+  truncateDebugRawText,
 } from "../utils/debug-chat-stream";
 import {
   createAssistantTurn,
@@ -310,7 +311,7 @@ export function useDebugChat(
         };
 
         state.debug.lastRequestId = currentRequestId;
-        state.debug.rawRequest = prettyJson(currentPayload);
+        state.debug.rawRequest = truncateDebugRawText(prettyJson(currentPayload));
         currentAssistantTurn = await runSingleDebugAssistantRequest(
           currentPayload,
           currentAssistantTurn,

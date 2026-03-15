@@ -904,6 +904,7 @@ function renderMessageContentHtml(content: unknown): string {
 
 export function renderMessageHtml(message: Record<string, any>, index: number, options: RenderMessageOptions = {}): string {
   const role = typeof message?.role === "string" ? message.role : (options.role ?? "unknown");
+  const hasContent = hasVisibleMessageContent(message?.content);
   const reasoningLive =
     typeof message?.reasoning_content === "string" &&
     message.reasoning_content.length > 0 &&
@@ -911,13 +912,13 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
   const reasoningOnly =
     typeof message?.reasoning_content === "string" &&
     message.reasoning_content.length > 0 &&
-    !hasVisibleMessageContent(message?.content) &&
+    !hasContent &&
     !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
     !isClientRecord(message?.function_call) &&
     !Array.isArray(message?.tool_calls);
   const toolResponseOnly =
     role === "tool" &&
-    hasVisibleMessageContent(message?.content) &&
+    hasContent &&
     !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
     !isClientRecord(message?.function_call) &&
     !Array.isArray(message?.tool_calls) &&
@@ -926,7 +927,7 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
     role === "assistant" &&
     Array.isArray(message?.tool_calls) &&
     message.tool_calls.length > 0 &&
-    !hasVisibleMessageContent(message?.content) &&
+    !hasContent &&
     !(typeof message?.reasoning_content === "string" && message.reasoning_content.length > 0) &&
     !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
     !isClientRecord(message?.function_call) &&
@@ -934,7 +935,7 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
   const pendingAssistantOnly =
     role === "assistant" &&
     message?.pending === true &&
-    !hasVisibleMessageContent(message?.content) &&
+    !hasContent &&
     !(typeof message?.reasoning_content === "string" && message.reasoning_content.length > 0) &&
     !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
     !isClientRecord(message?.function_call) &&
@@ -942,11 +943,21 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
   const pendingToolOnly =
     role === "tool" &&
     message?.pending === true &&
-    !hasVisibleMessageContent(message?.content) &&
+    !hasContent &&
     !(typeof message?.reasoning_content === "string" && message.reasoning_content.length > 0) &&
     !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
     !isClientRecord(message?.function_call) &&
     !Array.isArray(message?.tool_calls);
+  const compactAssistantStackOnly =
+    role === "assistant" &&
+    !hasContent &&
+    !(typeof message?.refusal === "string" && message.refusal.length > 0) &&
+    !(typeof message?.audio === "object" && message.audio !== null) &&
+    (
+      (typeof message?.reasoning_content === "string" && message.reasoning_content.length > 0) ||
+      isClientRecord(message?.function_call) ||
+      (Array.isArray(message?.tool_calls) && message.tool_calls.length > 0)
+    );
   const metaBits: UiBadge[] = [];
 
   if (!options.hideRoleBadge && role !== "user" && role !== "assistant") {
@@ -978,7 +989,7 @@ export function renderMessageHtml(message: Record<string, any>, index: number, o
   const hasHead = Boolean(options.heading) || metaBits.length > 0;
 
   return (
-    `<article class="turn ${escapeHtml(role)}${(reasoningOnly || toolResponseOnly || toolCallOnly || pendingToolOnly) ? " compact-bubble-only" : ""}${reasoningOnly ? " reasoning-only" : ""}${(toolResponseOnly || pendingToolOnly) ? " tool-response-only" : ""}${toolCallOnly ? " tool-call-only" : ""}${(pendingAssistantOnly || pendingToolOnly) ? " pending-only" : ""}">` +
+    `<article class="turn ${escapeHtml(role)}${(reasoningOnly || toolResponseOnly || toolCallOnly || pendingToolOnly) ? " compact-bubble-only" : ""}${reasoningOnly ? " reasoning-only" : ""}${(toolResponseOnly || pendingToolOnly) ? " tool-response-only" : ""}${toolCallOnly ? " tool-call-only" : ""}${compactAssistantStackOnly ? " compact-bubble-stack-only" : ""}${(pendingAssistantOnly || pendingToolOnly) ? " pending-only" : ""}">` +
       (hasHead
         ? (
           `<div class="turn-head">` +

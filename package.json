@@ -11,7 +11,8 @@
     "dev": "node ./scripts/dev-with-dashboard.cjs",
     "start": "npm run build && node dist/index.js",
     "start:dashboard": "node ./scripts/start-with-dashboard.cjs",
-    "test": "node ./scripts/run-tests.cjs"
+    "test": "node ./scripts/run-tests.cjs",
+    "test:memory": "npm run build && node --expose-gc ./scripts/memory-soak.cjs"
   },
   "engines": {
     "node": ">=18.17.0"
