@@ -173,8 +173,8 @@ function aceModeName(language: InlineAceLanguage): string {
   return `ace/mode/${language}`;
 }
 
-function aceShouldUseWorker(language: InlineAceLanguage): boolean {
-  return language === "json";
+function aceShouldUseWorker(language: InlineAceLanguage, readOnly: boolean): boolean {
+  return language === "json" && !readOnly;
 }
 
 export async function createCodeAceEditor(
@@ -188,21 +188,24 @@ export async function createCodeAceEditor(
     maxLines?: number;
     scrollPastEnd?: number;
     padding?: number;
+    valueIsSerialized?: boolean;
   } = {},
 ): Promise<AceViewerController> {
   const ace = await loadAce();
   const language = options.language ?? "json";
+  const readOnly = options.readOnly ?? true;
+  const useWorker = aceShouldUseWorker(language, readOnly);
   await ensureAceMode(language);
 
   const editor = ace.edit(host, {
     mode: aceModeName(language),
     theme: "ace/theme/textmate",
-    readOnly: options.readOnly ?? true,
+    readOnly,
     showPrintMargin: false,
     highlightActiveLine: false,
     highlightGutterLine: false,
     showGutter: true,
-    useWorker: aceShouldUseWorker(language),
+    useWorker,
     displayIndentGuides: true,
     wrap: true,
     tabSize: 2,
@@ -216,12 +219,16 @@ export async function createCodeAceEditor(
   });
 
   editor.session.setMode(aceModeName(language));
-  editor.session.setUseWorker(aceShouldUseWorker(language));
+  editor.session.setUseWorker(useWorker);
   editor.session.setUseWrapMode(true);
   editor.session.setFoldStyle("markbeginend");
   editor.renderer.setScrollMargin(0, 12, 12, 12);
   editor.renderer.setPadding(options.padding ?? 12);
-  editor.setValue(serializeCodeAceValue(options.value, language, options.placeholder ?? ""), -1);
+  const initialValue =
+    options.valueIsSerialized && typeof options.value === "string"
+      ? options.value
+      : serializeCodeAceValue(options.value, language, options.placeholder ?? "");
+  editor.setValue(initialValue, -1);
   editor.clearSelection();
 
   let resizeObserver: ResizeObserver | null = null;
@@ -248,6 +255,7 @@ export async function createCodeAceEditor(
     },
     setReadOnly(readOnly: boolean) {
       editor.setReadOnly(readOnly);
+      editor.session.setUseWorker(aceShouldUseWorker(language, readOnly));
     },
     setValue(value: unknown, placeholder = "") {
       const nextValue = serializeCodeAceValue(value, language, placeholder);

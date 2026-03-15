@@ -37,7 +37,7 @@ const props = withDefaults(defineProps<{
 
 const hostEl = ref<HTMLElement | null>(null);
 const reasoningExpanded = ref(false);
-const inlineAceEditors: AceViewerController[] = [];
+const inlineAceEditors = new Map<HTMLElement, AceViewerController>();
 const reasoningStateKey = computed(() => String(
   props.itemKey ?? `${props.index}:${typeof props.message.role === "string" ? props.message.role : "unknown"}`,
 ));
@@ -51,9 +51,21 @@ watch(
 );
 
 function destroyInlineAceEditors(): void {
-  while (inlineAceEditors.length > 0) {
-    inlineAceEditors.pop()?.destroy();
+  for (const controller of inlineAceEditors.values()) {
+    controller.destroy();
   }
+
+  inlineAceEditors.clear();
+}
+
+function destroyInlineAceEditor(container: HTMLElement): void {
+  const controller = inlineAceEditors.get(container);
+  if (!controller) {
+    return;
+  }
+
+  controller.destroy();
+  inlineAceEditors.delete(container);
 }
 
 function rememberReasoningState(key: string, expanded: boolean): void {
@@ -73,10 +85,64 @@ function rememberReasoningState(key: string, expanded: boolean): void {
   }
 }
 
-function resizeInlineAceEditors(): void {
-  for (const controller of inlineAceEditors) {
+function resizeInlineAceEditors(scope?: Node | null): void {
+  for (const [container, controller] of inlineAceEditors) {
+    if (scope && !scope.contains(container)) {
+      continue;
+    }
+
     controller.resize();
   }
+}
+
+function isInlineAceContainerVisible(container: HTMLElement): boolean {
+  return !container.closest("details.compact-bubble-panel:not([open])");
+}
+
+async function ensureInlineAceEditor(container: HTMLElement): Promise<void> {
+  if (inlineAceEditors.has(container)) {
+    return;
+  }
+
+  const host = container.querySelector<HTMLElement>(".inline-ace-host");
+  const payload = container.querySelector<HTMLScriptElement>('script[type="application/json"]');
+  if (!host || !payload) {
+    return;
+  }
+
+  const language = normalizeInlineAceLanguage(container.dataset.aceLanguage ?? "") ?? "json";
+  const value = decodeJsonAcePayload(payload.textContent ?? "");
+  const valueIsSerialized = container.dataset.aceValueSerialized === "true";
+
+  try {
+    const controller = await createCodeAceEditor(host, {
+      value,
+      valueIsSerialized,
+      language: language as InlineAceLanguage,
+      readOnly: true,
+      scrollPastEnd: 0,
+      padding: 10,
+    });
+
+    if (!hostEl.value?.contains(container)) {
+      controller.destroy();
+      return;
+    }
+
+    inlineAceEditors.set(container, controller);
+  } catch (error) {
+    console.error("Failed to initialize inline code viewer.", error);
+  }
+}
+
+function queueInlineAceRefresh(scope?: HTMLElement | null): void {
+  window.requestAnimationFrame(() => {
+    void syncInlineAceEditors(scope ?? undefined).then(() => {
+      window.requestAnimationFrame(() => {
+        resizeInlineAceEditors(scope ?? undefined);
+      });
+    });
+  });
 }
 
 function handleReasoningToggle(event: Event): void {
@@ -86,15 +152,11 @@ function handleReasoningToggle(event: Event): void {
   }
 
   if (target.classList.contains("compact-bubble-panel-tool")) {
-    window.requestAnimationFrame(() => {
-      resizeInlineAceEditors();
-    });
+    queueInlineAceRefresh(target);
   }
 
   if (target.classList.contains("compact-bubble-panel-embedded")) {
-    window.requestAnimationFrame(() => {
-      resizeInlineAceEditors();
-    });
+    queueInlineAceRefresh(target);
   }
 }
 
@@ -122,37 +184,35 @@ function handleReasoningClick(event: Event): void {
   }
 }
 
-async function syncInlineAceEditors(): Promise<void> {
-  destroyInlineAceEditors();
+async function syncInlineAceEditors(scope?: HTMLElement): Promise<void> {
   await nextTick();
 
   if (!hostEl.value) {
+    destroyInlineAceEditors();
     return;
   }
 
-  const containers = hostEl.value.querySelectorAll<HTMLElement>('[data-inline-ace="true"]');
+  const currentContainers = new Set(hostEl.value.querySelectorAll<HTMLElement>('[data-inline-ace="true"]'));
+
+  for (const container of inlineAceEditors.keys()) {
+    if (!currentContainers.has(container)) {
+      destroyInlineAceEditor(container);
+    }
+  }
+
+  const root = scope ?? hostEl.value;
+  const containers = root.querySelectorAll<HTMLElement>('[data-inline-ace="true"]');
 
   for (const container of containers) {
-    const host = container.querySelector<HTMLElement>(".inline-ace-host");
-    const payload = container.querySelector<HTMLScriptElement>('script[type="application/json"]');
-    if (!host || !payload) {
+    if (!currentContainers.has(container)) {
       continue;
     }
 
-    const language = normalizeInlineAceLanguage(container.dataset.aceLanguage ?? "") ?? "json";
-
-    try {
-      const controller = await createCodeAceEditor(host, {
-        value: decodeJsonAcePayload(payload.textContent ?? ""),
-        language: language as InlineAceLanguage,
-        readOnly: true,
-        scrollPastEnd: 0,
-        padding: 10,
-      });
-      inlineAceEditors.push(controller);
-    } catch (error) {
-      console.error("Failed to initialize inline code viewer.", error);
+    if (!isInlineAceContainerVisible(container)) {
+      continue;
     }
+
+    await ensureInlineAceEditor(container);
   }
 }
 

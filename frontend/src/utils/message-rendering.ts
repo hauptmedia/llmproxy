@@ -345,7 +345,7 @@ function renderInlineAceHtml(
   }
 
   return (
-    `<div class="${escapeHtml(wrapperClass)}" data-inline-ace="true" data-ace-language="${escapeHtml(aceLanguage)}">` +
+    `<div class="${escapeHtml(wrapperClass)}" data-inline-ace="true" data-ace-language="${escapeHtml(aceLanguage)}" data-ace-value-serialized="true">` +
       `<script type="application/json">${encodeJsonAcePayload(serialized)}</script>` +
       `<div class="inline-ace-host"></div>` +
     `</div>`
