@@ -125,6 +125,13 @@ interface ActiveConnectionRuntime {
   cancel?: (message?: string) => void;
 }
 
+interface LlmProxyServerOptions {
+  maxSseClientBufferBytes?: number;
+  listenBacklog?: number;
+}
+
+const DEFAULT_MAX_SSE_CLIENT_BUFFER_BYTES = 1_000_000;
+
 export function isSupportedProxyRoute(method: string, pathname: string): boolean {
   if (method !== "POST") {
     return false;
@@ -140,11 +147,17 @@ export class LlmProxyServer {
   private heartbeat?: NodeJS.Timeout;
   private liveSnapshotTicker?: NodeJS.Timeout;
   private snapshotTimer?: NodeJS.Timeout;
+  private readonly maxSseClientBufferBytes: number;
+  private readonly listenBacklog?: number;
 
   public constructor(
     private readonly configStore: ConfigStore,
     private readonly loadBalancer: LoadBalancer,
-  ) {}
+    options: LlmProxyServerOptions = {},
+  ) {
+    this.maxSseClientBufferBytes = options.maxSseClientBufferBytes ?? DEFAULT_MAX_SSE_CLIENT_BUFFER_BYTES;
+    this.listenBacklog = isPositiveInteger(options.listenBacklog) ? options.listenBacklog : undefined;
+  }
 
   public async start(): Promise<void> {
     this.server = createServer((request, response) => {
@@ -158,7 +171,7 @@ export class LlmProxyServer {
     this.loadBalancer.on("snapshot", this.handleLoadBalancerSnapshot);
     this.heartbeat = setInterval(() => {
       for (const client of this.sseClients) {
-        client.write(": ping\n\n");
+        this.writeSseFrame(client, ": ping\n\n");
       }
     }, 15_000);
     this.liveSnapshotTicker = setInterval(() => {
@@ -173,10 +186,17 @@ export class LlmProxyServer {
 
     await new Promise<void>((resolve, reject) => {
       this.server?.once("error", reject);
-      this.server?.listen(port, host, () => {
+      const onListening = () => {
         this.server?.off("error", reject);
         resolve();
-      });
+      };
+
+      if (this.listenBacklog) {
+        this.server?.listen(port, host, this.listenBacklog, onListening);
+        return;
+      }
+
+      this.server?.listen(port, host, onListening);
     });
   }
 
@@ -394,11 +414,13 @@ export class LlmProxyServer {
       "x-accel-buffering": "no",
     });
 
-    response.write(`event: snapshot\ndata: ${JSON.stringify(this.getSnapshot())}\n\n`);
+    this.writeSseFrame(response, `event: snapshot\ndata: ${JSON.stringify(this.getSnapshot())}\n\n`);
     for (const requestId of this.activeConnections.keys()) {
       this.writeRequestDetailEvent(response, requestId);
     }
-    this.sseClients.add(response);
+    if (!response.destroyed && !response.writableEnded) {
+      this.sseClients.add(response);
+    }
 
     response.on("close", () => {
       this.sseClients.delete(response);
@@ -1534,12 +1556,7 @@ export class LlmProxyServer {
     const payload = `event: snapshot\ndata: ${JSON.stringify(this.getSnapshot())}\n\n`;
 
     for (const client of this.sseClients) {
-      if (client.writableEnded) {
-        this.sseClients.delete(client);
-        continue;
-      }
-
-      client.write(payload);
+      this.writeSseFrame(client, payload);
     }
   }
 
@@ -1549,11 +1566,6 @@ export class LlmProxyServer {
     }
 
     for (const client of this.sseClients) {
-      if (client.writableEnded) {
-        this.sseClients.delete(client);
-        continue;
-      }
-
       this.writeRequestDetailEvent(client, requestId);
     }
   }
@@ -1564,7 +1576,34 @@ export class LlmProxyServer {
       return;
     }
 
-    response.write(`event: request_detail\ndata: ${JSON.stringify(detail)}\n\n`);
+    this.writeSseFrame(response, `event: request_detail\ndata: ${JSON.stringify(detail)}\n\n`);
+  }
+
+  private writeSseFrame(response: ServerResponse, payload: string): void {
+    if (this.shouldDropSseClient(response)) {
+      this.dropSseClient(response);
+      return;
+    }
+
+    response.write(payload);
+    if (this.shouldDropSseClient(response)) {
+      this.dropSseClient(response);
+    }
+  }
+
+  private shouldDropSseClient(response: ServerResponse): boolean {
+    if (response.destroyed || response.writableEnded) {
+      return true;
+    }
+
+    return response.writableLength > this.maxSseClientBufferBytes;
+  }
+
+  private dropSseClient(response: ServerResponse): void {
+    this.sseClients.delete(response);
+    if (!response.destroyed && !response.writableEnded) {
+      response.destroy(new Error("Dashboard SSE client fell too far behind."));
+    }
   }
 
   private readonly handleLoadBalancerSnapshot = (): void => {

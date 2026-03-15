@@ -6,9 +6,21 @@ const props = defineProps<{
   connector: BackendSnapshot["connector"];
 }>();
 
+const connectorClass = computed(() => {
+  if (props.connector === "llama.cpp") {
+    return "connector-badge-llamacpp";
+  }
+
+  return `connector-badge-${props.connector}`;
+});
+
 const connectorLabel = computed(() => {
   if (props.connector === "ollama") {
     return "Ollama";
+  }
+
+  if (props.connector === "llama.cpp") {
+    return "llama.cpp";
   }
 
   return "OpenAI API";
@@ -19,13 +31,17 @@ const connectorTitle = computed(() => {
     return "Ollama connector using the native Ollama API surface behind llmproxy.";
   }
 
+  if (props.connector === "llama.cpp") {
+    return "llama.cpp connector using the OpenAI-compatible server routes while preserving llama.cpp-specific sampler fields.";
+  }
+
   return "OpenAI-compatible connector using the standard OpenAI API surface behind llmproxy.";
 });
 </script>
 
 <template>
   <span
-    :class="['badge', 'neutral', 'connector-badge', `connector-badge-${connector}`]"
+    :class="['badge', 'neutral', 'connector-badge', connectorClass]"
     :title="connectorTitle"
   >
     <svg
@@ -51,6 +67,20 @@ const connectorTitle = computed(() => {
         stroke-linecap="round"
       />
       <path d="M9 7.4V5.8M15 7.4V5.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+    </svg>
+    <svg
+      v-else-if="connector === 'llama.cpp'"
+      class="connector-badge-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <g fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 18.5h12" />
+        <path d="M8 18.5v-9.8c0-1.2 1-2.2 2.2-2.2h3.6c1.2 0 2.2 1 2.2 2.2v9.8" />
+        <path d="M10.2 10.4h3.6" />
+        <path d="M10.2 13.4h3.6" />
+        <path d="M12 6.5V4.2" />
+      </g>
     </svg>
     <svg
       v-else

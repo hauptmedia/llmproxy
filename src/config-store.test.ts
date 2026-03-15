@@ -78,10 +78,10 @@ test("creates a backend and writes it to config", async () => {
       id: "secondary",
       name: "Secondary",
       baseUrl: "https://ollama.example.com",
-      connector: "ollama",
+      connector: "llama.cpp",
       enabled: false,
       maxConcurrency: 2,
-      healthPath: "/api/tags",
+      healthPath: "/v1/models",
       models: ["llama3.2", "qwen2.5"],
       headers: {
         "x-cluster": "gpu-a",
@@ -91,7 +91,7 @@ test("creates a backend and writes it to config", async () => {
     });
 
     assert.equal(result.backend.id, "secondary");
-    assert.equal(result.backend.connector, "ollama");
+    assert.equal(result.backend.connector, "llama.cpp");
     assert.equal(result.backend.apiKeyConfigured, true);
     assert.equal(result.config.backends.length, 2);
 
@@ -102,10 +102,10 @@ test("creates a backend and writes it to config", async () => {
       id: "secondary",
       name: "Secondary",
       baseUrl: "https://ollama.example.com",
-      connector: "ollama",
+      connector: "llama.cpp",
       enabled: false,
       maxConcurrency: 2,
-      healthPath: "/api/tags",
+      healthPath: "/v1/models",
       allowedModels: ["llama3.2", "qwen2.5"],
       headers: {
         "x-cluster": "gpu-a",

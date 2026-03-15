@@ -67,7 +67,9 @@ export class LoadBalancer extends EventEmitter {
   private rejectedRequests = 0;
   private nextIndex = 0;
   private healthTimer?: NodeJS.Timeout;
+  private healthAbortController?: AbortController;
   private healthRefreshPromise?: Promise<void>;
+  private stopped = false;
 
   public constructor(config: ProxyConfig, options: LoadBalancerOptions = {}) {
     super();
@@ -105,26 +107,17 @@ export class LoadBalancer extends EventEmitter {
     const models = new Map<string, KnownModel>();
 
     for (const backend of this.backends) {
-      for (const model of backend.config.models ?? []) {
-        if (!model.includes("*")) {
-          models.set(model, {
-            id: model,
-            backendId: backend.config.id,
-            ownedBy: backend.config.name,
-            source: "configured",
-          });
+      for (const model of listConcreteKnownModels(backend)) {
+        if (models.has(model.id)) {
+          continue;
         }
-      }
 
-      for (const model of backend.discoveredModels) {
-        if (!model.includes("*") && !models.has(model)) {
-          models.set(model, {
-            id: model,
-            backendId: backend.config.id,
-            ownedBy: backend.config.name,
-            source: "discovered",
-          });
-        }
+        models.set(model.id, {
+          id: model.id,
+          backendId: backend.config.id,
+          ownedBy: backend.config.name,
+          source: model.source,
+        });
       }
     }
 
@@ -173,6 +166,10 @@ export class LoadBalancer extends EventEmitter {
 
     this.emitSnapshot();
     this.trimRecentRequests();
+    if (this.stopped) {
+      return;
+    }
+
     if (this.healthTimer && previousHealthIntervalMs !== nextConfig.server.healthCheckIntervalMs) {
       clearInterval(this.healthTimer);
       this.healthTimer = setInterval(() => {
@@ -183,20 +180,42 @@ export class LoadBalancer extends EventEmitter {
   }
 
   public async start(): Promise<void> {
+    this.stopped = false;
     await this.refreshHealth();
+    if (this.healthTimer) {
+      return;
+    }
+
     this.healthTimer = setInterval(() => {
       void this.refreshHealth();
     }, this.config.server.healthCheckIntervalMs);
   }
 
   public async stop(): Promise<void> {
+    this.stopped = true;
     if (this.healthTimer) {
       clearInterval(this.healthTimer);
       this.healthTimer = undefined;
     }
+
+    this.rejectQueuedRequests("Load balancer stopped.");
+
+    if (this.healthAbortController && !this.healthAbortController.signal.aborted) {
+      this.healthAbortController.abort(new Error("Load balancer stopped."));
+    }
+
+    try {
+      await this.healthRefreshPromise;
+    } catch {
+      // Ignore aborted refreshes during shutdown.
+    }
   }
 
   public async acquire(route: ProxyRouteRequest, signal?: AbortSignal): Promise<BackendLease> {
+    if (this.stopped) {
+      throw new Error("Load balancer stopped.");
+    }
+
     if (this.backends.length === 0) {
       this.recordRejectedRequest(route, "No backends configured.");
       throw new Error("No backends configured.");
@@ -499,20 +518,38 @@ export class LoadBalancer extends EventEmitter {
   }
 
   private async refreshHealth(): Promise<void> {
+    if (this.stopped) {
+      return;
+    }
+
     if (this.healthRefreshPromise) {
       return this.healthRefreshPromise;
     }
 
+    const refreshController = new AbortController();
+    this.healthAbortController = refreshController;
     this.healthRefreshPromise = (async () => {
       try {
         await Promise.all(
           this.backends.map(async (backend) => {
-            await this.refreshBackendHealth(backend);
+            if (this.stopped || refreshController.signal.aborted) {
+              return;
+            }
+
+            await this.refreshBackendHealth(backend, refreshController.signal);
           }),
         );
+
+        if (this.stopped || refreshController.signal.aborted) {
+          return;
+        }
+
         this.emitSnapshot();
         this.pumpQueue();
       } finally {
+        if (this.healthAbortController === refreshController) {
+          this.healthAbortController = undefined;
+        }
         this.healthRefreshPromise = undefined;
       }
     })();
@@ -520,7 +557,11 @@ export class LoadBalancer extends EventEmitter {
     return this.healthRefreshPromise;
   }
 
-  private async refreshBackendHealth(backend: BackendRuntime): Promise<void> {
+  private async refreshBackendHealth(backend: BackendRuntime, signal?: AbortSignal): Promise<void> {
+    if (this.stopped || signal?.aborted) {
+      return;
+    }
+
     if (!backend.config.enabled) {
       backend.healthy = false;
       backend.lastCheckedAt = new Date().toISOString();
@@ -533,6 +574,10 @@ export class LoadBalancer extends EventEmitter {
     let discoveredModelDetails = backend.discoveredModelDetails;
 
     for (const healthPath of healthPaths) {
+      if (this.stopped || signal?.aborted) {
+        return;
+      }
+
       try {
         const response = await fetchWithTimeout(
           this.fetcher,
@@ -542,7 +587,12 @@ export class LoadBalancer extends EventEmitter {
             headers: backend.resolvedHeaders,
           },
           backend.config.timeoutMs ?? 5000,
+          signal,
         );
+
+        if (this.stopped || signal?.aborted) {
+          return;
+        }
 
         if (!response.ok) {
           lastError = `${healthPath} returned HTTP ${response.status}.`;
@@ -558,8 +608,16 @@ export class LoadBalancer extends EventEmitter {
         backend.discoveredModels = discoveredModelDetails.map((entry) => entry.id);
         return;
       } catch (error) {
+        if (this.stopped || signal?.aborted) {
+          return;
+        }
+
         lastError = toErrorMessage(error);
       }
+    }
+
+    if (this.stopped || signal?.aborted) {
+      return;
     }
 
     backend.healthy = false;
@@ -594,6 +652,21 @@ export class LoadBalancer extends EventEmitter {
 
   private emitSnapshot(): void {
     this.emit("snapshot", this.getSnapshot());
+  }
+
+  private rejectQueuedRequests(message: string): void {
+    if (this.queue.length === 0) {
+      return;
+    }
+
+    const pendingRequests = this.queue.splice(0);
+    for (const pending of pendingRequests) {
+      pending.abortCleanup?.();
+      clearTimeout(pending.timeout);
+      pending.reject(new Error(message));
+    }
+
+    this.emitSnapshot();
   }
 
   private recordRejectedRequest(
@@ -743,18 +816,71 @@ function hasDiscoveredModels(backend: BackendRuntime): boolean {
   return backend.discoveredModels.length > 0 || backend.discoveredModelDetails.length > 0;
 }
 
-function pickAutomaticBackendModel(backend: BackendRuntime): string | undefined {
-  if (backend.discoveredModels.length > 0) {
-    return backend.discoveredModels[0];
+function listConcreteKnownModels(backend: BackendRuntime): Array<Pick<KnownModel, "id" | "source">> {
+  if (!backend.config.enabled || !backend.healthy) {
+    return [];
   }
 
+  const discovered = collectConcreteDiscoveredModelIds(backend);
+  if (hasDiscoveredModels(backend)) {
+    return discovered.map((id) => ({
+      id,
+      source: "discovered",
+    }));
+  }
+
+  return collectConcreteConfiguredModelIds(backend)
+    .map((id) => ({
+      id,
+      source: "configured",
+    }));
+}
+
+function collectConcreteDiscoveredModelIds(backend: BackendRuntime): string[] {
+  const discovered = new Set<string>();
+  const configuredPatterns = backend.config.models ?? [];
+
   for (const detail of backend.discoveredModelDetails) {
-    if (typeof detail.id === "string" && detail.id.length > 0) {
-      return detail.id;
+    if (
+      typeof detail.id === "string" &&
+      detail.id.length > 0 &&
+      !detail.id.includes("*") &&
+      matchesConfiguredPatterns(configuredPatterns, detail.id)
+    ) {
+      discovered.add(detail.id);
     }
   }
 
-  return backend.config.models?.find((model) => !model.includes("*"));
+  for (const model of backend.discoveredModels) {
+    if (model.length > 0 && !model.includes("*") && matchesConfiguredPatterns(configuredPatterns, model)) {
+      discovered.add(model);
+    }
+  }
+
+  return Array.from(discovered);
+}
+
+function collectConcreteConfiguredModelIds(backend: BackendRuntime): string[] {
+  return (backend.config.models ?? [])
+    .filter((model) => model.length > 0 && !model.includes("*"));
+}
+
+function pickAutomaticBackendModel(backend: BackendRuntime): string | undefined {
+  const discovered = collectConcreteDiscoveredModelIds(backend);
+  if (discovered.length > 0) {
+    return discovered[0];
+  }
+
+  if (hasDiscoveredModels(backend)) {
+    return undefined;
+  }
+
+  const configured = collectConcreteConfiguredModelIds(backend);
+  if (configured.length > 0) {
+    return configured[0];
+  }
+
+  return undefined;
 }
 
 function resolveDiscoveredBackendModel(backend: BackendRuntime, requestedModel: string): string | undefined {
@@ -788,6 +914,14 @@ function extractModelAliases(metadata: JsonValue | undefined): string[] {
 
   return metadata.aliases
     .filter((value): value is string => typeof value === "string" && value.length > 0);
+}
+
+function matchesConfiguredPatterns(patterns: string[], model: string): boolean {
+  if (patterns.length === 0) {
+    return true;
+  }
+
+  return patterns.some((pattern) => matchesPattern(pattern, model));
 }
 
 function updateAverageLatency(backend: BackendRuntime, latencyMs: number): number {
@@ -962,18 +1096,34 @@ async function fetchWithTimeout(
   url: string,
   init: RequestInit,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<Response> {
   const controller = new AbortController();
+  const abort = (reason?: unknown) => {
+    if (!controller.signal.aborted) {
+      controller.abort(reason);
+    }
+  };
   const timeout = setTimeout(() => {
-    controller.abort(new Error(`Timed out after ${timeoutMs}ms.`));
+    abort(new Error(`Timed out after ${timeoutMs}ms.`));
   }, timeoutMs);
+  const onAbort = () => {
+    abort(signal?.reason ?? new Error("Request was aborted."));
+  };
 
   try {
+    if (signal?.aborted) {
+      onAbort();
+    } else {
+      signal?.addEventListener("abort", onAbort, { once: true });
+    }
+
     return await fetcher(url, {
       ...init,
       signal: controller.signal,
     });
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener("abort", onAbort);
   }
 }

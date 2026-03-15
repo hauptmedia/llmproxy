@@ -118,13 +118,16 @@ function openModelDetail(detail: ModelDetailView | undefined): void {
                 </svg>
               </button>
               <button
-                class="button secondary small"
+                class="icon-button compact"
                 type="button"
                 title="Edit backend configuration"
                 aria-label="Edit backend configuration"
                 @click="emit('edit-backend', backend.id)"
               >
-                Edit
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"></path>
+                </svg>
               </button>
             </div>
           </td>

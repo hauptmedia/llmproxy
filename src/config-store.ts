@@ -263,6 +263,10 @@ function normalizeBackendConfig(config: Partial<BackendConfig>): BackendConfig {
 }
 
 function normalizeConnector(value: unknown): BackendConnector {
+  if (value === "llama.cpp") {
+    return "llama.cpp";
+  }
+
   return value === "ollama" ? "ollama" : "openai";
 }
 
@@ -339,7 +343,11 @@ function toBackendEditorConfig(backend: BackendConfig): BackendEditorConfig {
     id: backend.id,
     name: backend.name,
     baseUrl: backend.baseUrl,
-    connector: backend.connector === "ollama" ? "ollama" : "openai",
+    connector: backend.connector === "ollama"
+      ? "ollama"
+      : backend.connector === "llama.cpp"
+        ? "llama.cpp"
+        : "openai",
     enabled: backend.enabled,
     maxConcurrency: backend.maxConcurrency,
     healthPath: backend.healthPath,

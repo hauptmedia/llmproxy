@@ -21,8 +21,8 @@ async function main(): Promise<void> {
   process.stderr.write(`dashboard available on http://${host}:${port}${FIXED_DASHBOARD_PATH}\n`);
 
   const shutdown = async () => {
-    await server.stop();
     await loadBalancer.stop();
+    await server.stop();
     process.exit(0);
   };
 

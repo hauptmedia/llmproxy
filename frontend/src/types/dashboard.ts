@@ -37,7 +37,7 @@ export interface BackendSnapshot {
   id: string;
   name: string;
   baseUrl: string;
-  connector: "openai" | "ollama";
+  connector: "openai" | "ollama" | "llama.cpp";
   enabled: boolean;
   healthy: boolean;
   maxConcurrency: number;
@@ -165,7 +165,7 @@ export interface EditableBackendConfig {
   id: string;
   name: string;
   baseUrl: string;
-  connector: "openai" | "ollama";
+  connector: "openai" | "ollama" | "llama.cpp";
   enabled: boolean;
   maxConcurrency: number;
   healthPath?: string;
@@ -180,7 +180,7 @@ export interface BackendEditorFields {
   id: string;
   name: string;
   baseUrl: string;
-  connector: "openai" | "ollama";
+  connector: "openai" | "ollama" | "llama.cpp";
   enabled: boolean;
   maxConcurrency: string;
   healthPath: string;
@@ -300,7 +300,7 @@ export interface RequestDetailState {
 
 export interface DashboardState {
   snapshot: ProxySnapshot;
-  connectionStatus: "connecting" | "connected";
+  connectionStatus: "connecting" | "connected" | "paused";
   connectionText: string;
   models: KnownModel[];
   serverConfig: EditableServerConfig | null;

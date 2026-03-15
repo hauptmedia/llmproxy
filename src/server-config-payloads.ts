@@ -180,7 +180,7 @@ function parseOptionalStringRecord(value: unknown, fieldName: string): Record<st
   return Object.keys(record).length > 0 ? record : undefined;
 }
 
-function parseBackendConnector(value: unknown): "openai" | "ollama" {
+function parseBackendConnector(value: unknown): "openai" | "ollama" | "llama.cpp" {
   if (value === undefined || value === null || value === "openai") {
     return "openai";
   }
@@ -189,5 +189,9 @@ function parseBackendConnector(value: unknown): "openai" | "ollama" {
     return "ollama";
   }
 
-  throw new Error('"connector" must be "openai" or "ollama".');
+  if (value === "llama.cpp") {
+    return "llama.cpp";
+  }
+
+  throw new Error('"connector" must be "openai", "ollama", or "llama.cpp".');
 }

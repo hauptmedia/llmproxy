@@ -393,8 +393,9 @@ export function useBackendControls(
     }
   }
 
-  async function saveBackendEditor(): Promise<void> {
-    const { fields, mode, originalId } = state.backendEditor;
+  async function saveBackendEditor(fieldsOverride?: BackendEditorFields): Promise<void> {
+    const { mode, originalId } = state.backendEditor;
+    const fields = fieldsOverride ?? state.backendEditor.fields;
     state.backendEditor.error = "";
 
     try {

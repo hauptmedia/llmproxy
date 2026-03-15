@@ -11,6 +11,7 @@ import { BackendConfig } from "./types";
 test("uses connector-specific default health paths", () => {
   assert.deepEqual(getDefaultHealthPaths({ connector: "openai" }), ["/v1/models", "/health"]);
   assert.deepEqual(getDefaultHealthPaths({ connector: "ollama" }), ["/api/tags", "/v1/models"]);
+  assert.deepEqual(getDefaultHealthPaths({ connector: "llama.cpp" }), ["/v1/models", "/health"]);
   assert.deepEqual(getDefaultHealthPaths({ connector: "ollama", healthPath: "/readyz" }), ["/readyz"]);
 });
 
@@ -213,4 +214,121 @@ test("routes Ollama chat completions to the native /api/chat endpoint", () => {
 
   assert.equal(plan.pathAndSearch, "/api/chat");
   assert.equal(plan.responseMode, "ollama-ndjson");
+});
+
+test("rewrites legacy OpenAI chat fields before forwarding chat requests", () => {
+  const backend: BackendConfig = {
+    id: "openai-test",
+    name: "OpenAI Test",
+    baseUrl: "https://api.openai.com",
+    connector: "openai",
+    enabled: true,
+    maxConcurrency: 1,
+  };
+
+  const plan = buildBackendRequestPlan(
+    backend,
+    "POST",
+    "/v1/chat/completions",
+    "",
+    Buffer.from("{}"),
+    {
+      model: "gpt-4.1-mini",
+      messages: [{ role: "user", content: "Hi" }],
+      stream: false,
+      temperature: 0.7,
+      top_p: 0.95,
+      top_k: 40,
+      min_p: 0.05,
+      repeat_penalty: 1.1,
+      max_tokens: 256,
+    },
+    true,
+  );
+
+  const payload = JSON.parse((plan.body ?? Buffer.from("{}")).toString("utf8")) as Record<string, unknown>;
+
+  assert.equal(plan.pathAndSearch, "/v1/chat/completions");
+  assert.equal(plan.responseMode, "openai-sse");
+  assert.equal(payload.stream, true);
+  assert.equal(payload.temperature, 0.7);
+  assert.equal(payload.top_p, 0.95);
+  assert.equal(payload.max_completion_tokens, 256);
+  assert.equal("max_tokens" in payload, false);
+  assert.equal("top_k" in payload, false);
+  assert.equal("min_p" in payload, false);
+  assert.equal("repeat_penalty" in payload, false);
+});
+
+test("preserves explicit max_completion_tokens for OpenAI chat requests", () => {
+  const backend: BackendConfig = {
+    id: "openai-test",
+    name: "OpenAI Test",
+    baseUrl: "https://api.openai.com",
+    connector: "openai",
+    enabled: true,
+    maxConcurrency: 1,
+  };
+
+  const plan = buildBackendRequestPlan(
+    backend,
+    "POST",
+    "/v1/chat/completions",
+    "",
+    Buffer.from("{}"),
+    {
+      model: "gpt-5-mini",
+      messages: [{ role: "user", content: "Hi" }],
+      stream: false,
+      max_tokens: 256,
+      max_completion_tokens: 128,
+    },
+    false,
+  );
+
+  const payload = JSON.parse((plan.body ?? Buffer.from("{}")).toString("utf8")) as Record<string, unknown>;
+
+  assert.equal(plan.responseMode, "raw");
+  assert.equal(payload.max_completion_tokens, 128);
+  assert.equal("max_tokens" in payload, false);
+});
+
+test("preserves llama.cpp sampler fields on the OpenAI-compatible chat route", () => {
+  const backend: BackendConfig = {
+    id: "llamacpp-test",
+    name: "llama.cpp Test",
+    baseUrl: "http://127.0.0.1:8081",
+    connector: "llama.cpp",
+    enabled: true,
+    maxConcurrency: 1,
+  };
+
+  const plan = buildBackendRequestPlan(
+    backend,
+    "POST",
+    "/v1/chat/completions",
+    "",
+    Buffer.from("{}"),
+    {
+      model: "qwen-local",
+      messages: [{ role: "user", content: "Hi" }],
+      stream: false,
+      temperature: 0.7,
+      top_p: 0.95,
+      top_k: 40,
+      min_p: 0.05,
+      repeat_penalty: 1.1,
+      max_tokens: 256,
+    },
+    true,
+  );
+
+  const payload = JSON.parse((plan.body ?? Buffer.from("{}")).toString("utf8")) as Record<string, unknown>;
+
+  assert.equal(plan.pathAndSearch, "/v1/chat/completions");
+  assert.equal(plan.responseMode, "openai-sse");
+  assert.equal(payload.stream, true);
+  assert.equal(payload.top_k, 40);
+  assert.equal(payload.min_p, 0.05);
+  assert.equal(payload.repeat_penalty, 1.1);
 });

@@ -385,6 +385,11 @@
     @apply bg-amber-600;
   }
 
+  .brand-connection-indicator.paused .connection-dot {
+    background: #78716c;
+    box-shadow: 0 0 0 3px rgba(168, 162, 158, 0.16);
+  }
+
   .brand-connection-indicator.disconnected .connection-dot {
     @apply bg-red-700;
   }
@@ -1156,10 +1161,6 @@
     @apply inline-flex;
   }
 
-  .backend-action-content .button {
-    @apply inline-flex items-center justify-center;
-  }
-
   .backend-number-cell {
     @apply text-center align-middle;
   }
@@ -1328,6 +1329,12 @@
     color: #9a3412;
     border-color: rgba(154, 52, 18, 0.18);
     background: rgba(255, 237, 213, 0.94);
+  }
+
+  .connector-badge-llamacpp {
+    color: #1d4ed8;
+    border-color: rgba(29, 78, 216, 0.18);
+    background: rgba(239, 246, 255, 0.94);
   }
 
   .inline-toggle,
@@ -1775,8 +1782,11 @@
   }
 
   .request-actions .icon-button,
+  .backend-action-content .icon-button,
   .log-action-content .icon-button,
   .conversation-surface-actions .icon-button,
+  .backend-editor-dialog .panel-header .icon-button,
+  .server-editor-dialog .panel-header .icon-button,
   .config-panel-header .icon-button,
   .config-section-head .icon-button,
   .chat-composer-settings .icon-button {
@@ -1789,8 +1799,11 @@
   }
 
   .request-actions .icon-button:hover:not(:disabled),
+  .backend-action-content .icon-button:hover:not(:disabled),
   .log-action-content .icon-button:hover:not(:disabled),
   .conversation-surface-actions .icon-button:hover:not(:disabled),
+  .backend-editor-dialog .panel-header .icon-button:hover:not(:disabled),
+  .server-editor-dialog .panel-header .icon-button:hover:not(:disabled),
   .config-panel-header .icon-button:hover:not(:disabled),
   .config-section-head .icon-button:hover:not(:disabled),
   .chat-composer-settings .icon-button:hover:not(:disabled) {
@@ -1803,8 +1816,11 @@
   }
 
   .request-actions .icon-button.active,
+  .backend-action-content .icon-button.active,
   .log-action-content .icon-button.active,
   .conversation-surface-actions .icon-button.active,
+  .backend-editor-dialog .panel-header .icon-button.active,
+  .server-editor-dialog .panel-header .icon-button.active,
   .config-panel-header .icon-button.active,
   .config-section-head .icon-button.active,
   .chat-composer-settings .icon-button.active {
@@ -1817,8 +1833,11 @@
   }
 
   .request-actions .icon-button.danger,
+  .backend-action-content .icon-button.danger,
   .log-action-content .icon-button.danger,
   .conversation-surface-actions .icon-button.danger,
+  .backend-editor-dialog .panel-header .icon-button.danger,
+  .server-editor-dialog .panel-header .icon-button.danger,
   .config-panel-header .icon-button.danger,
   .config-section-head .icon-button.danger,
   .chat-composer-settings .icon-button.danger {
@@ -1831,8 +1850,11 @@
   }
 
   .request-actions .icon-button.danger:hover:not(:disabled),
+  .backend-action-content .icon-button.danger:hover:not(:disabled),
   .log-action-content .icon-button.danger:hover:not(:disabled),
   .conversation-surface-actions .icon-button.danger:hover:not(:disabled),
+  .backend-editor-dialog .panel-header .icon-button.danger:hover:not(:disabled),
+  .server-editor-dialog .panel-header .icon-button.danger:hover:not(:disabled),
   .config-panel-header .icon-button.danger:hover:not(:disabled),
   .config-section-head .icon-button.danger:hover:not(:disabled),
   .chat-composer-settings .icon-button.danger:hover:not(:disabled) {
@@ -3683,7 +3705,7 @@
     grid-template-rows: minmax(0, 1fr);
     align-items: stretch;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .model-info-dialog {
@@ -3692,6 +3714,17 @@
 
   .backend-editor-dialog {
     max-width: min(1120px, calc(100vw - 32px));
+  }
+
+  .backend-editor-overlay {
+    background: rgba(28, 25, 23, 0.18);
+    backdrop-filter: none;
+  }
+
+  .backend-editor-dialog {
+    box-shadow: 0 18px 44px rgba(120, 53, 15, 0.14);
+    backdrop-filter: none;
+    contain: layout paint;
   }
 
   .server-editor-dialog {
@@ -3791,6 +3824,13 @@
     overflow: hidden;
     background-clip: padding-box;
     isolation: isolate;
+  }
+
+  .request-detail-inspector-card {
+    @apply border border-amber-900/10 bg-white/75 shadow-2xl backdrop-blur-xl;
+    border-radius: 1.75rem;
+    background-image: linear-gradient(180deg, rgba(255, 252, 247, 0.88), rgba(255, 248, 240, 0.78));
+    overflow: visible;
   }
 
   .request-detail-conversation-shell {

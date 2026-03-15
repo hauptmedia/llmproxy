@@ -64,6 +64,7 @@ onBeforeUnmount(() => {
 watch(
   currentPage,
   (page) => {
+    store.setLiveFeedPaused(page === "config");
     document.title = `llmproxy - ${getPageTitle(page)}`;
   },
   { immediate: true },

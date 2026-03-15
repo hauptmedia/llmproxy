@@ -1,4 +1,4 @@
-import { computed, readonly, ref, watch } from "vue";
+import { computed, readonly, ref, shallowRef, watch } from "vue";
 import type {
   DiagnosticPromptDefinition,
   DiagnosticsToolDefinition,
@@ -8,9 +8,9 @@ import { listMcpManifest } from "../utils/diagnostics-mcp";
 import { useDashboardStore } from "./useDashboardStore";
 
 const loadingCapabilitiesState = ref(false);
-const toolDefinitionsState = ref<DiagnosticsToolDefinition[]>([]);
-const promptDefinitionsState = ref<DiagnosticPromptDefinition[]>([]);
-const serviceDefinitionsState = ref<McpServiceDefinition[]>([]);
+const toolDefinitionsState = shallowRef<DiagnosticsToolDefinition[]>([]);
+const promptDefinitionsState = shallowRef<DiagnosticPromptDefinition[]>([]);
+const serviceDefinitionsState = shallowRef<McpServiceDefinition[]>([]);
 const endpointUrlState = ref(`${window.location.origin}/mcp`);
 
 let capabilitiesLoaded = false;
@@ -93,8 +93,6 @@ export function useDiagnosticsCapabilities() {
         capabilitiesLoaded = false;
         return;
       }
-
-      void loadCapabilities();
     },
     { immediate: true },
   );

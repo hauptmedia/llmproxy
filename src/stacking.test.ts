@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { createServer, IncomingMessage, Server, ServerResponse } from "node:http";
+import { createServer, get as httpGet, IncomingMessage, Server, ServerResponse } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -563,6 +563,9 @@ async function startMockSlowStreamingBackend(
 async function startRouter(
   config: ProxyConfig,
   configPath: string,
+  serverOptions?: {
+    maxSseClientBufferBytes?: number;
+  },
 ): Promise<{
   loadBalancer: LoadBalancer;
   server: LlmProxyServer;
@@ -572,7 +575,7 @@ async function startRouter(
   const loadBalancer = new LoadBalancer(config);
   await loadBalancer.start();
 
-  const server = new LlmProxyServer(configStore, loadBalancer);
+  const server = new LlmProxyServer(configStore, loadBalancer, serverOptions);
   await server.start();
 
   return { loadBalancer, server };
@@ -1289,7 +1292,7 @@ test("ollama connector keeps the client surface OpenAI-compatible", async (t) =>
   });
 });
 
-test("proxy preserves max_tokens and tool calls for non-streaming chat clients", async (t) => {
+test("proxy rewrites legacy max_tokens for OpenAI-compatible non-streaming chat clients", async (t) => {
   const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-tool-flow-"));
   const receivedPayloads: Array<Record<string, unknown>> = [];
   const cleanup: Array<() => Promise<void>> = [];
@@ -1494,7 +1497,8 @@ test("proxy preserves max_tokens and tool calls for non-streaming chat clients",
 
   assert.equal(receivedPayloads.length, 1);
   assert.equal(receivedPayloads[0]?.stream, true);
-  assert.equal(receivedPayloads[0]?.max_tokens, 777);
+  assert.equal(receivedPayloads[0]?.max_completion_tokens, 777);
+  assert.equal("max_tokens" in receivedPayloads[0]!, false);
   assert.equal(Array.isArray(receivedPayloads[0]?.tools), true);
   assert.equal((receivedPayloads[0]?.tools as unknown[]).length, 2);
 });
@@ -1844,6 +1848,234 @@ test("dashboard SSE streams live request_detail events before and after completi
     detailEvents[detailEvents.length - 1]?.responseBody?.choices?.[0]?.message?.content ?? "",
     /Streaming response\./,
   );
+});
+
+test("dashboard SSE clients are released after disconnect churn", async (t) => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-sse-churn-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  t.after(async () => {
+    for (const entry of cleanup.reverse()) {
+      await entry();
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  const mockPort = await getFreePort();
+  const routerPort = await getFreePort();
+  const streamModes: boolean[] = [];
+
+  const mockServer = await startMockOpenAiBackend(mockPort, streamModes);
+  cleanup.push(async () => {
+    await new Promise<void>((resolve, reject) => {
+      mockServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  });
+
+  const config: ProxyConfig = {
+    server: {
+      host: "127.0.0.1",
+      port: routerPort,
+      requestTimeoutMs: 15_000,
+      queueTimeoutMs: 2_000,
+      healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
+      mcpServerEnabled: true,
+    },
+    backends: [
+      {
+        id: "mock-sse-churn-upstream",
+        name: "mock sse churn upstream",
+        baseUrl: `http://127.0.0.1:${mockPort}`,
+        enabled: true,
+        maxConcurrency: 1,
+        healthPath: "/v1/models",
+        models: ["mock-stack-model"],
+      },
+    ],
+  };
+
+  const router = await startRouter(config, path.join(tempDir, "sse-churn-router.config.json"));
+  cleanup.push(async () => {
+    await router.server.stop();
+    await router.loadBalancer.stop();
+  });
+
+  const baseUrl = `http://127.0.0.1:${routerPort}`;
+  await waitForHealthyBackend(baseUrl, "mock-sse-churn-upstream");
+
+  const connections = await Promise.all(
+    Array.from({ length: 40 }, async () => {
+      const controller = new AbortController();
+      const response = await fetch(`${baseUrl}/api/events`, {
+        signal: controller.signal,
+      });
+      assert.equal(response.status, 200);
+      return {
+        controller,
+        reader: response.body?.getReader(),
+      };
+    }),
+  );
+
+  const serverInternals = router.server as unknown as {
+    sseClients: Set<unknown>;
+  };
+  const connectedDeadline = Date.now() + 800;
+  while (Date.now() < connectedDeadline && serverInternals.sseClients.size < connections.length) {
+    await delay(20);
+  }
+
+  assert.equal(serverInternals.sseClients.size, connections.length);
+
+  await Promise.allSettled(connections.map(async ({ controller, reader }) => {
+    controller.abort();
+    if (reader) {
+      await reader.cancel().catch(() => undefined);
+    }
+  }));
+
+  const disconnectedDeadline = Date.now() + 800;
+  while (Date.now() < disconnectedDeadline && serverInternals.sseClients.size !== 0) {
+    await delay(20);
+  }
+
+  assert.equal(serverInternals.sseClients.size, 0);
+});
+
+test("dashboard SSE drops stalled clients before buffers grow unbounded", async (t) => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-sse-backpressure-"));
+  const cleanup: Array<() => Promise<void>> = [];
+
+  t.after(async () => {
+    for (const entry of cleanup.reverse()) {
+      await entry();
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  const mockPort = await getFreePort();
+  const routerPort = await getFreePort();
+
+  const mockServer = await startMockSlowStreamingBackend(mockPort);
+  cleanup.push(async () => {
+    await new Promise<void>((resolve, reject) => {
+      mockServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  });
+
+  const config: ProxyConfig = {
+    server: {
+      host: "127.0.0.1",
+      port: routerPort,
+      requestTimeoutMs: 15_000,
+      queueTimeoutMs: 2_000,
+      healthCheckIntervalMs: 60_000,
+      recentRequestLimit: 1000,
+      mcpServerEnabled: true,
+    },
+    backends: [
+      {
+        id: "mock-sse-backpressure-upstream",
+        name: "mock sse backpressure upstream",
+        baseUrl: `http://127.0.0.1:${mockPort}`,
+        enabled: true,
+        maxConcurrency: 2,
+        healthPath: "/v1/models",
+        models: ["mock-live-model"],
+      },
+    ],
+  };
+
+  const router = await startRouter(
+    config,
+    path.join(tempDir, "sse-backpressure-router.config.json"),
+    { maxSseClientBufferBytes: 12_000 },
+  );
+  cleanup.push(async () => {
+    await router.server.stop();
+    await router.loadBalancer.stop();
+  });
+
+  const baseUrl = `http://127.0.0.1:${routerPort}`;
+  await waitForHealthyBackend(baseUrl, "mock-sse-backpressure-upstream");
+
+  const stalledConnection = await new Promise<{
+    request: ReturnType<typeof httpGet>;
+    response: IncomingMessage;
+  }>((resolve, reject) => {
+    const request = httpGet(`${baseUrl}/api/events`, (response) => {
+      response.pause();
+      resolve({ request, response });
+    });
+
+    request.once("error", reject);
+  });
+
+  cleanup.push(async () => {
+    stalledConnection.request.destroy();
+    stalledConnection.response.destroy();
+  });
+
+  const serverInternals = router.server as unknown as {
+    sseClients: Set<unknown>;
+  };
+  const connectedDeadline = Date.now() + 800;
+  while (Date.now() < connectedDeadline && serverInternals.sseClients.size !== 1) {
+    await delay(20);
+  }
+
+  assert.equal(serverInternals.sseClients.size, 1);
+
+  await Promise.all(Array.from({ length: 4 }, (_, index) => fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "mock-live-model",
+      stream: true,
+      messages: [
+        {
+          role: "system",
+          content: `system-${index}-` + "s".repeat(12_000),
+        },
+        {
+          role: "user",
+          content: `user-${index}-` + "u".repeat(12_000),
+        },
+      ],
+    }),
+  }).then(async (response) => {
+    try {
+      await response.text();
+    } catch {
+      // The proxy can terminate streaming responses abruptly when the upstream fails.
+    }
+  })));
+
+  const droppedDeadline = Date.now() + 4_000;
+  while (Date.now() < droppedDeadline && serverInternals.sseClients.size > 0) {
+    await delay(20);
+  }
+
+  assert.equal(serverInternals.sseClients.size, 0);
 });
 
 test("cancelled requests retain the partial streamed response in request history", async (t) => {

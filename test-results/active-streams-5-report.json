@@ -1,0 +1,151 @@
+{
+  "ok": true,
+  "config": {
+    "sampleIntervalMs": 500,
+    "backendCount": 4,
+    "mode": "active-streams",
+    "requestedConnections": 5,
+    "minTokens": 1000,
+    "maxTokens": 2000
+  },
+  "memory": {
+    "baseline": {
+      "heapUsedMb": 9,
+      "rssMb": 75.6,
+      "externalMb": 3.6,
+      "arrayBuffersMb": 0.1
+    },
+    "final": {
+      "heapUsedMb": 10.5,
+      "rssMb": 81.7,
+      "externalMb": 3.6,
+      "arrayBuffersMb": 0.1
+    },
+    "peakHeapMb": 14.1,
+    "peakRssMb": 82.2,
+    "heapGrowthMb": 1.5
+  },
+  "load": {
+    "clientStats": {
+      "operations": {
+        "stream_fixed": 5
+      },
+      "results": {
+        "success": 5
+      },
+      "statusCodes": {
+        "200": 5
+      },
+      "errors": {},
+      "bytesReceived": 72203,
+      "streamChunks": 130,
+      "requestIds": [
+        "f511a93a-1170-4837-b9a7-9f0266ef5f34",
+        "b45dcce6-1a67-40ca-b988-415649f13452",
+        "292656a2-4673-4e3c-a34a-4288b290208f",
+        "1e703db8-abad-4203-8afc-f40e43938517",
+        "1f8f012c-3783-4e3f-aa81-e7975b0ba67c"
+      ]
+    },
+    "maxQueueDepth": 0,
+    "maxActiveConnections": 5,
+    "peakQueuedConnections": 0,
+    "peakConnectedConnections": 0,
+    "peakStreamingConnections": 5,
+    "retainedDetailBytes": 167756,
+    "retainedRequestCount": 5,
+    "recentRequestLimit": 64,
+    "peakSseBufferedBytes": 0,
+    "finalSseClientCount": 0,
+    "requestedConnections": 5,
+    "tokenTargets": {
+      "min": 1142,
+      "max": 1754,
+      "average": 1318.8
+    }
+  },
+  "backendStats": {
+    "stream-bulk-openai-1": {
+      "connector": "openai",
+      "profile": "stream-bulk-openai-1",
+      "requests": 2,
+      "healthChecks": 1,
+      "healthFailures": 0,
+      "scenarios": {
+        "long": 2,
+        "stream_chunks": 50
+      }
+    },
+    "stream-bulk-openai-2": {
+      "connector": "openai",
+      "profile": "stream-bulk-openai-2",
+      "requests": 1,
+      "healthChecks": 1,
+      "healthFailures": 0,
+      "scenarios": {
+        "long": 1,
+        "stream_chunks": 25
+      }
+    },
+    "stream-bulk-openai-3": {
+      "connector": "openai",
+      "profile": "stream-bulk-openai-3",
+      "requests": 1,
+      "healthChecks": 1,
+      "healthFailures": 0,
+      "scenarios": {
+        "long": 1,
+        "stream_chunks": 25
+      }
+    },
+    "stream-bulk-openai-4": {
+      "connector": "openai",
+      "profile": "stream-bulk-openai-4",
+      "requests": 1,
+      "healthChecks": 1,
+      "healthFailures": 0,
+      "scenarios": {
+        "long": 1,
+        "stream_chunks": 25
+      }
+    }
+  },
+  "samples": [
+    {
+      "elapsedMs": 515,
+      "heapUsedMb": 12,
+      "rssMb": 81.9,
+      "externalMb": 4.5,
+      "arrayBuffersMb": 1,
+      "activeConnections": 5,
+      "queuedConnections": 0,
+      "connectedConnections": 0,
+      "streamingConnections": 5,
+      "queueDepth": 0,
+      "activeSseClients": 0,
+      "sseBufferedBytes": 0,
+      "retainedDetailBytes": 0,
+      "retainedRequestCount": 0,
+      "totalClientBytesReceived": 29841,
+      "clientStreamChunks": 50
+    },
+    {
+      "elapsedMs": 1017,
+      "heapUsedMb": 14.1,
+      "rssMb": 82.2,
+      "externalMb": 4.7,
+      "arrayBuffersMb": 1.1,
+      "activeConnections": 5,
+      "queuedConnections": 0,
+      "connectedConnections": 0,
+      "streamingConnections": 5,
+      "queueDepth": 0,
+      "activeSseClients": 0,
+      "sseBufferedBytes": 0,
+      "retainedDetailBytes": 0,
+      "retainedRequestCount": 0,
+      "totalClientBytesReceived": 62407,
+      "clientStreamChunks": 105
+    }
+  ]
+}

@@ -339,6 +339,58 @@ test("auto selects the first free backend with a concrete model", async () => {
   await balancer.stop();
 });
 
+test("auto skips discovered models that are not allowed by the whitelist", async () => {
+  const config: ProxyConfig = {
+    server: {
+      ...TEST_CONFIG.server,
+      port: 4008,
+    },
+    backends: [
+      {
+        id: "auto-whitelist",
+        name: "Auto Whitelist",
+        baseUrl: "http://127.0.0.1:9700",
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["allowed-*"],
+      },
+    ],
+  };
+
+  const balancer = new LoadBalancer(config, {
+    fetcher: async () => jsonResponse({
+      object: "list",
+      data: [
+        { id: "blocked-model" },
+        { id: "allowed-model" },
+      ],
+    }),
+  });
+
+  await balancer.start();
+
+  const lease = await balancer.acquire({
+    id: "req-auto-whitelist",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "auto",
+    stream: true,
+  });
+
+  assert.equal(lease.backend.id, "auto-whitelist");
+  assert.equal(lease.selectedModel, "allowed-model");
+
+  lease.release({
+    outcome: "success",
+    latencyMs: 25,
+    statusCode: 200,
+    queuedMs: lease.queueMs,
+  });
+
+  await balancer.stop();
+});
+
 test("missing model selects the first free backend with a concrete model", async () => {
   const config: ProxyConfig = {
     server: {
@@ -930,6 +982,79 @@ test("memory retention stays bounded under many large completed requests", async
   assert.ok(retainedBytes < 1_200_000);
 });
 
+test("stop rejects queued acquires and clears the queue immediately", async () => {
+  const balancer = new LoadBalancer(TEST_CONFIG, {
+    fetcher: async () => jsonResponse({ object: "list", data: [] }),
+  });
+
+  const firstLease = await balancer.acquire({
+    id: "req-stop-first",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "chat-local",
+    stream: true,
+  });
+
+  const queuedLeasePromise = balancer.acquire({
+    id: "req-stop-queued",
+    receivedAt: Date.now(),
+    method: "POST",
+    path: "/v1/chat/completions",
+    model: "chat-local",
+    stream: true,
+  });
+
+  await delay(50);
+  const rejection = assert.rejects(queuedLeasePromise, /Load balancer stopped\./);
+  await balancer.stop();
+  await rejection;
+
+  firstLease.release({
+    outcome: "cancelled",
+    latencyMs: 10,
+    queuedMs: firstLease.queueMs,
+    error: "Stopped during test.",
+  });
+
+  assert.equal(balancer.getSnapshot().queueDepth, 0);
+});
+
+test("stop aborts in-flight health refreshes", async () => {
+  let fetchCalls = 0;
+  let abortedCalls = 0;
+
+  const balancer = new LoadBalancer(TEST_CONFIG, {
+    fetcher: async (_input, init) => {
+      fetchCalls += 1;
+      const signal = init?.signal;
+
+      return await new Promise<Response>((_resolve, reject) => {
+        const onAbort = () => {
+          abortedCalls += 1;
+          reject(signal?.reason instanceof Error ? signal.reason : new Error("Health check aborted."));
+        };
+
+        if (signal?.aborted) {
+          onAbort();
+          return;
+        }
+
+        signal?.addEventListener("abort", onAbort, { once: true });
+      });
+    },
+  });
+
+  const deadline = Date.now() + 500;
+  while (Date.now() < deadline && fetchCalls < TEST_CONFIG.backends.length) {
+    await delay(10);
+  }
+
+  assert.equal(fetchCalls, TEST_CONFIG.backends.length);
+  await balancer.stop();
+  assert.equal(abortedCalls, fetchCalls);
+});
+
 test("applies health check interval changes without restarting the load balancer", async () => {
   let healthChecks = 0;
   const balancer = new LoadBalancer({
@@ -964,4 +1089,95 @@ test("applies health check interval changes without restarting the load balancer
     healthChecks > baselineChecks,
     `expected health checks to increase after interval update, got ${baselineChecks} -> ${healthChecks}`,
   );
+});
+
+test("listKnownModels only exposes models that are currently routable", async () => {
+  const config: ProxyConfig = {
+    server: {
+      ...TEST_CONFIG.server,
+      port: 4007,
+    },
+    backends: [
+      {
+        id: "discovered-backend",
+        name: "Discovered Backend",
+        baseUrl: "http://127.0.0.1:9600",
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["live-*"],
+      },
+      {
+        id: "configured-fallback",
+        name: "Configured Fallback",
+        baseUrl: "http://127.0.0.1:9601",
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["configured-only", "*"],
+      },
+      {
+        id: "disabled-backend",
+        name: "Disabled Backend",
+        baseUrl: "http://127.0.0.1:9602",
+        enabled: false,
+        maxConcurrency: 1,
+        models: ["disabled-model"],
+      },
+      {
+        id: "unhealthy-backend",
+        name: "Unhealthy Backend",
+        baseUrl: "http://127.0.0.1:9603",
+        enabled: true,
+        maxConcurrency: 1,
+        models: ["unhealthy-model"],
+      },
+    ],
+  };
+
+  const balancer = new LoadBalancer(config, {
+    fetcher: async (input) => {
+      const url = new URL(
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url,
+      );
+
+      if (url.port === "9600") {
+        return jsonResponse({
+          object: "list",
+          data: [{ id: "hidden-model" }, { id: "live-model" }],
+        });
+      }
+
+      if (url.port === "9601") {
+        return jsonResponse({ status: "ok" });
+      }
+
+      if (url.port === "9603") {
+        return new Response("upstream failed", { status: 500 });
+      }
+
+      return jsonResponse({ status: "ok" });
+    },
+  });
+
+  await balancer.start();
+
+  assert.deepEqual(balancer.listKnownModels(), [
+    {
+      id: "configured-only",
+      backendId: "configured-fallback",
+      ownedBy: "Configured Fallback",
+      source: "configured",
+    },
+    {
+      id: "live-model",
+      backendId: "discovered-backend",
+      ownedBy: "Discovered Backend",
+      source: "discovered",
+    },
+  ]);
+
+  await balancer.stop();
 });

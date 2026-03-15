@@ -15,7 +15,15 @@ export interface SplitJsonLinesResult {
 }
 
 export function getBackendConnector(backend: Pick<BackendConfig, "connector">): BackendConnector {
-  return backend.connector === "ollama" ? "ollama" : "openai";
+  if (backend.connector === "ollama") {
+    return "ollama";
+  }
+
+  if (backend.connector === "llama.cpp") {
+    return "llama.cpp";
+  }
+
+  return "openai";
 }
 
 export function getDefaultHealthPaths(backend: Pick<BackendConfig, "connector" | "healthPath">): string[] {
@@ -40,6 +48,10 @@ export function buildBackendRequestPlan(
   forceStreaming: boolean,
 ): BackendRequestPlan {
   const pathAndSearch = `${pathname}${search}`;
+  const normalizedParsedBody =
+    getBackendConnector(backend) === "openai" && method === "POST" && pathname === "/v1/chat/completions"
+      ? sanitizeOpenAiChatRequestBody(parsedBody)
+      : parsedBody;
 
   if (getBackendConnector(backend) === "ollama" && method === "POST" && pathname === "/v1/chat/completions") {
     return {
@@ -49,17 +61,17 @@ export function buildBackendRequestPlan(
     };
   }
 
-  if (forceStreaming && parsedBody) {
+  if (forceStreaming && normalizedParsedBody) {
     return {
       pathAndSearch,
-      body: buildStreamingRequestBody(parsedBody),
+      body: buildStreamingRequestBody(normalizedParsedBody),
       responseMode: "openai-sse",
     };
   }
 
   return {
     pathAndSearch,
-    body: rawBody.length > 0 ? rawBody : undefined,
+    body: normalizedParsedBody ? Buffer.from(JSON.stringify(normalizedParsedBody)) : (rawBody.length > 0 ? rawBody : undefined),
     responseMode: "raw",
   };
 }
@@ -540,4 +552,23 @@ function normalizeJsonValue(value: unknown): JsonValue | undefined {
 
 function isRecord(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function sanitizeOpenAiChatRequestBody(
+  parsedBody: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!parsedBody) {
+    return parsedBody;
+  }
+
+  const sanitized = { ...parsedBody };
+  if (!("max_completion_tokens" in sanitized) && "max_tokens" in sanitized) {
+    sanitized.max_completion_tokens = sanitized.max_tokens;
+  }
+
+  delete sanitized.max_tokens;
+  delete sanitized.top_k;
+  delete sanitized.min_p;
+  delete sanitized.repeat_penalty;
+  return sanitized;
 }

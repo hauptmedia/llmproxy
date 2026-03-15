@@ -39,7 +39,15 @@ export function backendStatusError(backend: BackendSnapshot): string {
 }
 
 export function connectorLabel(connector: BackendSnapshot["connector"]): string {
-  return connector === "ollama" ? "Ollama" : "OpenAI-compatible";
+  if (connector === "ollama") {
+    return "Ollama";
+  }
+
+  if (connector === "llama.cpp") {
+    return "llama.cpp";
+  }
+
+  return "OpenAI-compatible";
 }
 
 export function recentBackendRequests(

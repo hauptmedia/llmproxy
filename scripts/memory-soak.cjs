@@ -146,6 +146,23 @@ function heapUsedMb() {
   return Math.round((process.memoryUsage().heapUsed / (1024 * 1024)) * 10) / 10;
 }
 
+async function delay(milliseconds) {
+  await new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitForCondition(check, timeoutMs, message) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (check()) {
+      return;
+    }
+
+    await delay(20);
+  }
+
+  throw new Error(message);
+}
+
 async function main() {
   const tempDir = await mkdtemp(path.join(tmpdir(), "llmproxy-memory-soak-"));
   const cleanup = [];
@@ -275,15 +292,57 @@ async function main() {
     assert.ok(retainedBytes < 2_000_000);
     assert.ok(finalHeapMb <= baselineHeapMb + 35);
 
+    const sseConnections = await Promise.all(
+      Array.from({ length: 40 }, async () => {
+        const controller = new AbortController();
+        const response = await fetch(`${baseUrl}/api/events`, {
+          signal: controller.signal,
+        });
+        assert.equal(response.status, 200);
+
+        return {
+          controller,
+          reader: response.body?.getReader(),
+        };
+      }),
+    );
+
+    await waitForCondition(
+      () => server.sseClients.size === sseConnections.length,
+      1_000,
+      `Timed out waiting for ${sseConnections.length} SSE clients. Currently connected: ${server.sseClients.size}.`,
+    );
+
+    await Promise.allSettled(sseConnections.map(async ({ controller, reader }) => {
+      controller.abort();
+      if (reader) {
+        await reader.cancel().catch(() => undefined);
+      }
+    }));
+
+    await waitForCondition(
+      () => server.sseClients.size === 0,
+      1_000,
+      `Timed out waiting for SSE clients to disconnect. Remaining clients: ${server.sseClients.size}.`,
+    );
+
+    await forceGc();
+    const postSseHeapMb = heapUsedMb();
+    const peakHeapMb = Math.max(finalHeapMb, postSseHeapMb);
+    assert.ok(peakHeapMb <= baselineHeapMb + 40);
+
     process.stdout.write(
       JSON.stringify({
         ok: true,
         baselineHeapMb,
         finalHeapMb,
+        postSseHeapMb,
+        peakHeapMb,
         heapGrowthMb: Math.round((finalHeapMb - baselineHeapMb) * 10) / 10,
         retainedBytes,
         recentRequests: snapshot.recentRequests.length,
         retainedDetails: recentRequestDetails.size,
+        sseClientsAfterChurn: server.sseClients.size,
       }, null, 2) + "\n",
     );
   } finally {

@@ -12,7 +12,9 @@
     "start": "npm run build && node dist/index.js",
     "start:dashboard": "node ./scripts/start-with-dashboard.cjs",
     "test": "node ./scripts/run-tests.cjs",
-    "test:memory": "npm run build && node --expose-gc ./scripts/memory-soak.cjs"
+    "test:memory": "npm run build && node --expose-gc ./scripts/memory-soak.cjs",
+    "test:chaos-memory": "npm run build && node --expose-gc ./scripts/chaos-memory-soak.cjs",
+    "test:streams-500": "npm run build:server && node --expose-gc ./scripts/chaos-memory-soak.cjs --mode=active-streams --connections=500 --min-tokens=1000 --max-tokens=40000"
   },
   "engines": {
     "node": ">=18.17.0"

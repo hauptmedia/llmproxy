@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import BackendEditorDialog from "../components/BackendEditorDialog.vue";
 import BackendTable from "../components/BackendTable.vue";
 import ToolDefinitionsView from "../components/ToolDefinitionsView.vue";
@@ -11,7 +11,7 @@ import type { McpToolDefinition } from "../types/dashboard";
 type ConfigTab = "general" | "openai" | "mcp" | "backends";
 
 const store = useDashboardStore();
-const { endpointUrl, loadingCapabilities, mcpServerEnabled, serviceDefinitions } = useDiagnosticsCapabilities();
+const { endpointUrl, loadCapabilities, loadingCapabilities, mcpServerEnabled, serviceDefinitions } = useDiagnosticsCapabilities();
 const activeTab = ref<ConfigTab>("general");
 const openAiBaseUrl = `${window.location.origin}`;
 
@@ -37,13 +37,17 @@ function mapToolDefinitionsForRenderer(tools: readonly McpToolDefinition[]) {
   }));
 }
 
-const mcpServicesForDocs = computed(() => serviceDefinitions.value.map((service) => ({
-  ...service,
-  helperRoutes: service.helperRoutes.map((route) => ({ ...route })),
-  toolsForRenderer: mapToolDefinitionsForRenderer(service.tools),
-})));
+const mcpServicesForDocs = computed(() => (
+  activeTab.value === "mcp"
+    ? serviceDefinitions.value.map((service) => ({
+      ...service,
+      helperRoutes: service.helperRoutes.map((route) => ({ ...route })),
+      toolsForRenderer: mapToolDefinitionsForRenderer(service.tools),
+    }))
+    : []
+));
 const currentBackendConfig = computed(() => {
-  const backendId = store.state.backendEditor.originalId || store.state.backendEditor.fields.id;
+  const backendId = store.state.backendEditor.originalId;
   return backendId ? store.state.backendConfigs[backendId] ?? null : null;
 });
 
@@ -102,6 +106,16 @@ const serverConfigRows = computed(() => {
     },
   ];
 });
+
+watch(
+  activeTab,
+  (tab) => {
+    if (tab === "mcp" && mcpServerEnabled.value !== false) {
+      void loadCapabilities();
+    }
+  },
+  { immediate: true },
+);
 
 </script>
 
@@ -241,6 +255,7 @@ const serverConfigRows = computed(() => {
           </button>
         </div>
         <BackendTable
+          v-if="!store.state.backendEditor.open"
           :backends="store.state.snapshot.backends"
           mode="config"
           @edit-backend="store.openEditBackend"

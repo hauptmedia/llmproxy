@@ -1,7 +1,7 @@
 export type RequestOutcome = "success" | "error" | "cancelled" | "queued_timeout";
 export type ActiveConnectionPhase = "queued" | "connected" | "streaming";
 export type ActiveConnectionKind = "chat.completions" | "completions" | "other";
-export type BackendConnector = "openai" | "ollama";
+export type BackendConnector = "openai" | "ollama" | "llama.cpp";
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 

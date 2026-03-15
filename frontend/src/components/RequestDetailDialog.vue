@@ -285,7 +285,7 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
       </div>
 
       <div class="request-detail-grid">
-        <div class="request-detail-card">
+        <div class="request-detail-card request-detail-inspector-card">
           <div class="request-detail-tab-bar" role="tablist" aria-label="Request detail sections">
             <button
               type="button"

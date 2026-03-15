@@ -9,7 +9,7 @@ Prerequisite: Node.js 18+ should be available on your system `PATH` or configure
 ## Features
 
 - OpenAI-compatible forwarding for `POST /v1/chat/completions`
-- Backend connector abstraction with built-in `openai` and `ollama` connectors
+- Backend connector abstraction with built-in `openai`, `llama.cpp`, and `ollama` connectors
 - Load balancing across multiple backends with configurable `maxConcurrency`
 - Queueing when local backends are fully utilized
 - Vue-based single page dashboard served by the backend under `/dashboard`, refactored into Vue single-file components and built with Vite plus Tailwind CSS
@@ -17,7 +17,7 @@ Prerequisite: Node.js 18+ should be available on your system `PATH` or configure
 - Built-in chat debugger with model selection, live token metrics, sampler parameters, and direct jump-to-request debugging
 - Built-in diagnostics area with MCP-compatible tools/prompts for request troubleshooting
 - Aggregated `/v1/models`
-- Connector-aware health checks and model discovery for OpenAI-compatible backends and native Ollama backends
+- Connector-aware health checks and model discovery for OpenAI-compatible backends, `llama.cpp`, and native Ollama backends
 
 ## Supported Routes
 
@@ -85,6 +85,22 @@ You still open the dashboard through the backend URL:
 
 In dev mode, those routes load the dashboard code from the Vite dev server automatically, so UI changes show up immediately without rebuilding manually.
 
+## Stress And Chaos Tests
+
+For memory-focused load checks:
+
+```bash
+npm run test:memory
+```
+
+For a heavier chaos run with real HTTP mock backends, slow or stalled dashboard clients, long streamed tokens, upstream drops, timeouts, and mixed OpenAI/Ollama traffic:
+
+```bash
+npm run test:chaos-memory
+```
+
+The chaos run writes a JSON report to `test-results/chaos-memory-report.json` with heap, RSS, queue depth, retained-request bytes, SSE buffer pressure, and per-backend scenario stats.
+
 ## Configuration
 
 By default, `llmproxy.config.json` is loaded from the project directory. Alternatively, set `LLMPROXY_CONFIG`.
@@ -97,10 +113,10 @@ Important configuration fields:
 - `recentRequestLimit`: maximum number of recent request log entries to retain in memory and show in the dashboard, default `1000`
 - `mcpServerEnabled`: enables or disables the built-in MCP endpoint and the MCP tools exposed to the dashboard chat, default `true`
 - `baseUrl`: target URL of the OpenAI-compatible backend
-- `connector`: backend adapter to use, currently `openai` or `ollama`
+- `connector`: backend adapter to use, currently `openai`, `llama.cpp`, or `ollama`
 - `maxConcurrency`: concurrent requests allowed for that backend
 - `allowedModels`: optional model allowlist or patterns such as `["llama-*"]` or `["*"]`
-- `healthPath`: optional backend health endpoint, for `openai` usually `/v1/models`, for `ollama` usually `/api/tags`
+- `healthPath`: optional backend health endpoint, for `openai` and `llama.cpp` usually `/v1/models`, for `ollama` usually `/api/tags`
 - `apiKey` or `apiKeyEnv`: optional upstream authentication
 
 The `Config` page opens in a read-only view by default. Use the pencil button in the `Config` panel to edit the main `llmproxy` server config, or the backend actions on the page to edit backend entries and write changes back to your local `llmproxy.config.json`.
@@ -118,6 +134,8 @@ For a short architecture overview of connectors, routing, retention, and config 
 - Clients may send `model: "auto"`, `model: "*"`, or omit `model` entirely. In those cases, `llmproxy` currently picks the first free backend that has a concrete discovered/configured model and forwards the request with that resolved model name upstream.
 - Chat completion requests always use upstream streaming so the proxy can collect live metrics such as `tok/s`, TTFB, and in-flight token counts.
 - If the client does not request streaming, the proxy buffers the upstream stream internally and returns a normal JSON response at the end.
+- `connector: "openai"` targets the strict OpenAI API surface and strips non-OpenAI sampler fields such as `top_k`, `min_p`, and `repeat_penalty` before forwarding.
+- `connector: "llama.cpp"` keeps the OpenAI-compatible `/v1/*` route surface but preserves llama.cpp-specific sampler fields such as `top_k`, `min_p`, and `repeat_penalty`.
 - `connector: "ollama"` keeps the external client contract OpenAI-compatible while translating upstream traffic to native Ollama endpoints such as `/api/chat` and `/api/tags`.
 - The proxy is intentionally limited to the completion routes listed above; other `/v1/*` routes return `501`.
 - The `Active Connections` dashboard section shows live `chat.completions` requests in real time, including queue state, streaming mode, token counts, and `tok/s`.

@@ -18,6 +18,7 @@ Backends are configured through a connector abstraction.
 Current connectors:
 
 - `openai`: forwards to an OpenAI-compatible upstream
+- `llama.cpp`: keeps the OpenAI-compatible route surface, but preserves llama.cpp-specific sampler fields such as `top_k`, `min_p`, and `repeat_penalty`
 - `ollama`: keeps the external client contract OpenAI-compatible, but translates upstream traffic to native Ollama routes such as `/api/chat` and `/api/tags`
 
 The connector layer is responsible for:
@@ -45,6 +46,7 @@ The selected concrete model is then applied to the upstream request body before 
 Connector-aware health checks and discovery are used:
 
 - OpenAI-compatible backends usually use `/v1/models`
+- `llama.cpp` backends usually use `/v1/models`
 - Ollama backends usually use `/api/tags`
 
 Discovered models are used for:
