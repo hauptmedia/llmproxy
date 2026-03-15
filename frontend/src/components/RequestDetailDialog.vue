@@ -329,7 +329,13 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
             </button>
           </div>
           <div class="detail-card-viewport">
-            <section v-if="activeInspectorTab === 'request'" class="request-detail-section">
+            <div v-if="store.state.requestDetail.loading && !store.state.requestDetail.detail" class="empty">
+              Loading request details...
+            </div>
+            <div v-else-if="store.state.requestDetail.error && !store.state.requestDetail.detail" class="empty">
+              {{ store.state.requestDetail.error }}
+            </div>
+            <section v-else-if="activeInspectorTab === 'request'" class="request-detail-section">
               <div v-if="store.requestParamRows.length" class="detail-table-wrap">
                 <table class="detail-table">
                   <thead>
@@ -449,7 +455,14 @@ async function copyRawPayload(kind: RawPayloadKind): Promise<void> {
           :follow-anchor-active="Boolean(store.state.requestDetail.detail?.live)"
         >
           <section class="request-detail-section request-detail-conversation-panel">
+            <div v-if="store.state.requestDetail.loading && !store.state.requestDetail.detail" class="empty">
+              Loading conversation...
+            </div>
+            <div v-else-if="store.state.requestDetail.error && !store.state.requestDetail.detail" class="empty">
+              {{ store.state.requestDetail.error }}
+            </div>
             <ConversationTranscript
+              v-else
               :items="store.requestConversationItems"
               empty-text="No OpenAI messages were stored for this request."
               bubble-layout

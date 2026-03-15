@@ -3604,7 +3604,8 @@
   }
 
   .request-detail-overlay {
-    @apply fixed inset-0 z-60 grid place-items-center p-3;
+    @apply fixed inset-0 grid place-items-center p-3;
+    z-index: 90;
     background: rgba(28, 25, 23, 0.26);
     backdrop-filter: blur(6px);
   }
@@ -3647,7 +3648,8 @@
   }
 
   .raw-payload-overlay {
-    @apply fixed inset-0 z-70 grid place-items-center p-3;
+    @apply fixed inset-0 grid place-items-center p-3;
+    z-index: 100;
     background: rgba(28, 25, 23, 0.34);
     backdrop-filter: blur(8px);
   }

@@ -90,18 +90,21 @@ export function useRequestDetail(
       detail: state.requestDetail.detail,
       loading: state.requestDetail.loading,
     };
+    const keepDialogOpenOnLoadFailure = isActiveRequestId(requestId);
+    const cachedDetail = !keepDialogOpenOnLoadFailure
+      ? state.requestDetail.cache[requestId] ?? null
+      : null;
+    const shouldKeepCurrentDetail = previousState.requestId === requestId && previousState.detail;
 
     state.requestDetail.requestId = requestId;
     state.requestDetail.tab = tab;
+    state.requestDetail.open = true;
     state.requestDetail.error = "";
-    if (!previousState.open) {
-      state.requestDetail.detail = null;
-    }
+    state.requestDetail.detail = shouldKeepCurrentDetail ? previousState.detail : cachedDetail;
     state.requestDetail.loading = true;
     const loaded = await loadRequestDetail(requestId);
 
-    if (loaded) {
-      state.requestDetail.open = true;
+    if (loaded || keepDialogOpenOnLoadFailure) {
       return;
     }
 
